@@ -48,12 +48,19 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
 
 linux:
+  # Apenas AppImage: arquivo único, executa sem instalação e sem root. O alvo
+  # `.deb` exige um mantenedor identificado com e-mail, gravado em cada pacote
+  # distribuído — identidade que este projeto ainda não tem. Acrescentar o .deb
+  # depois é só definir `linux.maintainer` e reincluir o alvo.
   target:
     - target: AppImage
       arch: [x64]
-    - target: deb
-      arch: [x64]
   category: Science
+  # Sem isto, ambientes de desktop não associam a janela em execução à entrada
+  # do lançador — o app aparece como um ícone genérico separado na barra. O
+  # nome do `.desktop` passa a ser derivado de `desktopName` no package.json,
+  # casando com o `StartupWMClass` e com o `app_id` do Electron.
+  syncDesktopName: true
   synopsis: Agregação de resultados normativos e relatórios em neuropsicologia
   description: >-
     Aplicativo desktop local-first para agregação de escores normativos,

@@ -7,6 +7,7 @@
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
+  "desktopName": "baremo.desktop",
   "scripts": {
     "predev": "node scripts/native-abi.mjs electron",
     "dev": "electron-vite dev",
