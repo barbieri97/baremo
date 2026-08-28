@@ -43,11 +43,44 @@ const streamText = ref('')
 const toolActivity = ref<string[]>([])
 const currentRequestId = ref<string | null>(null)
 
+interface BlockDiffEntry {
+  index: number
+  kind: 'keep' | 'insert' | 'delete' | 'replace'
+  before: string | null
+  after: string | null
+}
+
 const confirmation = ref<{
   confirmationId: string
   toolName: string
   preview: string
+  blockDiff: BlockDiffEntry[] | null
 } | null>(null)
+
+/** Blocos que o profissional aceitou. Começa vazio: aceitar é ato deliberado. */
+const acceptedBlocks = ref<Set<number>>(new Set())
+
+const changedBlocks = computed(
+  () => confirmation.value?.blockDiff?.filter((entry) => entry.kind !== 'keep') ?? []
+)
+
+function toggleBlock(index: number): void {
+  const next = new Set(acceptedBlocks.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  acceptedBlocks.value = next
+}
+
+function acceptAllBlocks(): void {
+  acceptedBlocks.value = new Set(changedBlocks.value.map((entry) => entry.index))
+}
+
+const DIFF_LABELS: Record<BlockDiffEntry['kind'], string> = {
+  keep: 'Sem alteração',
+  insert: 'Trecho novo',
+  delete: 'Trecho removido',
+  replace: 'Trecho reescrito'
+}
 
 const aiEnabled = computed(() => appStore.state?.aiEnabled ?? false)
 const transcript = ref<HTMLElement | null>(null)
@@ -98,8 +131,10 @@ function handleStream(event: AiStreamEvent): void {
       confirmation.value = {
         confirmationId: event.confirmationId,
         toolName: event.toolName,
-        preview: event.preview
+        preview: event.preview,
+        blockDiff: event.blockDiff
       }
+      acceptedBlocks.value = new Set()
       break
 
     case 'done':
@@ -208,15 +243,20 @@ async function cancel(): Promise<void> {
 
 async function respondToConfirmation(approved: boolean): Promise<void> {
   if (confirmation.value === null) return
+
+  const hasDiff = confirmation.value.blockDiff !== null
   try {
     await api('ai:confirmToolCall', {
       confirmationId: confirmation.value.confirmationId,
-      approved
+      approved,
+      // Sem diff, a proposta é aplicada inteira; com diff, só o que foi marcado.
+      acceptedBlocks: hasDiff && approved ? [...acceptedBlocks.value] : null
     })
   } catch (error) {
     appStore.notifyError(error)
   } finally {
     confirmation.value = null
+    acceptedBlocks.value = new Set()
   }
 }
 
@@ -409,20 +449,84 @@ async function deleteSession(sessionId: string): Promise<void> {
     <BaseDialog
       :open="confirmation !== null"
       title="O assistente pede autorização para gravar"
+      wide
       @update:open="(value) => !value && respondToConfirmation(false)"
     >
       <p class="text-sm text-ink-700">{{ confirmation?.preview }}</p>
+
+      <!-- §10.6 — edição de documento existente vai para revisão bloco a bloco. -->
+      <div v-if="changedBlocks.length > 0" class="mt-4">
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Alterações propostas ({{ acceptedBlocks.size }} de {{ changedBlocks.length }} aceitas)
+          </p>
+          <button class="text-xs text-brand-500 hover:underline" @click="acceptAllBlocks">
+            Aceitar todas
+          </button>
+        </div>
+
+        <ul class="max-h-80 space-y-2 overflow-y-auto">
+          <li
+            v-for="entry in changedBlocks"
+            :key="entry.index"
+            class="rounded border p-2"
+            :class="
+              acceptedBlocks.has(entry.index)
+                ? 'border-ok-500 bg-ok-50'
+                : 'border-ink-200 bg-white'
+            "
+          >
+            <label class="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                class="mt-1 rounded border-ink-300"
+                :checked="acceptedBlocks.has(entry.index)"
+                @change="toggleBlock(entry.index)"
+              />
+              <span class="min-w-0 flex-1">
+                <span class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                  {{ DIFF_LABELS[entry.kind] }}
+                </span>
+
+                <span
+                  v-if="entry.before !== null"
+                  class="mt-1 block whitespace-pre-wrap text-xs text-danger-600 line-through"
+                >
+                  {{ entry.before }}
+                </span>
+                <span
+                  v-if="entry.after !== null"
+                  class="mt-1 block whitespace-pre-wrap text-xs text-ink-800"
+                >
+                  {{ entry.after }}
+                </span>
+              </span>
+            </label>
+          </li>
+        </ul>
+
+        <p class="mt-2 text-xs text-ink-500">
+          O que não for aceito permanece como está hoje — rejeitar significa "nada muda aqui".
+        </p>
+      </div>
+
       <p class="mt-3 text-xs text-ink-500">
         Ferramenta: <span class="font-mono">{{ confirmation?.toolName }}</span>
       </p>
-      <p class="mt-3 text-xs text-ink-500">
+      <p class="mt-1 text-xs text-ink-500">
         Nada é gravado sem esta autorização. Revise antes de aprovar — inclusive se a solicitação
         parecer ter vindo do conteúdo de um arquivo anexado.
       </p>
 
       <template #footer>
         <BaseButton variant="ghost" @click="respondToConfirmation(false)">Recusar</BaseButton>
-        <BaseButton variant="primary" @click="respondToConfirmation(true)">Autorizar</BaseButton>
+        <BaseButton
+          variant="primary"
+          :disabled="changedBlocks.length > 0 && acceptedBlocks.size === 0"
+          @click="respondToConfirmation(true)"
+        >
+          {{ changedBlocks.length > 0 ? `Aplicar ${acceptedBlocks.size} bloco(s)` : 'Autorizar' }}
+        </BaseButton>
       </template>
     </BaseDialog>
   </div>

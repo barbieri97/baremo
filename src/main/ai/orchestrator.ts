@@ -47,22 +47,42 @@ const MAX_TOOL_ITERATIONS = 8
 
 export type StreamEmitter = (event: AiStreamEvent) => void
 
+/** Resposta do usuário à confirmação: recusa, ou aceite com os blocos escolhidos. */
+export interface ConfirmationDecision {
+  readonly approved: boolean
+  /** `null` = aplicar a proposta inteira (tools sem diff). */
+  readonly acceptedBlocks: readonly number[] | null
+}
+
 interface PendingConfirmation {
   readonly confirmationId: string
   readonly toolName: string
   readonly args: Record<string, unknown>
-  resolve: (approved: boolean) => void
+  resolve: (decision: ConfirmationDecision) => void
+}
+
+/**
+ * O que a UI precisa mostrar antes de autorizar uma gravação.
+ *
+ * Montado FORA do orquestrador, por uma função injetada: descrever a edição de
+ * um documento exige lê-lo, e `src/main/ai/**` não pode importar os
+ * repositórios gerais (§10.5, camada 2, imposta por ESLint).
+ */
+export interface WritePreview {
+  readonly description: string
+  readonly blockDiff: BlockDiffEntry[] | null
+}
+
+export interface BlockDiffEntry {
+  index: number
+  kind: 'keep' | 'insert' | 'delete' | 'replace'
+  before: string | null
+  after: string | null
 }
 
 interface ActiveRequest {
   readonly controller: AbortController
   pending: PendingConfirmation | null
-}
-
-/** Resultado de uma tool de escrita já confirmada, para o handler aplicar. */
-export interface ApprovedWrite {
-  readonly toolName: string
-  readonly args: Record<string, unknown>
 }
 
 export class AgentOrchestrator {
@@ -71,11 +91,21 @@ export class AgentOrchestrator {
   constructor(
     private readonly handle: BaremoDatabase,
     private readonly emit: StreamEmitter,
-    private readonly applyWrite: (
-      patientId: string,
-      toolName: string,
-      args: Record<string, unknown>
-    ) => Promise<string>
+    private readonly writes: {
+      /** Monta a descrição e, quando cabe, o diff por bloco (§10.6). */
+      prepare: (
+        patientId: string,
+        toolName: string,
+        args: Record<string, unknown>
+      ) => WritePreview
+      /** Executa a gravação DEPOIS da confirmação, só com os blocos aceitos. */
+      apply: (
+        patientId: string,
+        toolName: string,
+        args: Record<string, unknown>,
+        acceptedBlocks: readonly number[] | null
+      ) => Promise<string>
+    }
   ) {}
 
   cancel(requestId: string): void {
@@ -84,14 +114,18 @@ export class AgentOrchestrator {
 
     // Uma confirmação pendente precisa ser resolvida como recusa: sem isso, o
     // turno ficaria esperando para sempre por um diálogo que já sumiu da tela.
-    request.pending?.resolve(false)
+    request.pending?.resolve({ approved: false, acceptedBlocks: null })
     request.controller.abort()
   }
 
-  confirm(confirmationId: string, approved: boolean): boolean {
+  confirm(
+    confirmationId: string,
+    approved: boolean,
+    acceptedBlocks: readonly number[] | null
+  ): boolean {
     for (const request of this.active.values()) {
       if (request.pending?.confirmationId === confirmationId) {
-        request.pending.resolve(approved)
+        request.pending.resolve({ approved, acceptedBlocks })
         return true
       }
     }
@@ -385,8 +419,9 @@ export class AgentOrchestrator {
     args: Record<string, unknown>
   ): Promise<unknown> {
     const confirmationId = randomUUID()
+    const preview = this.writes.prepare(patientId, toolName, args)
 
-    const approved = await new Promise<boolean>((resolve) => {
+    const decision = await new Promise<ConfirmationDecision>((resolve) => {
       request.pending = { confirmationId, toolName, args, resolve }
 
       this.emit({
@@ -394,18 +429,19 @@ export class AgentOrchestrator {
         requestId,
         confirmationId,
         toolName,
-        preview: describeWrite(toolName, args),
-        argumentsJson: JSON.stringify(args)
+        preview: preview.description,
+        argumentsJson: JSON.stringify(args),
+        blockDiff: preview.blockDiff
       })
     })
 
     request.pending = null
 
-    if (!approved) {
+    if (!decision.approved) {
       return { status: 'recusado', detalhe: 'O profissional não autorizou esta gravação.' }
     }
 
-    const summary = await this.applyWrite(patientId, toolName, args)
+    const summary = await this.writes.apply(patientId, toolName, args, decision.acceptedBlocks)
     return { status: 'gravado', detalhe: summary }
   }
 
@@ -487,22 +523,6 @@ export class AgentOrchestrator {
       })
       .run()
   }
-}
-
-/** Descrição legível do que será gravado, para o diálogo de confirmação. */
-function describeWrite(toolName: string, args: Record<string, unknown>): string {
-  if (toolName === 'criar_rascunho_documento') {
-    const title = typeof args['titulo'] === 'string' ? args['titulo'] : 'Sem título'
-    const content = typeof args['conteudo'] === 'string' ? args['conteudo'] : ''
-    return `Criar o rascunho "${title}" com ${content.split(/\s+/).length} palavra(s).`
-  }
-
-  if (toolName === 'sugerir_edicao_documento') {
-    const reason = typeof args['justificativa'] === 'string' ? args['justificativa'] : ''
-    return `Propor nova versão do documento. Justificativa: ${reason}`
-  }
-
-  return 'Gravação solicitada pelo assistente.'
 }
 
 /** Converte o Markdown do agente no JSON que o editor entende. */

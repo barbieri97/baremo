@@ -481,7 +481,16 @@ export const contracts = {
   ),
   'ai:cancel': channel(z.object({ requestId: z.string().min(1).max(80) }), ok),
   'ai:confirmToolCall': channel(
-    z.object({ confirmationId: z.string().min(1).max(80), approved: z.boolean() }),
+    z.object({
+      confirmationId: z.string().min(1).max(80),
+      approved: z.boolean(),
+      /**
+       * Índices dos blocos aceitos, quando a confirmação traz um diff (§10.6).
+       * `null` significa "aplicar a proposta inteira" — o caso das tools que não
+       * produzem diff, como a criação de rascunho.
+       */
+      acceptedBlocks: z.array(z.number().int()).nullable().default(null)
+    }),
     ok
   ),
   'ai:listAudit': channel(

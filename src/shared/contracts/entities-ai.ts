@@ -138,7 +138,22 @@ export const aiStreamEventSchema = z.discriminatedUnion('kind', [
     toolName: z.string(),
     /** Descrição legível do que será gravado, para o usuário decidir. */
     preview: z.string(),
-    argumentsJson: z.string()
+    argumentsJson: z.string(),
+    /**
+     * Diff por bloco, quando a tool propõe editar um documento existente
+     * (§10.6). O usuário aceita ou rejeita bloco a bloco — a unidade que ele
+     * revisa e assina é o parágrafo, não o documento inteiro.
+     */
+    blockDiff: z
+      .array(
+        z.object({
+          index: z.number().int(),
+          kind: z.enum(['keep', 'insert', 'delete', 'replace']),
+          before: z.string().nullable(),
+          after: z.string().nullable()
+        })
+      )
+      .nullable()
   }),
   z.object({
     kind: z.literal('done'),

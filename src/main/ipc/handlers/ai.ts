@@ -16,6 +16,8 @@ import { getAiConfig, updateAiConfig } from '../../repositories/ai-config'
 import { getPatient } from '../../repositories/patients'
 import { clearKey, encryptionAvailable, keyHint, saveKey } from '../../ai/key-store'
 import { AgentOrchestrator, contentToTiptap } from '../../ai/orchestrator'
+import type { WritePreview } from '../../ai/orchestrator'
+import { applyAcceptedChanges, countChanges, diffBlocks } from '@shared/domain/block-diff'
 import { listAiAudit, recordAiEvent } from '../../ai/audit'
 import { createAiDraft, getDocument, saveContent } from '../../repositories/documents'
 import { nowIso } from '../../repositories/helpers'
@@ -243,8 +245,8 @@ export function registerAiHandlers(): void {
     return { ok: true as const }
   })
 
-  registerHandler('ai:confirmToolCall', ({ confirmationId, approved }) => {
-    const found = getOrchestrator().confirm(confirmationId, approved)
+  registerHandler('ai:confirmToolCall', ({ confirmationId, approved, acceptedBlocks }) => {
+    const found = getOrchestrator().confirm(confirmationId, approved, acceptedBlocks)
     if (!found) throw notFound('Esta confirmação não está mais pendente.')
     return { ok: true as const }
   })
@@ -268,9 +270,74 @@ function currentConfig(): ReturnType<typeof getAiConfig> {
 
 function getOrchestrator(): AgentOrchestrator {
   if (orchestrator === null) {
-    orchestrator = new AgentOrchestrator(getDatabase(), emitToRenderer, applyWriteTool)
+    orchestrator = new AgentOrchestrator(getDatabase(), emitToRenderer, {
+      prepare: prepareWriteTool,
+      apply: applyWriteTool
+    })
   }
   return orchestrator
+}
+
+/**
+ * Monta o que o diálogo de confirmação mostra (§10.6).
+ *
+ * Para a edição de um documento existente, produz o diff POR BLOCO: o
+ * profissional aceita ou rejeita parágrafo a parágrafo, porque essa é a unidade
+ * que ele revisa e assina. Um "aceitar tudo ou nada" empurraria para aceitar o
+ * que não foi lido.
+ *
+ * Vive aqui, e não no orquestrador, porque montar o diff exige LER o documento —
+ * e `src/main/ai/**` está proibido de importar os repositórios gerais (§10.5).
+ */
+function prepareWriteTool(
+  patientId: string,
+  toolName: string,
+  args: Record<string, unknown>
+): WritePreview {
+  if (toolName === 'criar_rascunho_documento') {
+    const title = typeof args['titulo'] === 'string' ? args['titulo'] : 'Sem título'
+    const content = typeof args['conteudo'] === 'string' ? args['conteudo'] : ''
+    const words = content.trim().length === 0 ? 0 : content.trim().split(/\s+/).length
+
+    return {
+      description: `Criar o rascunho "${title}" com ${words} palavra(s). Ele nascerá marcado como assistido por IA e precisará de revisão antes de ser finalizado.`,
+      blockDiff: null
+    }
+  }
+
+  if (toolName === 'sugerir_edicao_documento') {
+    const documentId = typeof args['documentoId'] === 'string' ? args['documentoId'] : ''
+
+    try {
+      const document = getDocument(getDatabase(), documentId)
+
+      // Revalidação de propriedade também aqui: o ID veio do modelo, e mostrar
+      // o conteúdo de outro prontuário no diálogo já seria um vazamento.
+      if (document.patientId !== patientId) {
+        return {
+          description: 'O documento indicado não pertence ao paciente desta sessão.',
+          blockDiff: null
+        }
+      }
+
+      const changes = diffBlocks(document.contentJson, contentToTiptap(args['conteudo']))
+      const reason = typeof args['justificativa'] === 'string' ? args['justificativa'] : ''
+
+      return {
+        description: `Propor nova versão de "${document.title}" — ${countChanges(changes)} bloco(s) alterado(s). Justificativa: ${reason}`,
+        blockDiff: changes.map((change) => ({
+          index: change.index,
+          kind: change.kind,
+          before: change.before,
+          after: change.after
+        }))
+      }
+    } catch {
+      return { description: 'Documento não encontrado.', blockDiff: null }
+    }
+  }
+
+  return { description: 'Gravação solicitada pelo assistente.', blockDiff: null }
 }
 
 /** Difunde o evento de streaming; o renderer filtra por `requestId` (§10.4). */
@@ -290,7 +357,8 @@ function emitToRenderer(event: AiStreamEvent): void {
 async function applyWriteTool(
   patientId: string,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  acceptedBlocks: readonly number[] | null
 ): Promise<string> {
   const handle = getDatabase()
 
@@ -321,8 +389,20 @@ async function applyWriteTool(
       throw new Error('O documento indicado não pertence ao paciente desta sessão.')
     }
 
-    saveContent(handle, documentId, contentToTiptap(args['conteudo']))
-    return `Documento "${document.title}" atualizado com a versão proposta. A versão anterior foi preservada no histórico.`
+    const proposed = contentToTiptap(args['conteudo'])
+
+    // Sem seleção de blocos, aplica a proposta inteira; com seleção, monta o
+    // documento a partir do que foi aceito — o rejeitado volta ao estado atual.
+    const changes = diffBlocks(document.contentJson, proposed)
+    const content =
+      acceptedBlocks === null
+        ? proposed
+        : applyAcceptedChanges(changes, acceptedBlocks)
+
+    saveContent(handle, documentId, content)
+
+    const applied = acceptedBlocks === null ? countChanges(changes) : acceptedBlocks.length
+    return `Documento "${document.title}" atualizado: ${applied} bloco(s) aplicado(s). A versão anterior foi preservada no histórico.`
   }
 
   throw new Error(`Ferramenta de escrita desconhecida: ${toolName}.`)

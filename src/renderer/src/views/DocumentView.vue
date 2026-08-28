@@ -20,7 +20,10 @@ import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
 import EditorToolbar from '../components/EditorToolbar.vue'
+import SlashMenu from '../components/SlashMenu.vue'
 import { buildExtensions } from '../editor/extensions'
+import { createSlashMenu } from '../editor/slash-menu'
+import type { SlashItem } from '../editor/slash-menu'
 import { formatIsoDate } from '@shared/domain/dates'
 import {
   DOCUMENT_ORIGIN_LABELS,
@@ -50,6 +53,28 @@ const signatureNoticeOpen = ref(false)
 
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined
 
+// ─── Slash menu (§9.2) ──────────────────────────────────────────────────────
+
+const slashItems = ref<SlashItem[]>([])
+const slashPosition = ref<{ top: number; left: number } | null>(null)
+const slashMenu = ref<InstanceType<typeof SlashMenu> | null>(null)
+let pickSlashItem: ((item: SlashItem) => void) | null = null
+
+function positionFrom(clientRect?: (() => DOMRect | null) | null): void {
+  const rect = clientRect?.()
+  slashPosition.value = rect ? { top: rect.bottom + 6, left: rect.left } : null
+}
+
+function closeSlashMenu(): void {
+  slashPosition.value = null
+  slashItems.value = []
+  pickSlashItem = null
+}
+
+function onSlashPick(item: SlashItem): void {
+  pickSlashItem?.(item)
+}
+
 const readOnly = computed(() => document.value?.status === 'finalized')
 
 const needsReview = computed(
@@ -68,9 +93,30 @@ async function load(): Promise<void> {
     editor.value = new Editor({
       content: (document.value.contentJson as object) ?? { type: 'doc', content: [{ type: 'paragraph' }] },
       editable: !readOnly.value,
-      extensions: buildExtensions({
-        placeholder: 'Escreva o documento. Use / para inserir blocos e tokens.'
-      }),
+      extensions: [
+        ...buildExtensions({
+          placeholder: 'Escreva o documento. Use / para inserir blocos e tokens.'
+        }),
+        createSlashMenu({ assessmentId: document.value.assessmentId }, () => ({
+          onStart: ({ items, command, clientRect }) => {
+            slashItems.value = items
+            pickSlashItem = command
+            positionFrom(clientRect)
+          },
+          onUpdate: ({ items, clientRect }) => {
+            slashItems.value = items
+            positionFrom(clientRect)
+          },
+          onKeyDown: ({ event }) => {
+            if (event.key === 'Escape') {
+              closeSlashMenu()
+              return true
+            }
+            return slashMenu.value?.handleKey(event) ?? false
+          },
+          onExit: closeSlashMenu
+        }))
+      ],
       editorProps: { attributes: { class: 'tiptap' } },
       onUpdate: scheduleAutosave
     })
@@ -332,6 +378,13 @@ const saveLabel = computed(() => {
         </BubbleMenu>
 
         <EditorContent v-if="editor !== null" :editor="editor" />
+
+        <SlashMenu
+          ref="slashMenu"
+          :items="slashItems"
+          :position="slashPosition"
+          @pick="onSlashPick"
+        />
       </div>
     </div>
 
