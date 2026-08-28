@@ -15,9 +15,14 @@
 
 import { protocol, net } from 'electron'
 import { createReadStream, existsSync, statSync } from 'node:fs'
-import { join, normalize, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
+// A lógica de contenção de caminho vive num módulo sem dependência de Electron,
+// para que o gate de segurança do §13.5 possa exercitá-la em Node puro.
+import { isWithinRoot, resolveWithinRoot } from './path-guard'
+
+export { isWithinRoot, resolveWithinRoot }
 
 export const APP_SCHEME = 'app'
 export const APP_HOST = 'baremo'
@@ -43,50 +48,6 @@ export function registerPrivilegedSchemes(): void {
       privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
     }
   ])
-}
-
-/**
- * Resolve um caminho pedido para dentro de uma raiz, ou devolve `null`.
- *
- * É o guarda contra path traversal do §13.3, e o alvo do teste de segurança
- * correspondente. Trabalha sobre o caminho já decodificado e compara o resultado
- * de `resolve` com a raiz — checagem baseada em prefixo com separador, para que
- * `/dados/arquivos-outros` não passe por estar sob `/dados/arquivos`.
- */
-export function resolveWithinRoot(root: string, requestedPath: string): string | null {
-  let decoded: string
-  try {
-    // Decodifica uma vez; `%252e%252e` vira `%2e%2e`, que não é separador de
-    // caminho e portanto não escapa — decodificar em laço é que abriria a porta.
-    decoded = decodeURIComponent(requestedPath)
-  } catch {
-    return null
-  }
-
-  // Bytes nulos truncam caminhos em algumas camadas nativas.
-  if (decoded.includes('\0')) return null
-
-  const normalizedRoot = resolve(root)
-  const candidate = resolve(normalizedRoot, `.${normalize(`/${decoded}`)}`)
-
-  const rootWithSep = normalizedRoot.endsWith(sep) ? normalizedRoot : normalizedRoot + sep
-  if (candidate !== normalizedRoot && !candidate.startsWith(rootWithSep)) return null
-
-  return candidate
-}
-
-/**
- * Confere se um caminho ABSOLUTO já resolvido cai dentro da raiz.
- *
- * Complementa `resolveWithinRoot`, que trata caminhos vindos de uma URL. Aqui a
- * entrada já é um caminho do nosso próprio resolvedor — a checagem existe para
- * que um bug em outra camada não vire leitura arbitrária de disco.
- */
-export function isWithinRoot(root: string, absolutePath: string): boolean {
-  const normalizedRoot = resolve(root)
-  const candidate = resolve(absolutePath)
-  const rootWithSep = normalizedRoot.endsWith(sep) ? normalizedRoot : normalizedRoot + sep
-  return candidate === normalizedRoot || candidate.startsWith(rootWithSep)
 }
 
 const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {

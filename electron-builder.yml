@@ -1,0 +1,67 @@
+appId: br.com.baremo.desktop
+productName: Baremo
+copyright: Baremo
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# better-sqlite3 é módulo nativo: o `.node` precisa ficar FORA do asar, senão o
+# carregador nativo não consegue abri-lo em runtime.
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+
+# O usuário escolhe onde instalar e o app não se abre sozinho depois: instalar um
+# software de prontuário não deveria surpreender ninguém.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Sem certificado, o instalador dispara aviso de SmartScreen. É a pendência
+  # §15.3, com custo anual — decisão de produto, não de código. Quando o
+  # certificado existir, o electron-builder o consome de
+  # CSC_LINK / CSC_KEY_PASSWORD sem alteração neste arquivo.
+  signAndEditExecutable: true
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.medical
+  # Endurecimento exigido pela notarização da Apple. Sem conta de desenvolvedor,
+  # o Gatekeeper exibe aviso na primeira abertura — mesma pendência §15.3.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Science
+  synopsis: Agregação de resultados normativos e relatórios em neuropsicologia
+  description: >-
+    Aplicativo desktop local-first para agregação de escores normativos,
+    produção de documentos técnicos e geração de relatórios em PDF.
+
+publish:
+  provider: github
+  releaseType: release
+
+# Manifestos de atualização consumidos pelo electron-updater (§15.3).
+generateUpdatesFilesForAllChannels: true

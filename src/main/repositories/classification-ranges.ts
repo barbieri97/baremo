@@ -96,7 +96,11 @@ export function saveRanges(
   scoreType: ScoreType,
   drafts: readonly ClassificationRangeDraft[]
 ): ClassificationRangeWithColor[] {
-  const issues = validateDraft(scoreType, drafts)
+  // Um conjunto vazio é a ação legítima "remover as faixas deste instrumento",
+  // e não um erro: sem faixas, os resultados passam a ser gravados sem
+  // classificação automática — que é o comportamento documentado. Por isso o
+  // problema `empty` não bloqueia aqui, do mesmo modo que não bloqueia na UI.
+  const issues = validateDraft(scoreType, drafts).filter((issue) => issue.code !== 'empty')
   if (issues.length > 0) {
     throw conflict(
       'O conjunto de faixas está inconsistente. Corrija os problemas apontados antes de salvar.',

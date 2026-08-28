@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Empacotar e publicar (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificação de tipos
+        run: npm run typecheck
+
+      - name: Testes de unidade e gates de segurança
+        # Os três gates do §13.5 são bloqueantes também aqui: nenhuma release
+        # sai sem eles.
+        run: npm test
+
+      - name: Empacotar e publicar
+        # `--publish always` cria (ou atualiza) o release no GitHub e gera os
+        # manifestos `latest.yml` / `latest-mac.yml` / `latest-linux.yml` que o
+        # electron-updater consome (§15.2, §15.3).
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Assinatura de código — pendência §15.3, com custo anual. Enquanto os
+          # segredos não existirem, o electron-builder empacota sem assinar e os
+          # instaladores disparam SmartScreen (Windows) e Gatekeeper (macOS).
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

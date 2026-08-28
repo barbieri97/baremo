@@ -23,6 +23,7 @@
   },
   "include": [
     "src/main/**/*.ts",
+    "src/main/**/*.d.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts",

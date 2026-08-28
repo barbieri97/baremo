@@ -8,7 +8,8 @@
  */
 
 import { createWriteStream } from 'node:fs'
-import archiver from 'archiver'
+// archiver 8 é ESM nativo e expõe classes nomeadas — não há mais export default.
+import { ZipArchive } from 'archiver'
 import { eq } from 'drizzle-orm'
 import type { BaremoDatabase } from '../../db/gateway'
 import { attachments, documents, patients } from '../../db/schema'
@@ -72,7 +73,7 @@ export async function exportMedicalRecord(
   }
 
   const output = createWriteStream(targetPath)
-  const archive = archiver('zip', { zlib: { level: 9 } })
+  const archive = new ZipArchive({ zlib: { level: 9 } })
 
   // A promessa resolve no `close` do stream de saída, não no `finalize` do
   // archiver: `finalize` só sinaliza que não há mais entradas, e retornar antes

@@ -25,7 +25,7 @@ import {
 } from './protocol/schemes'
 import { PRINT_SCHEME_PRIVILEGES, registerPrintScheme } from './pdf/render'
 import { createMainWindow, preloadPath } from './windows/main-window'
-import { assertAllChannelsRegistered, setAllowedOrigins } from './ipc/register'
+import { assertAllChannelsRegistered, originOf, setAllowedOrigins } from './ipc/register'
 import { registerConfigHandlers } from './ipc/handlers/config'
 import { registerDomainHandlers } from './ipc/handlers/domain'
 import { registerReportHandlers } from './ipc/handlers/reports'
@@ -75,10 +75,10 @@ async function start(): Promise<void> {
   registerFileScheme(attachmentsDir(), resolveAttachmentForProtocol)
   registerPrintScheme()
 
-  // Só estas origens podem falar com o processo principal (§13.2).
-  setAllowedOrigins(
-    DEV_SERVER_URL ? [new URL(DEV_SERVER_URL).origin, APP_ORIGIN] : [APP_ORIGIN]
-  )
+  // Só estas origens podem falar com o processo principal (§13.2). As duas
+  // pontas passam por `originOf` para que a comparação seja entre iguais.
+  const devOrigin = DEV_SERVER_URL !== undefined ? originOf(DEV_SERVER_URL) : null
+  setAllowedOrigins([APP_ORIGIN, ...(devOrigin !== null ? [devOrigin] : [])])
 
   registerConfigHandlers()
   registerDomainHandlers()
