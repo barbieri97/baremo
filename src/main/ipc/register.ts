@@ -16,7 +16,8 @@
 
 import { ipcMain } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
-import { z } from 'zod'
+// `z` só aparece em posição de tipo aqui — a validação em si usa os schemas do contrato.
+import type { z } from 'zod'
 import { contracts } from '@shared/contracts'
 import type { ChannelName, ChannelOutput, IpcError, IpcResult } from '@shared/contracts'
 

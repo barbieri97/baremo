@@ -161,6 +161,9 @@ function sanitizeEntryName(value: string): string {
   return value
     .replace(/[/\\]/g, '_')
     .replace(/\.{2,}/g, '_')
+    // Remover caracteres de controle do nome é exatamente o objetivo aqui: eles
+    // corrompem entradas de zip em vários extratores.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim()
     .slice(0, 120) || 'arquivo'

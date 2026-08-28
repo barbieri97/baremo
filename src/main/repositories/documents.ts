@@ -60,10 +60,15 @@ export function listDocuments(
     .where(and(...filters))
     .orderBy(desc(documents.updatedAt))
     .all()
-    .map((row) => {
-      const { contentJson: _contentJson, ...rest } = toDocument(row)
-      return rest
-    })
+    // A listagem omite o conteúdo de propósito: um documento longo multiplicado
+    // por dezenas de linhas encheria o payload do IPC sem a tela usar nada disso.
+    .map((row) => omitContent(toDocument(row)))
+}
+
+function omitContent(document: BaremoDocument): Omit<BaremoDocument, 'contentJson'> {
+  const copy: Partial<BaremoDocument> = { ...document }
+  delete copy.contentJson
+  return copy as Omit<BaremoDocument, 'contentJson'>
 }
 
 export function getDocument(handle: BaremoDatabase, id: string): BaremoDocument {
