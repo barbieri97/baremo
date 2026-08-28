@@ -8,14 +8,27 @@
  * `baremo-file://`, e por isso vale isolá-lo do resto.
  */
 
-import { normalize, resolve, sep } from 'node:path'
+import { resolve, sep } from 'node:path'
 
 /**
  * Resolve um caminho pedido para dentro de uma raiz, ou devolve `null`.
  *
- * Trabalha sobre o caminho decodificado e compara o resultado de `resolve` com a
- * raiz — comparação por prefixo COM separador, para que `/dados/arquivos-outros`
- * não passe por começar com `/dados/arquivos`.
+ * A entrada é o *pathname* de uma URL — sempre com barras normais, sempre
+ * POSIX — e NÃO um caminho do sistema. Por isso a normalização é feita à mão,
+ * segmento a segmento, em vez de delegar a `path.normalize`:
+ *
+ *  - no Windows, `path.normalize` é `path.win32`, que interpreta `//algo` como
+ *    caminho UNC (`\\servidor\compartilhamento`) e se recusa a colapsar `..`
+ *    além da raiz do compartilhamento — um `/a/b/../c` sairia de lá como
+ *    `/a/b/c`, com o `..` engolido;
+ *  - a mesma entrada produziria resultados diferentes em Windows e em POSIX, e
+ *    um resolvedor de segurança que muda de comportamento conforme o sistema é
+ *    um resolvedor que não dá para revisar.
+ *
+ * O laço abaixo não tem essas armadilhas: `..` desempilha, e desempilhar uma
+ * pilha vazia não faz nada — então nenhuma sequência de `..` alcança fora da
+ * raiz, em nenhuma plataforma. `isWithinRoot` confere o resultado como segunda
+ * barreira.
  */
 export function resolveWithinRoot(root: string, requestedPath: string): string | null {
   let decoded: string
@@ -30,12 +43,28 @@ export function resolveWithinRoot(root: string, requestedPath: string): string |
   // Bytes nulos truncam caminhos em algumas camadas nativas.
   if (decoded.includes('\0')) return null
 
+  // A contrabarra é tratada como separador, e não como caractere de nome: é o
+  // que o Chromium faz ao normalizar URLs, e é a leitura conservadora — um
+  // segmento literal `..\..` nunca chega a virar nome de arquivo.
+  const segments: string[] = []
+
+  for (const segment of decoded.replace(/\\/g, '/').split('/')) {
+    if (segment === '' || segment === '.') continue
+
+    if (segment === '..') {
+      segments.pop()
+      continue
+    }
+
+    segments.push(segment)
+  }
+
   const normalizedRoot = resolve(root)
+  const candidate = resolve(normalizedRoot, ...segments)
 
-  // O `.` inicial força o caminho a ser relativo à raiz, mesmo quando o pedido
-  // é absoluto; `normalize` colapsa os `..` antes disso.
-  const candidate = resolve(normalizedRoot, `.${normalize(`/${decoded}`)}`)
-
+  // Segunda barreira. Pega, entre outros, o caso do Windows em que um segmento
+  // como `C:` seria interpretado por `resolve` como designador de unidade e
+  // levaria para fora da raiz.
   return isWithinRoot(normalizedRoot, candidate) ? candidate : null
 }
 

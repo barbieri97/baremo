@@ -104,6 +104,51 @@ describe('resolveWithinRoot — traversal', () => {
   })
 })
 
+/**
+ * O resolvedor recebe o *pathname* de uma URL, que é sempre POSIX — e não um
+ * caminho do sistema. Delegar a normalização ao `path` da plataforma fazia o
+ * Windows tratar `//algo` como caminho UNC e engolir o `..`, produzindo
+ * resultado diferente do POSIX para a mesma entrada.
+ *
+ * Estes casos são independentes de plataforma de propósito: falham em qualquer
+ * sistema se alguém voltar a usar `path.normalize` aqui.
+ */
+describe('resolveWithinRoot — independência de plataforma', () => {
+  it('colapsa .. no meio do caminho', () => {
+    // O caso que o Windows quebrava: `..` engolido pela semântica UNC.
+    expect(resolveWithinRoot(root, '/ab/cd/../blob.pdf')).toBe(join(root, 'ab', 'blob.pdf'))
+  })
+
+  it('trata barras duplicadas como uma só, sem virar caminho UNC', () => {
+    expect(resolveWithinRoot(root, '//ab//blob.pdf')).toBe(join(root, 'ab', 'blob.pdf'))
+    expect(resolveWithinRoot(root, '/ab///cd/../blob.pdf')).toBe(join(root, 'ab', 'blob.pdf'))
+  })
+
+  it('não deixa um designador de unidade escapar da raiz', () => {
+    // No Windows, `resolve(raiz, 'C:')` seria interpretado como caminho relativo
+    // à unidade C: — a checagem final contra a raiz é o que fecha isso.
+    for (const attempt of ['/C:/Windows/System32', '/C:', '/D:/dados']) {
+      const resolved = resolveWithinRoot(root, attempt)
+      if (resolved !== null) expect(isWithinRoot(root, resolved)).toBe(true)
+    }
+  })
+
+  it('trata a contrabarra como separador, e não como nome de arquivo', () => {
+    expect(resolveWithinRoot(root, '/ab\\blob.pdf')).toBe(join(root, 'ab', 'blob.pdf'))
+  })
+
+  it('nunca sai da raiz, qualquer que seja a quantidade de ..', () => {
+    for (let depth = 1; depth <= 12; depth++) {
+      const attempt = `/${'../'.repeat(depth)}segredo.txt`
+      const resolved = resolveWithinRoot(root, attempt)
+
+      expect(resolved).not.toBeNull()
+      expect(isWithinRoot(root, resolved!)).toBe(true)
+      expect(resolved).toBe(join(root, 'segredo.txt'))
+    }
+  })
+})
+
 describe('isWithinRoot', () => {
   it('aceita a raiz e o que está dentro dela', () => {
     expect(isWithinRoot(root, root)).toBe(true)
