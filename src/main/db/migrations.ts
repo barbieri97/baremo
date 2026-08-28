@@ -8,6 +8,11 @@
  *
  * REGRA: uma migration publicada nunca é editada. Divergência de schema se
  * corrige com uma migration nova.
+ *
+ * As chaves primárias são declaradas `PRIMARY KEY NOT NULL` de propósito: por
+ * compatibilidade histórica, o SQLite aceita NULL numa coluna `TEXT PRIMARY KEY`
+ * quando o NOT NULL não é explícito. `tests/unit/schema-drift.spec.ts` compara
+ * este DDL com o schema Drizzle e teria acusado a diferença de qualquer forma.
  */
 
 export interface Migration {
@@ -21,7 +26,7 @@ const initial: Migration = {
   name: 'esquema-inicial',
   statements: [
     `CREATE TABLE professional_profile (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        name TEXT NOT NULL DEFAULT '',
        crp TEXT NOT NULL DEFAULT '',
        specialty TEXT NOT NULL DEFAULT '',
@@ -32,12 +37,12 @@ const initial: Migration = {
      )`,
 
     `CREATE TABLE app_settings (
-       key TEXT PRIMARY KEY,
+       key TEXT PRIMARY KEY NOT NULL,
        value TEXT NOT NULL
      )`,
 
     `CREATE TABLE colors (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        name TEXT NOT NULL,
        hex TEXT NOT NULL,
        "order" INTEGER NOT NULL DEFAULT 0,
@@ -45,7 +50,7 @@ const initial: Migration = {
      )`,
 
     `CREATE TABLE patients (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        full_name TEXT NOT NULL,
        birth_date TEXT,
        sex TEXT NOT NULL DEFAULT 'unspecified',
@@ -60,7 +65,7 @@ const initial: Migration = {
     `CREATE INDEX idx_patients_name ON patients (full_name)`,
 
     `CREATE TABLE cognitive_functions (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        parent_id TEXT REFERENCES cognitive_functions(id) ON DELETE CASCADE,
        name TEXT NOT NULL,
        description TEXT,
@@ -71,7 +76,7 @@ const initial: Migration = {
     // Excluir uma função cognitiva remove o VÍNCULO com os instrumentos (§6.3),
     // não os instrumentos — daí SET NULL, e não CASCADE.
     `CREATE TABLE instruments (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        parent_id TEXT REFERENCES instruments(id) ON DELETE CASCADE,
        name TEXT NOT NULL,
        acronym TEXT,
@@ -85,7 +90,7 @@ const initial: Migration = {
     `CREATE INDEX idx_instruments_function ON instruments (cognitive_function_id)`,
 
     `CREATE TABLE classification_ranges (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        instrument_id TEXT NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
        score_type TEXT NOT NULL,
        classification_name TEXT NOT NULL,
@@ -97,7 +102,7 @@ const initial: Migration = {
     `CREATE INDEX idx_ranges_instrument_type ON classification_ranges (instrument_id, score_type)`,
 
     `CREATE TABLE assessments (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
        date TEXT NOT NULL,
        referral_reason TEXT,
@@ -112,7 +117,7 @@ const initial: Migration = {
     // (§4.8 / ADR-004). Uma FK obrigaria a escolher entre travar a edição das
     // faixas e apagar o rastro — as duas piores que guardar o ID solto.
     `CREATE TABLE assessment_results (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        assessment_id TEXT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
        instrument_id TEXT NOT NULL REFERENCES instruments(id) ON DELETE RESTRICT,
        score_type TEXT NOT NULL,
@@ -130,7 +135,7 @@ const initial: Migration = {
        ON assessment_results (assessment_id, instrument_id, score_type)`,
 
     `CREATE TABLE attachments (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
        assessment_id TEXT REFERENCES assessments(id) ON DELETE SET NULL,
        original_name TEXT NOT NULL,
@@ -147,7 +152,7 @@ const initial: Migration = {
     `CREATE INDEX idx_attachments_sha ON attachments (sha256)`,
 
     `CREATE TABLE documents (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
        assessment_id TEXT REFERENCES assessments(id) ON DELETE SET NULL,
        type TEXT NOT NULL,
@@ -163,7 +168,7 @@ const initial: Migration = {
     `CREATE INDEX idx_documents_patient ON documents (patient_id)`,
 
     `CREATE TABLE document_versions (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
        content_json TEXT NOT NULL,
        reason TEXT NOT NULL,
@@ -172,7 +177,7 @@ const initial: Migration = {
     `CREATE INDEX idx_document_versions_document ON document_versions (document_id)`,
 
     `CREATE TABLE document_templates (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        type TEXT NOT NULL,
        name TEXT NOT NULL,
        content_json TEXT NOT NULL,
@@ -181,7 +186,7 @@ const initial: Migration = {
 
     // Sem FK: a auditoria precisa sobreviver à exclusão do que ela registra.
     `CREATE TABLE audit_log (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
        entity TEXT NOT NULL,
        entity_id TEXT,
@@ -191,7 +196,7 @@ const initial: Migration = {
     `CREATE INDEX idx_audit_timestamp ON audit_log (timestamp)`,
 
     `CREATE TABLE ai_config (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        enabled INTEGER NOT NULL DEFAULT 0,
        model TEXT NOT NULL DEFAULT 'gemini-flash-latest',
        key_hint TEXT,
@@ -203,7 +208,7 @@ const initial: Migration = {
      )`,
 
     `CREATE TABLE ai_sessions (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
        title TEXT NOT NULL DEFAULT '',
        model TEXT NOT NULL,
@@ -213,7 +218,7 @@ const initial: Migration = {
     `CREATE INDEX idx_ai_sessions_patient ON ai_sessions (patient_id)`,
 
     `CREATE TABLE ai_messages (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        session_id TEXT NOT NULL REFERENCES ai_sessions(id) ON DELETE CASCADE,
        role TEXT NOT NULL,
        text TEXT NOT NULL DEFAULT '',
@@ -223,7 +228,7 @@ const initial: Migration = {
     `CREATE INDEX idx_ai_messages_session ON ai_messages (session_id)`,
 
     `CREATE TABLE ai_tool_calls (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        session_id TEXT NOT NULL REFERENCES ai_sessions(id) ON DELETE CASCADE,
        message_id TEXT,
        tool_name TEXT NOT NULL,
@@ -235,7 +240,7 @@ const initial: Migration = {
     `CREATE INDEX idx_ai_tool_calls_session ON ai_tool_calls (session_id)`,
 
     `CREATE TABLE consents (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        scope TEXT NOT NULL,
        patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE,
        granted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -247,7 +252,7 @@ const initial: Migration = {
        ON consents (scope, COALESCE(patient_id, ''))`,
 
     `CREATE TABLE ai_audit (
-       id TEXT PRIMARY KEY,
+       id TEXT PRIMARY KEY NOT NULL,
        timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
        session_id TEXT,
        patient_id TEXT,

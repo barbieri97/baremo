@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Nenhuma chave real de API em ponto algum do CI (§15.1). O SDK do Gemini nunca
+# é chamado de verdade: os testes exercitam o orquestrador com o módulo desligado
+# e as tools contra um banco local.
+env:
+  CI: 'true'
+
+jobs:
+  verificacao:
+    name: Lint, tipos e testes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: ESLint
+        # Inclui a regra que impede o módulo de IA de importar os repositórios
+        # gerais — camada 2 do isolamento por paciente (§10.5).
+        run: npm run lint
+
+      - name: Verificação de tipos
+        run: npm run typecheck
+
+      - name: Testes de unidade e gates de segurança
+        # `pretest` deixa o better-sqlite3 na ABI do Node antes do Vitest.
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Testes E2E (Playwright for Electron)
+        # xvfb porque o Electron precisa de um display; a flag --no-sandbox fica
+        # no próprio teste, por conta do contêiner.
+        run: xvfb-run -a npm run test:e2e
+
+      - name: Anexar relatório do E2E em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  build-multiplataforma:
+    name: Build de verificação (${{ matrix.os }})
+    needs: verificacao
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificação de tipos
+        run: npm run typecheck
+
+      - name: Testes de unidade e gates de segurança
+        run: npm test
+
+      - name: Build
+        # Compila o better-sqlite3 para a ABI do Electron da plataforma-alvo —
+        # é o que confirma que o empacotamento funciona nos três sistemas.
+        run: npm run build

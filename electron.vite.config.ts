@@ -26,7 +26,14 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: resolve('src/preload/index.ts') }
+        input: { index: resolve('src/preload/index.ts') },
+        // O preload roda com `sandbox: true`, e preload em sandbox não suporta
+        // ESM. Com `"type": "module"` no package.json, um `.js` seria tratado
+        // como módulo — daí o `.cjs` explícito.
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
+        }
       }
     }
   },

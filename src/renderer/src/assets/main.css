@@ -1,0 +1,217 @@
+@import 'tailwindcss';
+
+/**
+ * Tema do aplicativo.
+ *
+ * Tailwind v4 configura por CSS. As cores são neutras e de baixa saturação de
+ * propósito: a cor com significado nesta interface é a das faixas de
+ * classificação, e um tema colorido competiria com a leitura dos resultados.
+ */
+@theme {
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f5f9;
+  --color-ink-200: #e2e8f0;
+  --color-ink-300: #cbd5e0;
+  --color-ink-400: #a0aec0;
+  --color-ink-500: #718096;
+  --color-ink-600: #4a5568;
+  --color-ink-700: #2d3748;
+  --color-ink-800: #1a202c;
+  --color-ink-900: #111827;
+
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-500: #2b6cb0;
+  --color-brand-600: #1e5a9c;
+  --color-brand-700: #1a365d;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #c53030;
+  --color-danger-600: #9b2c2c;
+
+  --color-warn-50: #fffaf0;
+  --color-warn-200: #feebc8;
+  --color-warn-500: #dd6b20;
+  --color-warn-700: #7b341e;
+
+  --color-ok-50: #f0fff4;
+  --color-ok-500: #2f855a;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-50);
+  color: var(--color-ink-800);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/**
+ * Foco sempre visível.
+ *
+ * §16.4 exige navegação completa por teclado nos fluxos de entrada de
+ * resultados. Um anel de foco que some torna esse fluxo inutilizável, então o
+ * estilo é global e não pode ser removido componente a componente.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Utilitários usados o bastante para virarem classe. */
+@utility card {
+  background: white;
+  border: 1px solid var(--color-ink-200);
+  border-radius: 0.5rem;
+}
+
+@utility field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-500);
+  margin-bottom: 0.25rem;
+}
+
+@utility field-input {
+  width: 100%;
+  border: 1px solid var(--color-ink-300);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  background: white;
+  color: var(--color-ink-800);
+}
+
+@utility field-input-invalid {
+  border-color: var(--color-danger-500);
+  background: var(--color-danger-50);
+}
+
+/* A grade de resultados é densa: a tabela precisa de tipografia tabular para
+   os números alinharem coluna a coluna. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Conteúdo do editor (§9) — a folha de estilo da tela, não a da impressão. */
+.tiptap {
+  outline: none;
+  min-height: 24rem;
+}
+
+.tiptap p {
+  margin: 0 0 0.75rem;
+}
+
+.tiptap h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.tiptap h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+}
+
+.tiptap h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.875rem 0 0.5rem;
+}
+
+.tiptap ul,
+.tiptap ol {
+  margin: 0 0 0.75rem 1.5rem;
+}
+
+.tiptap ul {
+  list-style: disc;
+}
+
+.tiptap ol {
+  list-style: decimal;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid var(--color-ink-300);
+  padding-left: 1rem;
+  color: var(--color-ink-600);
+  margin: 0 0 0.75rem;
+}
+
+.tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.tiptap th,
+.tiptap td {
+  border: 1px solid var(--color-ink-300);
+  padding: 0.375rem 0.5rem;
+  vertical-align: top;
+}
+
+.tiptap th {
+  background: var(--color-ink-100);
+  font-weight: 600;
+}
+
+.tiptap pre {
+  background: var(--color-ink-100);
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+}
+
+.tiptap .is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-400);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Nó `variavel` (§9.2): o token precisa ser visivelmente um espaço reservado,
+   e não texto comum, para o profissional não confundir com o dado real. */
+.tiptap-token {
+  background: var(--color-brand-100);
+  color: var(--color-brand-700);
+  border-radius: 0.25rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.tiptap-page-break {
+  border-top: 2px dashed var(--color-ink-300);
+  margin: 1.5rem 0;
+  position: relative;
+  text-align: center;
+}
+
+.tiptap-page-break::after {
+  content: 'quebra de página';
+  position: relative;
+  top: -0.7rem;
+  background: var(--color-ink-50);
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-400);
+}

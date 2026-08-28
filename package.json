@@ -7,6 +7,7 @@
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
+  "desktopName": "baremo.desktop",
   "scripts": {
     "predev": "node scripts/native-abi.mjs electron",
     "dev": "electron-vite dev",
@@ -63,7 +64,6 @@
     "@tiptap/starter-kit": "^3.30.5",
     "@tiptap/suggestion": "^3.30.5",
     "@tiptap/vue-3": "^3.30.5",
-    "@types/archiver": "^6.0.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "@vitejs/plugin-vue": "^6.0.8",
@@ -74,6 +74,7 @@
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-vue": "^10.5.0",
+    "globals": "^17.11.0",
     "lowlight": "^3.3.0",
     "pdfjs-dist": "^6.2.108",
     "pinia": "^4.0.3",

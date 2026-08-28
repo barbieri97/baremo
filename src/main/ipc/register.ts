@@ -16,7 +16,8 @@
 
 import { ipcMain } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
-import { z } from 'zod'
+// `z` só aparece em posição de tipo aqui — a validação em si usa os schemas do contrato.
+import type { z } from 'zod'
 import { contracts } from '@shared/contracts'
 import type { ChannelName, ChannelOutput, IpcError, IpcResult } from '@shared/contracts'
 
@@ -58,6 +59,23 @@ export function setAllowedOrigins(origins: readonly string[]): void {
   allowedOrigins = origins
 }
 
+/**
+ * Origem de uma URL, montada a partir do protocolo e do host.
+ *
+ * `URL.origin` NÃO serve aqui: a especificação manda devolver a string `"null"`
+ * para todo esquema que não seja "especial" (http, https, ws, wss, ftp, file), e
+ * a interface em produção é servida por `app://`. Comparar `.origin` faria o
+ * processo principal recusar a própria janela do aplicativo.
+ */
+export function originOf(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return null
+  }
+}
+
 function senderIsTrusted(event: IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame
   if (frame === null) return false
@@ -66,12 +84,8 @@ function senderIsTrusted(event: IpcMainInvokeEvent): boolean {
   // conteúdo remoto que tenha conseguido carregar) não herda esse direito.
   if (frame.parent !== null) return false
 
-  try {
-    const origin = new URL(frame.url).origin
-    return allowedOrigins.includes(origin)
-  } catch {
-    return false
-  }
+  const origin = originOf(frame.url)
+  return origin !== null && allowedOrigins.includes(origin)
 }
 
 export type Handler<C extends ChannelName> = (
