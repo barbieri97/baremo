@@ -14,6 +14,11 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Os três jobs rodam `--publish always` contra a mesma tag. Em paralelo,
+      # cada um tenta criar o release e o GitHub aceita duplicatas: a v0.2.0
+      # saiu com dois releases e os artefatos divididos entre eles. Serializado,
+      # o primeiro job cria o release e os demais só anexam seus arquivos.
+      max-parallel: 1
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
@@ -36,6 +41,34 @@ jobs:
         # sai sem eles.
         run: npm test
 
+      - name: Configurar assinatura de código
+        # Assinatura — pendência §15.3, com custo anual. Enquanto os segredos não
+        # existirem, `secrets.CSC_LINK` chega como string vazia, e o
+        # electron-builder tenta ler essa string como caminho do certificado
+        # (`⨯ ... not a file`, que derrubou o job do macOS na v0.2.0). Por isso as
+        # variáveis só são definidas quando há segredo de verdade; sem ele, os
+        # instaladores saem sem assinatura e disparam SmartScreen (Windows) e
+        # Gatekeeper (macOS).
+        shell: bash
+        env:
+          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$CSC_LINK_SECRET" ]; then
+            {
+              echo "CSC_LINK<<__EOF__"
+              echo "$CSC_LINK_SECRET"
+              echo "__EOF__"
+              echo "CSC_KEY_PASSWORD<<__EOF__"
+              echo "$CSC_KEY_PASSWORD_SECRET"
+              echo "__EOF__"
+            } >> "$GITHUB_ENV"
+            echo "Certificado presente: empacotando com assinatura."
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            echo "Sem certificado: empacotando sem assinatura (§15.3)."
+          fi
+
       - name: Empacotar e publicar
         # `--publish always` cria (ou atualiza) o release no GitHub e gera os
         # manifestos `latest.yml` / `latest-mac.yml` / `latest-linux.yml` que o
@@ -43,11 +76,8 @@ jobs:
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Assinatura de código — pendência §15.3, com custo anual. Enquanto os
-          # segredos não existirem, o electron-builder empacota sem assinar e os
-          # instaladores disparam SmartScreen (Windows) e Gatekeeper (macOS).
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # A notarização só é tentada quando as credenciais da Apple existem;
+          # vazias, o electron-builder simplesmente as ignora.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
