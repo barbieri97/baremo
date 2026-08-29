@@ -2,13 +2,14 @@
  * Cliente tipado do IPC.
  *
  * O preload expõe um `invoke` genérico com allowlist; aqui ele ganha os tipos do
- * contrato e o envelope é desembrulhado. O resto do renderer chama
- * `api('patients:list', { … })` e recebe o dado ou uma exceção — sem `if (ok)`
- * espalhado por cada componente.
+ * contrato, o payload é posto em forma clonável e o envelope é desembrulhado. O
+ * resto do renderer chama `api('patients:list', { … })` e recebe o dado ou uma
+ * exceção — sem `if (ok)` espalhado por cada componente.
  */
 
 import type { ChannelInput, ChannelName, ChannelOutput, IpcError, IpcResult } from '@shared/contracts'
 import type { AiStreamEvent } from '@shared/contracts/entities-ai'
+import { toCloneablePayload } from '@shared/ipc-payload'
 
 declare global {
   interface Window {
@@ -36,7 +37,7 @@ export async function api<C extends ChannelName>(
   channel: C,
   ...[payload]: ChannelInput<C> extends void ? [] : [ChannelInput<C>]
 ): Promise<ChannelOutput<C>> {
-  const result = await window.baremo.invoke(channel, payload)
+  const result = await window.baremo.invoke(channel, toCloneablePayload(payload))
 
   if (!result.ok) {
     throw new BaremoError(result.error.code, result.error.message, result.error.details)
