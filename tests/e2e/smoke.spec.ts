@@ -149,3 +149,17 @@ test('o app funciona inteiro com o módulo de IA desligado', async () => {
   await page.getByRole('button', { name: 'Criar backup' }).click()
   await expect(page.getByText('Backup criado.')).toBeVisible()
 })
+
+test('salva o perfil profissional', async () => {
+  // Regressão: o formulário enviava o `ref` reativo direto ao IPC, e o
+  // contextBridge recusava o Proxy com "An object could not be cloned.".
+  // Atravessa a ponte de verdade — é o que o teste de unidade não prova.
+  await page.getByRole('link', { name: /Configurações/ }).click()
+
+  await page.getByLabel('Nome', { exact: true }).fill('Profissional de Verificação')
+  await page.getByLabel('CRP').fill('06/123456')
+  await page.getByRole('button', { name: 'Salvar perfil' }).click()
+
+  await expect(page.getByText('Perfil salvo.')).toBeVisible()
+  await expect(page.getByText('An object could not be cloned.')).toHaveCount(0)
+})
