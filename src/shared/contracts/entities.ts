@@ -33,6 +33,20 @@ export const hexColorSchema = z
 
 export const scoreTypeSchema = z.enum(SCORE_TYPES)
 
+/**
+ * Nível ordinal da faixa (§4.6). União de literais, e não `int().min(1).max(5)`,
+ * para que o tipo inferido seja o `ClassificationLevel` do domínio e não um
+ * `number` qualquer — quem consome o contrato recebe a mesma garantia que o
+ * `levels.ts` dá.
+ */
+export const classificationLevelSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5)
+])
+
 /** Texto livre de campo curto; `trim` evita nomes que diferem só por espaço. */
 const shortText = z.string().trim().min(1).max(200)
 const optionalShortText = z.string().trim().max(200).nullable()
@@ -47,8 +61,14 @@ export const professionalProfileSchema = z.object({
   phone: z.string().trim().max(40),
   email: z.string().trim().max(200),
   address: z.string().trim().max(400),
-  /** Logo do cabeçalho de relatório, como data URI. Opcional. */
-  logoDataUrl: z.string().max(2_000_000).nullable()
+  /**
+   * Logo do cabeçalho de relatório, como data URI. Opcional.
+   *
+   * 400 KB é folgado para uma imagem já reduzida a 480 × 260 px, e apertado o
+   * bastante para que uma imagem crua não atravesse a fronteira. Reduzem o
+   * renderer, antes de enviar, e `main/images/logo.ts`, antes de gravar.
+   */
+  logoDataUrl: z.string().max(400_000).nullable()
 })
 export type ProfessionalProfile = z.infer<typeof professionalProfileSchema>
 
@@ -137,7 +157,11 @@ export const classificationRangeSchema = z.object({
   maxValue: z.number(),
   colorId: idSchema,
   /** Incrementa a cada edição do conjunto — rastreabilidade do snapshot (§4.8). */
-  version: z.number().int().min(1)
+  version: z.number().int().min(1),
+  /** Ordem entre as faixas, que o nome livre não dá. Nulo = ainda não definido. */
+  level: classificationLevelSchema.nullable(),
+  /** Escore alto indica PIOR desempenho. Vale para o conjunto inteiro. */
+  inverted: z.boolean()
 })
 export type ClassificationRange = z.infer<typeof classificationRangeSchema>
 
@@ -146,7 +170,13 @@ export const classificationRangeDraftSchema = z.object({
   classificationName: shortText,
   minValue: z.number(),
   maxValue: z.number(),
-  colorId: idSchema
+  colorId: idSchema,
+  /**
+   * Com `default`, um rascunho sem estes campos continua válido — é o que faz um
+   * arquivo de catálogo gravado antes da migration 2 continuar importável.
+   */
+  level: classificationLevelSchema.nullable().default(null),
+  inverted: z.boolean().default(false)
 })
 export type ClassificationRangeDraft = z.infer<typeof classificationRangeDraftSchema>
 
@@ -192,6 +222,8 @@ export const assessmentResultSchema = z.object({
   colorHex: hexColorSchema.nullable(),
   rangeId: idSchema.nullable(),
   rangeVersion: z.number().int().nullable(),
+  /** Parte do mesmo snapshot: o nível com que este resultado foi classificado. */
+  classificationLevel: classificationLevelSchema.nullable(),
   manuallyOverridden: z.boolean(),
   notes: longText
 })
@@ -205,9 +237,19 @@ export const assessmentResultInputSchema = z
     value: z.number().nullable(),
     status: z.enum(RESULT_STATUSES),
     notes: longText,
-    /** Sobrescrita manual da classificação; quando ausente, o sistema resolve. */
+    /**
+     * Sobrescrita manual da classificação; quando ausente, o sistema resolve.
+     *
+     * O nível vai junto: sem ele, um resultado sobrescrito à mão sumiria do
+     * panorama por função, que é justamente onde a decisão do profissional
+     * precisa aparecer.
+     */
     override: z
-      .object({ classificationName: shortText, colorHex: hexColorSchema })
+      .object({
+        classificationName: shortText,
+        colorHex: hexColorSchema,
+        level: classificationLevelSchema.nullable().default(null)
+      })
       .nullable()
       .default(null)
   })

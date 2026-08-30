@@ -16,6 +16,7 @@ import {
   assessmentSchema,
   attachmentSchema,
   auditLogSchema,
+  classificationLevelSchema,
   classificationRangeDraftSchema,
   classificationRangeWithColorSchema,
   cognitiveFunctionInputSchema,
@@ -36,6 +37,7 @@ import {
   tiptapContentSchema,
   timestampSchema
 } from './entities'
+import { resultsOverviewSchema } from './results'
 import {
   AI_MODELS,
   aiAuditSchema,
@@ -122,25 +124,19 @@ export const contracts = {
 
   // ─── patients:* ────────────────────────────────────────────────────────────
   'patients:list': channel(
-    z.object({ query: z.string().max(200).default(''), includeArchived: z.boolean().default(false) }),
+    z.object({
+      query: z.string().max(200).default(''),
+      includeArchived: z.boolean().default(false)
+    }),
     z.array(patientSchema)
   ),
   'patients:get': channel(z.object({ id: idSchema }), patientSchema),
   'patients:create': channel(z.object({ input: patientInputSchema }), patientSchema),
-  'patients:update': channel(
-    z.object({ id: idSchema, input: patientInputSchema }),
-    patientSchema
-  ),
-  'patients:setArchived': channel(
-    z.object({ id: idSchema, archived: z.boolean() }),
-    patientSchema
-  ),
+  'patients:update': channel(z.object({ id: idSchema, input: patientInputSchema }), patientSchema),
+  'patients:setArchived': channel(z.object({ id: idSchema, archived: z.boolean() }), patientSchema),
   'patients:impact': channel(z.object({ id: idSchema }), impactSchema),
   /** Exclusão definitiva exige digitar o nome do paciente (§6.2). */
-  'patients:delete': channel(
-    z.object({ id: idSchema, confirmationName: z.string() }),
-    ok
-  ),
+  'patients:delete': channel(z.object({ id: idSchema, confirmationName: z.string() }), ok),
 
   // ─── cognitiveFunctions:* ──────────────────────────────────────────────────
   'cognitiveFunctions:list': channel(empty, z.array(cognitiveFunctionSchema)),
@@ -254,10 +250,29 @@ export const contracts = {
     resultRowSchema
   ),
   'results:delete': channel(z.object({ id: idSchema }), ok),
+  /**
+   * Panorama da avaliação: por função cognitiva e por teste, já agregado.
+   *
+   * Uma chamada só, e não o cliente montando a agregação a partir de
+   * `results:listByAssessment`: o PDF precisa exatamente do mesmo recorte, e
+   * duas montagens em paralelo é como a tela e o laudo passam a discordar.
+   */
+  'results:overview': channel(
+    z.object({
+      assessmentId: idSchema,
+      /** Outras avaliações do mesmo paciente, para comparar e ver evolução. */
+      comparisonAssessmentIds: z.array(idSchema).max(6).default([])
+    }),
+    resultsOverviewSchema
+  ),
   /** Reprocessa classificações desta avaliação — ação explícita, ADR-004. */
   'results:reprocess': channel(
     z.object({ assessmentId: idSchema }),
-    z.object({ updated: z.number().int(), unchanged: z.number().int(), unresolved: z.number().int() })
+    z.object({
+      updated: z.number().int(),
+      unchanged: z.number().int(),
+      unresolved: z.number().int()
+    })
   ),
   /** Prévia do reprocessamento: o que mudaria, antes de confirmar. */
   'results:reprocessPreview': channel(
@@ -267,9 +282,35 @@ export const contracts = {
         resultId: idSchema,
         instrumentName: z.string(),
         from: z.string().nullable(),
-        to: z.string().nullable()
+        to: z.string().nullable(),
+        /**
+         * O nível também entra na prévia: dar nível a uma faixa que já existia
+         * não muda o nome da classificação, então sem isto a mudança que
+         * recolore o panorama por função apareceria como "nada mudou".
+         */
+        fromLevel: classificationLevelSchema.nullable(),
+        toLevel: classificationLevelSchema.nullable()
       })
     )
+  ),
+
+  // ─── charts:* ──────────────────────────────────────────────────────────────
+  /**
+   * Salva a imagem de um gráfico da tela de resultados.
+   *
+   * O conteúdo sobe já renderizado pelo renderer — é lá que a instância do
+   * ECharts vive, e pedir ao processo principal para redesenhá-la significaria
+   * manter duas fontes para a mesma figura. O main é quem toca no disco: o
+   * diálogo de "salvar como" e a escrita ficam do lado que tem essa permissão.
+   */
+  'charts:exportImage': channel(
+    z.object({
+      fileName: z.string().trim().min(1).max(200),
+      format: z.enum(['png', 'svg']),
+      /** Data URL, em PNG; a marcação do SVG, em SVG. */
+      content: z.string().min(1).max(20_000_000)
+    }),
+    z.object({ filePath: z.string(), cancelled: z.boolean() })
   ),
 
   // ─── reports:* ─────────────────────────────────────────────────────────────
@@ -277,7 +318,13 @@ export const contracts = {
     z.object({
       kind: z.enum(REPORT_KINDS),
       assessmentId: idSchema.nullable(),
+      /** Só em `comparative`: a segunda avaliação, pareada uma a uma. */
       comparisonAssessmentId: idSchema.nullable(),
+      /**
+       * Só em `results`: as avaliações que entram como colunas adicionais. É
+       * lista, e não um segundo id, porque a evolução no tempo compara N datas.
+       */
+      comparisonAssessmentIds: z.array(idSchema).max(6).default([]),
       documentId: idSchema.nullable()
     }),
     z.object({ filePath: z.string(), cancelled: z.boolean() })
@@ -431,10 +478,7 @@ export const contracts = {
   'maintenance:listBackups': channel(empty, z.array(backupSchema)),
   'maintenance:createBackup': channel(empty, backupSchema),
   'maintenance:restoreBackup': channel(z.object({ fileName: z.string() }), ok),
-  'maintenance:integrityCheck': channel(
-    empty,
-    z.object({ ok: z.boolean(), detail: z.string() })
-  ),
+  'maintenance:integrityCheck': channel(empty, z.object({ ok: z.boolean(), detail: z.string() })),
   'maintenance:scanFiles': channel(
     empty,
     z.object({
@@ -545,12 +589,6 @@ export interface IpcError {
   readonly details?: unknown
 }
 
-export type IpcErrorCode =
-  | 'validation'
-  | 'not_found'
-  | 'conflict'
-  | 'forbidden'
-  | 'io'
-  | 'internal'
+export type IpcErrorCode = 'validation' | 'not_found' | 'conflict' | 'forbidden' | 'io' | 'internal'
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError }

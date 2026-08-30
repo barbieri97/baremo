@@ -113,19 +113,25 @@ function seedInstrumentWithRanges(
       classificationName: 'Inferior',
       minValue: 0,
       maxValue: 25,
-      colorId: colorIdByName(handle, 'Vermelho')
+      colorId: colorIdByName(handle, 'Vermelho'),
+      level: null,
+      inverted: false
     },
     {
       classificationName: 'Média',
       minValue: 25,
       maxValue: 75,
-      colorId: colorIdByName(handle, 'Amarelo claro')
+      colorId: colorIdByName(handle, 'Amarelo claro'),
+      level: null,
+      inverted: false
     },
     {
       classificationName: 'Superior',
       minValue: 75,
       maxValue: 100,
-      colorId: colorIdByName(handle, 'Verde escuro')
+      colorId: colorIdByName(handle, 'Verde escuro'),
+      level: null,
+      inverted: false
     }
   ])
 
@@ -305,13 +311,17 @@ describe('reimportação do mesmo catálogo', () => {
         classificationName: 'Abaixo da média',
         minValue: 0,
         maxValue: 50,
-        colorId: colorIdByName(origin, 'Vermelho')
+        colorId: colorIdByName(origin, 'Vermelho'),
+        level: null,
+        inverted: false
       },
       {
         classificationName: 'Acima da média',
         minValue: 50,
         maxValue: 100,
-        colorId: colorIdByName(origin, 'Verde escuro')
+        colorId: colorIdByName(origin, 'Verde escuro'),
+        level: null,
+        inverted: false
       }
     ])
 
@@ -384,19 +394,25 @@ describe('snapshot de classificação (ADR-004)', () => {
         classificationName: 'Inferior',
         minValue: 0,
         maxValue: 25,
-        colorId: colorIdByName(origin, 'Vermelho')
+        colorId: colorIdByName(origin, 'Vermelho'),
+        level: null,
+        inverted: false
       },
       {
         classificationName: 'Média',
         minValue: 25,
         maxValue: 75,
-        colorId: colorIdByName(origin, 'Amarelo claro')
+        colorId: colorIdByName(origin, 'Amarelo claro'),
+        level: null,
+        inverted: false
       },
       {
         classificationName: 'Muito acima da média',
         minValue: 75,
         maxValue: 100,
-        colorId: colorIdByName(origin, 'Verde escuro')
+        colorId: colorIdByName(origin, 'Verde escuro'),
+        level: null,
+        inverted: false
       }
     ])
 
@@ -428,7 +444,13 @@ describe('paleta', () => {
     const customId = randomUUID()
     origin.db
       .insert(colors)
-      .values({ id: customId, name: 'Roxo do consultório', hex: '#6B46C1', order: 99, isSeed: false })
+      .values({
+        id: customId,
+        name: 'Roxo do consultório',
+        hex: '#6B46C1',
+        order: 99,
+        isSeed: false
+      })
       .run()
 
     const instrumentId = createInstrument(origin, {
@@ -442,7 +464,14 @@ describe('paleta', () => {
       order: 0
     }).id
     saveRanges(origin, instrumentId, 'percentile', [
-      { classificationName: 'Tudo', minValue: 0, maxValue: 100, colorId: customId }
+      {
+        classificationName: 'Tudo',
+        minValue: 0,
+        maxValue: 100,
+        colorId: customId,
+        level: null,
+        inverted: false
+      }
     ])
 
     const report = applyCatalogImport(target, exportFile())
@@ -609,7 +638,9 @@ describe('arquivo inválido', () => {
               classificationName: 'Tudo',
               minValue: 0,
               maxValue: 100,
-              colorId: colorIdByName(target, 'Vermelho')
+              colorId: colorIdByName(target, 'Vermelho'),
+              level: null,
+              inverted: false
             }
           ]
         }

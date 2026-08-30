@@ -36,6 +36,8 @@ export function listRanges(
       maxValue: classificationRanges.maxValue,
       colorId: classificationRanges.colorId,
       version: classificationRanges.version,
+      level: classificationRanges.level,
+      inverted: classificationRanges.inverted,
       colorHex: colors.hex,
       colorName: colors.name
     })
@@ -77,7 +79,9 @@ export function validateDraft(
       minValue: range.minValue,
       maxValue: range.maxValue,
       colorHex: '#000000',
-      version: 1
+      version: 1,
+      level: range.level,
+      inverted: range.inverted
     })),
     scoreType
   )
@@ -140,7 +144,12 @@ export function saveRanges(
             minValue: draft.minValue,
             maxValue: draft.maxValue,
             colorId: draft.colorId,
-            version: nextVersion
+            version: nextVersion,
+            level: draft.level,
+            // A flag vale para o conjunto: gravar o valor da primeira faixa em
+            // todas mantém as linhas coerentes entre si, mesmo que a UI deixasse
+            // passar um rascunho misto.
+            inverted: drafts[0]?.inverted ?? false
           }))
         )
         .run()

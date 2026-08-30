@@ -42,7 +42,9 @@ export function buildCatalogFile(handle: BaremoDatabase, appVersion: string): Ca
           classificationName: entry.classificationName,
           minValue: entry.minValue,
           maxValue: entry.maxValue,
-          colorId: entry.colorId
+          colorId: entry.colorId,
+          level: entry.level,
+          inverted: entry.inverted
         }))
       })
     }

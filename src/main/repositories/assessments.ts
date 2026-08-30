@@ -16,13 +16,11 @@ import {
   documents,
   instruments
 } from '../db/schema'
-import type {
-  Assessment,
-  AssessmentInput,
-  AssessmentResultInput
-} from '@shared/contracts/entities'
+import type { Assessment, AssessmentInput, AssessmentResultInput } from '@shared/contracts/entities'
 import type { ScoreType } from '@shared/domain/score-types'
 import { SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
+import { toClassificationLevel } from '@shared/domain/levels'
+import type { ClassificationLevel } from '@shared/domain/levels'
 import { conflict, notFound } from '../ipc/register'
 import { countWhere, nowIso } from './helpers'
 import type { Impact } from './helpers'
@@ -79,10 +77,7 @@ export function getAssessment(handle: BaremoDatabase, id: string): Assessment {
   return row as Assessment
 }
 
-export function createAssessment(
-  handle: BaremoDatabase,
-  input: AssessmentInput
-): Assessment {
+export function createAssessment(handle: BaremoDatabase, input: AssessmentInput): Assessment {
   const id = randomUUID()
   handle.db
     .insert(assessments)
@@ -159,6 +154,7 @@ export interface ResultRow {
   colorHex: string | null
   rangeId: string | null
   rangeVersion: number | null
+  classificationLevel: ClassificationLevel | null
   manuallyOverridden: boolean
   notes: string | null
   instrumentName: string
@@ -180,6 +176,7 @@ export function listResults(handle: BaremoDatabase, assessmentId: string): Resul
       colorHex: assessmentResults.colorHex,
       rangeId: assessmentResults.rangeId,
       rangeVersion: assessmentResults.rangeVersion,
+      classificationLevel: assessmentResults.classificationLevel,
       manuallyOverridden: assessmentResults.manuallyOverridden,
       notes: assessmentResults.notes,
       instrumentName: instruments.name,
@@ -192,7 +189,11 @@ export function listResults(handle: BaremoDatabase, assessmentId: string): Resul
     .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
     .where(eq(assessmentResults.assessmentId, assessmentId))
     .orderBy(asc(instruments.order), asc(instruments.name))
-    .all() as ResultRow[]
+    .all()
+    .map((row) => ({
+      ...row,
+      classificationLevel: toClassificationLevel(row.classificationLevel)
+    })) as ResultRow[]
 }
 
 function getResultRow(handle: BaremoDatabase, id: string): ResultRow {
@@ -244,6 +245,7 @@ export function saveResult(
     colorHex: snapshot.colorHex,
     rangeId: snapshot.rangeId,
     rangeVersion: snapshot.rangeVersion,
+    classificationLevel: snapshot.classificationLevel,
     manuallyOverridden: input.override !== null,
     notes: input.notes
   }
@@ -251,7 +253,10 @@ export function saveResult(
   if (id === null) {
     const newId = randomUUID()
     try {
-      handle.db.insert(assessmentResults).values({ id: newId, ...values }).run()
+      handle.db
+        .insert(assessmentResults)
+        .values({ id: newId, ...values })
+        .run()
     } catch (error) {
       // O índice único (avaliação, instrumento, tipo de escore) impede duplicata;
       // a mensagem crua do SQLite não ajudaria o usuário.
@@ -285,7 +290,8 @@ function resolveSnapshot(
       classificationName: input.override.classificationName,
       colorHex: input.override.colorHex,
       rangeId: null,
-      rangeVersion: null
+      rangeVersion: null,
+      classificationLevel: input.override.level
     }
   }
 
@@ -308,6 +314,8 @@ export interface ReprocessChange {
   readonly instrumentName: string
   readonly from: string | null
   readonly to: string | null
+  readonly fromLevel: ClassificationLevel | null
+  readonly toLevel: ClassificationLevel | null
 }
 
 /**
@@ -317,10 +325,7 @@ export interface ReprocessChange {
  * Resultados sobrescritos manualmente ficam de fora: a decisão do profissional
  * prevalece sobre a tabela.
  */
-export function previewReprocess(
-  handle: BaremoDatabase,
-  assessmentId: string
-): ReprocessChange[] {
+export function previewReprocess(handle: BaremoDatabase, assessmentId: string): ReprocessChange[] {
   const results = listResults(handle, assessmentId)
   const rangesByKey = loadRangesForInstruments(handle, [
     ...new Set(results.map((result) => result.instrumentId))
@@ -334,12 +339,20 @@ export function previewReprocess(
     const ranges = rangesByKey.get(rangeKey(result.instrumentId, result.scoreType)) ?? []
     const snapshot = classify(result.value, result.scoreType, ranges)
 
-    if (snapshot.classificationName !== result.classificationName) {
+    // O nível entra na comparação: definir o nível de uma faixa que já existia
+    // não muda o nome da classificação, e sem isto a prévia diria "nada mudou"
+    // justamente na edição que faz o panorama por função ganhar cor.
+    if (
+      snapshot.classificationName !== result.classificationName ||
+      snapshot.classificationLevel !== result.classificationLevel
+    ) {
       changes.push({
         resultId: result.id,
         instrumentName: result.instrumentName,
         from: result.classificationName,
-        to: snapshot.classificationName
+        to: snapshot.classificationName,
+        fromLevel: result.classificationLevel,
+        toLevel: snapshot.classificationLevel
       })
     }
   }
@@ -380,7 +393,8 @@ export function reprocessAssessment(
 
       if (
         snapshot.classificationName === result.classificationName &&
-        snapshot.colorHex === result.colorHex
+        snapshot.colorHex === result.colorHex &&
+        snapshot.classificationLevel === result.classificationLevel
       ) {
         unchanged++
         continue
@@ -392,7 +406,8 @@ export function reprocessAssessment(
           classificationName: snapshot.classificationName,
           colorHex: snapshot.colorHex,
           rangeId: snapshot.rangeId,
-          rangeVersion: snapshot.rangeVersion
+          rangeVersion: snapshot.rangeVersion,
+          classificationLevel: snapshot.classificationLevel
         })
         .where(eq(assessmentResults.id, result.id))
         .run()
@@ -424,6 +439,7 @@ export function listResultsForAssessments(
       colorHex: assessmentResults.colorHex,
       rangeId: assessmentResults.rangeId,
       rangeVersion: assessmentResults.rangeVersion,
+      classificationLevel: assessmentResults.classificationLevel,
       manuallyOverridden: assessmentResults.manuallyOverridden,
       notes: assessmentResults.notes,
       instrumentName: instruments.name,
@@ -436,7 +452,11 @@ export function listResultsForAssessments(
     .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
     .where(inArray(assessmentResults.assessmentId, [...assessmentIds]))
     .orderBy(asc(instruments.order), asc(instruments.name))
-    .all() as ResultRow[]
+    .all()
+    .map((row) => ({
+      ...row,
+      classificationLevel: toClassificationLevel(row.classificationLevel)
+    })) as ResultRow[]
 }
 
 function isUniqueViolation(error: unknown): boolean {

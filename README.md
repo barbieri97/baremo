@@ -10,6 +10,13 @@ deles, o Baremo mapeia a classificação qualitativa e a cor conforme as faixas
 cadastradas, organiza os resultados na árvore de funções cognitivas, permite
 anexar arquivos e redigir documentos, e exporta tudo em PDF.
 
+A tela **Visualizar resultados**, na avaliação, é onde os resultados deixam de
+ser uma listagem: um panorama por função ordenado da mais rebaixada para a mais
+preservada, o detalhe de cada função, e por teste os subtestes lado a lado num
+gráfico que troca de tipo pela própria interface e sai como PNG ou SVG. O PDF é
+o mesmo conteúdo — mesma agregação, mesmos gráficos — com folha de estilo de
+impressão.
+
 ---
 
 ## ⚠️ Requisito de instalação: criptografia de disco
@@ -71,9 +78,10 @@ npm run dev
 | `npm run build` | Compila main, preload e renderer para `out/` |
 | `npm run lint` | ESLint, incluindo a regra de isolamento do módulo de IA |
 | `npm run typecheck` | `tsc` no main/preload e `vue-tsc` no renderer |
-| `npm test` | Vitest: unidade + os três gates de segurança |
+| `npm test` | Vitest: unidade + os quatro gates de segurança |
 | `npm run test:e2e` | Playwright for Electron (use `xvfb-run` sem display) |
 | `npm run pack:dir` | Empacota sem gerar instalador, para inspeção |
+| `npx vite-node --config vitest.config.ts scripts/preview-report.mjs` | Escreve o HTML do relatório de resultados com um caso de exemplo, para olhar o layout sem abrir o app |
 | `npm run release` | Build multiplataforma e publicação no GitHub Releases |
 
 ### Sobre o módulo nativo
@@ -102,7 +110,7 @@ src/
 └── shared/      contratos Zod e domínio puro, usados pelos dois lados
 ```
 
-Três decisões estruturais que valem conhecer antes de mexer no código:
+Cinco decisões estruturais que valem conhecer antes de mexer no código:
 
 **O contrato de IPC é a fonte única.** `src/shared/contracts/` declara, por
 canal, o schema Zod de entrada e de saída. Não existe `ipcMain.handle` cru em
@@ -110,11 +118,29 @@ lugar nenhum — tudo passa por `registerHandler`, que valida o remetente e o
 payload antes de qualquer acesso a banco ou filesystem. Um canal sem schema
 simplesmente não é exposto ao renderer.
 
+**O nível é o que dá ordem à classificação.** `classification_name` é texto
+livre — é o nome do manual do teste —, e por isso o app não teria como saber o
+que é bom e o que é ruim. Cada faixa carrega um **nível de 1 a 5**, escolhido no
+cadastro, e é dele que sai toda a leitura por cor: o panorama por função, a
+barra de calor e a cor das barras nos gráficos. Um conjunto de faixas também
+pode ser marcado como **invertido**, para as escalas de sintoma em que escore
+alto é o pior achado. Faixas sem nível não são adivinhadas: aparecem em cinza,
+com o aviso de que falta defini-las.
+
 **A classificação é um snapshot, não uma referência viva.** Quando um resultado
-é gravado, a classificação e a cor viram coluna daquela linha. Editar a tabela
-de faixas depois **não** reclassifica avaliações já emitidas em laudo — isso é
+é gravado, a classificação, a cor e o nível viram coluna daquela linha. Editar a
+tabela de faixas depois **não** reclassifica avaliações já emitidas em laudo — é
 inaceitável em documento com validade técnica (ADR-004). Reprocessar existe,
 mas é ação explícita, com prévia e auditoria.
+
+**O gráfico do PDF é renderizado no processo principal.** A janela que gera o
+PDF roda com `javascript: false` e CSP `default-src 'none'`: biblioteca de
+gráfico nenhuma executa lá dentro. O ECharts entra pelo modo SSR, em
+`src/main/pdf/charts.ts`, e devolve SVG estático a partir do MESMO objeto de
+opções que a tela usa (`src/shared/charts/options.ts`). Tela e laudo não são
+dois desenhos que combinaram de parecer iguais. O custo é que, sem canvas, a
+medição de texto do ECharts é aproximada — por isso os gráficos de impressão
+usam margens fixas, `containLabel: false` e rótulos truncados pelo nosso código.
 
 **O módulo de IA não alcança dados de paciente sem filtro.** O
 `AgentReadRepository` recebe o `patientId` no construtor e injeta o `WHERE` em
@@ -130,6 +156,7 @@ trava isso no CI.
 | `tests/security/patient-isolation.spec.ts` | Nenhuma tool retorna dado de outro prontuário — com IDs adversariais **e IDs válidos de outros pacientes** |
 | `tests/security/serializer-xss.spec.ts` | A allowlist do serializador TipTap→HTML segura payloads de XSS |
 | `tests/security/path-resolver.spec.ts` | O resolvedor do protocolo `baremo-file://` não escapa do diretório de anexos |
+| `tests/security/print-html.spec.ts` | O sanitizador do HTML de impressão aceita o SVG dos gráficos sem reabrir a porta para script, `foreignObject` ou `javascript:` |
 
 ---
 
@@ -166,7 +193,8 @@ registrada em `src/main/db/seed.ts`). Em arquivo, quem decide para quem o
 catálogo vai é quem o exportou.
 
 O que o arquivo leva: instrumentos, com a hierarquia; as faixas de cada par
-instrumento + tipo de escore; e as cores usadas por essas faixas. O que ele
+instrumento + tipo de escore, com nível e inversão; e as cores usadas por essas
+faixas. O que ele
 **não** leva: nenhum dado de paciente, avaliação, resultado ou documento — para
 isso existe "Exportar prontuário", que é outra coisa e tem outro cuidado.
 

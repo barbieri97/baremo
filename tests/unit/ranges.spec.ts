@@ -8,7 +8,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { describeRange, resolveRange, suggestNextMin, validateRangeSet } from '@shared/domain/ranges'
+import {
+  describeRange,
+  resolveRange,
+  suggestNextMin,
+  validateRangeSet
+} from '@shared/domain/ranges'
 import type { RangeLike } from '@shared/domain/ranges'
 
 function range(
@@ -18,7 +23,18 @@ function range(
   max: number,
   colorHex = '#000000'
 ): RangeLike {
-  return { id, classificationName: name, minValue: min, maxValue: max, colorHex, version: 1 }
+  return {
+    id,
+    classificationName: name,
+    minValue: min,
+    maxValue: max,
+    colorHex,
+    version: 1,
+    // Nível e inversão não participam da resolução da faixa — só da leitura.
+    // Ficam neutros aqui para deixar isso explícito.
+    level: null,
+    inverted: false
+  }
 }
 
 /** Série de percentil cobrindo 0–100 sem lacuna nem sobreposição. */

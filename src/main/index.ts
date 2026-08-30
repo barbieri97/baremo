@@ -28,7 +28,11 @@ import { assertAllChannelsRegistered, originOf, setAllowedOrigins } from './ipc/
 import { registerConfigHandlers } from './ipc/handlers/config'
 import { registerDomainHandlers } from './ipc/handlers/domain'
 import { registerReportHandlers } from './ipc/handlers/reports'
-import { registerAttachmentHandlers, resolveAttachmentForProtocol } from './ipc/handlers/attachments'
+import { registerChartHandlers } from './ipc/handlers/charts'
+import {
+  registerAttachmentHandlers,
+  resolveAttachmentForProtocol
+} from './ipc/handlers/attachments'
 import { registerDocumentHandlers } from './ipc/handlers/documents'
 import { registerMaintenanceHandlers } from './ipc/handlers/maintenance'
 import { registerCatalogHandlers } from './ipc/handlers/catalog'
@@ -83,6 +87,7 @@ async function start(): Promise<void> {
   registerConfigHandlers()
   registerDomainHandlers()
   registerReportHandlers()
+  registerChartHandlers()
   registerAttachmentHandlers()
   registerDocumentHandlers()
   registerMaintenanceHandlers()

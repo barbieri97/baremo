@@ -7,8 +7,11 @@
  * classificável.
  *
  * Faixas invertidas — escalas em que valor alto indica pior desempenho, como
- * escalas de sintomas em T-score — saem de graça: são as mesmas faixas
- * numéricas com outros nomes de classificação. Não existe flag para isso.
+ * escalas de sintomas em T-score — não mudam nada na RESOLUÇÃO: continuam sendo
+ * as mesmas faixas numéricas com outros nomes. Mas mudam a LEITURA, e por isso
+ * o conjunto carrega `inverted`: é o que impede o panorama por função de pintar
+ * de verde um escore alto de sintoma. Quem usa a flag é a normalização
+ * (`normalize.ts`) e a sugestão de níveis (`levels.ts`), não `resolveRange`.
  *
  * Tudo aqui é função pura, sem I/O: é o que permite que os testes de fronteira
  * do §15.1 rodem direto, sem banco.
@@ -16,6 +19,7 @@
 
 import { isBounded, SCORE_TYPE_DOMAINS, scaledStep, toScaled } from './score-types'
 import type { ScoreType } from './score-types'
+import type { ClassificationLevel } from './levels'
 
 /** Uma faixa, no formato mínimo de que a resolução precisa. */
 export interface RangeLike {
@@ -25,6 +29,8 @@ export interface RangeLike {
   readonly maxValue: number
   readonly colorHex: string
   readonly version: number
+  readonly level: ClassificationLevel | null
+  readonly inverted: boolean
 }
 
 /**
@@ -81,10 +87,7 @@ export interface RangeIssue {
  * (§4.6): sem sobreposição, sem lacuna, e cobrindo as duas extremidades do
  * domínio do tipo de escore.
  */
-export function validateRangeSet(
-  ranges: readonly RangeLike[],
-  scoreType: ScoreType
-): RangeIssue[] {
+export function validateRangeSet(ranges: readonly RangeLike[], scoreType: ScoreType): RangeIssue[] {
   const issues: RangeIssue[] = []
   const domain = SCORE_TYPE_DOMAINS[scoreType]
 
@@ -197,10 +200,7 @@ export function validateRangeSet(
  * Sugere o próximo `minValue` ao acrescentar uma faixa — o cadastro fica
  * contíguo por construção, em vez de depender do usuário acertar o encaixe.
  */
-export function suggestNextMin(
-  ranges: readonly RangeLike[],
-  scoreType: ScoreType
-): number {
+export function suggestNextMin(ranges: readonly RangeLike[], scoreType: ScoreType): number {
   const domain = SCORE_TYPE_DOMAINS[scoreType]
   if (ranges.length === 0) return domain.min ?? 0
   return Math.max(...ranges.map((r) => r.maxValue))

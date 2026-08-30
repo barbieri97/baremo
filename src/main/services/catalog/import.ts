@@ -262,7 +262,9 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
       classificationName: entry.classificationName,
       minValue: entry.minValue,
       maxValue: entry.maxValue,
-      colorId: colorIdMap.get(entry.colorId)!
+      colorId: colorIdMap.get(entry.colorId)!,
+      level: entry.level ?? null,
+      inverted: entry.inverted ?? false
     }))
 
     const issues = validateRangeSet(
@@ -272,7 +274,9 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
         minValue: draft.minValue,
         maxValue: draft.maxValue,
         colorHex: '#000000',
-        version: 1
+        version: 1,
+        level: draft.level,
+        inverted: draft.inverted
       })),
       set.scoreType
     )

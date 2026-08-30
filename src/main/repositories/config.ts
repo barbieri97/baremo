@@ -5,10 +5,17 @@
 import { randomUUID } from 'node:crypto'
 import { asc, eq, sql } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
-import { appSettings, classificationRanges, colors, professionalProfile, SINGLETON_ID } from '../db/schema'
+import {
+  appSettings,
+  classificationRanges,
+  colors,
+  professionalProfile,
+  SINGLETON_ID
+} from '../db/schema'
 import type { Color, ProfessionalProfile } from '@shared/contracts/entities'
 import { conflict, notFound } from '../ipc/register'
 import { normalizeHex } from '@shared/domain/color'
+import { normalizeLogo } from '../images/logo'
 
 // ─── Perfil ──────────────────────────────────────────────────────────────────
 
@@ -35,10 +42,16 @@ export function saveProfile(
   handle: BaremoDatabase,
   input: ProfessionalProfile
 ): ProfessionalProfile {
+  // A logo é reduzida à caixa de impressão ANTES de virar linha no banco: o
+  // renderer já reduz, mas quem grava é quem tem de garantir. Sem isto, um
+  // perfil salvo por outro caminho carregaria megabytes de base64 para dentro
+  // de cada PDF gerado.
+  const values = { ...input, logoDataUrl: normalizeLogo(input.logoDataUrl) }
+
   handle.db
     .insert(professionalProfile)
-    .values({ id: SINGLETON_ID, ...input })
-    .onConflictDoUpdate({ target: professionalProfile.id, set: input })
+    .values({ id: SINGLETON_ID, ...values })
+    .onConflictDoUpdate({ target: professionalProfile.id, set: values })
     .run()
 
   return getProfile(handle)

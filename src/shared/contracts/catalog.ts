@@ -20,7 +20,13 @@
  */
 
 import { z } from 'zod'
-import { hexColorSchema, idSchema, scoreTypeSchema, timestampSchema } from './entities'
+import {
+  classificationLevelSchema,
+  hexColorSchema,
+  idSchema,
+  scoreTypeSchema,
+  timestampSchema
+} from './entities'
 
 /** Versão do formato. Um arquivo de outra versão é recusado inteiro, não adivinhado. */
 export const CATALOG_FILE_SCHEMA = 'baremo/catalog@1'
@@ -64,7 +70,16 @@ export const catalogRangeSetSchema = z.object({
         classificationName: shortText,
         minValue: z.number(),
         maxValue: z.number(),
-        colorId: idSchema
+        colorId: idSchema,
+        /**
+         * Nível e inversão entraram depois, e por isso são OPCIONAIS: a versão
+         * do formato segue `@1` de propósito. Bumpar recusaria inteiro o
+         * arquivo que o usuário já tem na máquina de destino, e o ganho seria
+         * nenhum — um binário antigo lendo um arquivo novo apenas ignora os
+         * campos que não conhece.
+         */
+        level: classificationLevelSchema.nullable().optional(),
+        inverted: z.boolean().optional()
       })
     )
     .min(1)

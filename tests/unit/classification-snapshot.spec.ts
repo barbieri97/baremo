@@ -41,8 +41,22 @@ let colorHighId: string
 /** Série inicial: divide o percentil em duas metades. */
 function saveInitialRanges(): void {
   saveRanges(handle, instrumentId, 'percentile', [
-    { classificationName: 'Inferior', minValue: 0, maxValue: 50, colorId: colorLowId },
-    { classificationName: 'Superior', minValue: 50, maxValue: 100, colorId: colorHighId }
+    {
+      classificationName: 'Inferior',
+      minValue: 0,
+      maxValue: 50,
+      colorId: colorLowId,
+      level: 1,
+      inverted: false
+    },
+    {
+      classificationName: 'Superior',
+      minValue: 50,
+      maxValue: 100,
+      colorId: colorHighId,
+      level: 5,
+      inverted: false
+    }
   ])
 }
 
@@ -94,7 +108,10 @@ afterAll(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-function saveScore(value: number, scoreType = 'percentile' as const): ReturnType<typeof saveResult> {
+function saveScore(
+  value: number,
+  scoreType = 'percentile' as const
+): ReturnType<typeof saveResult> {
   return saveResult(handle, null, {
     assessmentId,
     instrumentId,
@@ -196,14 +213,30 @@ describe('imutabilidade do snapshot — ADR-004', () => {
 
     // Reescreve a tabela invertendo completamente o significado das faixas.
     saveRanges(handle, instrumentId, 'percentile', [
-      { classificationName: 'Rebaixado', minValue: 0, maxValue: 20, colorId: colorLowId },
-      { classificationName: 'Preservado', minValue: 20, maxValue: 100, colorId: colorHighId }
+      {
+        classificationName: 'Rebaixado',
+        minValue: 0,
+        maxValue: 20,
+        colorId: colorLowId,
+        level: 2,
+        inverted: false
+      },
+      {
+        classificationName: 'Preservado',
+        minValue: 20,
+        maxValue: 100,
+        colorId: colorHighId,
+        level: 4,
+        inverted: false
+      }
     ])
 
     const after = listResults(handle, assessmentId).find((row) => row.id === before.id)
 
     // O laudo já emitido continua dizendo o que dizia.
     expect(after!.classificationName).toBe('Inferior')
+    // E o nível congela junto: é a perna do snapshot que dá cor ao panorama.
+    expect(after!.classificationLevel).toBe(1)
   })
 
   it('a versão da faixa sobe a cada gravação do conjunto', () => {
@@ -225,7 +258,7 @@ describe('sobrescrita manual', () => {
       value: 30,
       status: 'applied',
       notes: null,
-      override: { classificationName: 'Avaliação clínica', colorHex: '#123456' }
+      override: { classificationName: 'Avaliação clínica', colorHex: '#123456', level: 2 }
     })
 
     expect(result.classificationName).toBe('Avaliação clínica')
@@ -233,6 +266,9 @@ describe('sobrescrita manual', () => {
     expect(result.manuallyOverridden).toBe(true)
     // Sem faixa de origem: a classificação não veio de uma.
     expect(result.rangeId).toBeNull()
+    // Mas o nível vai junto, senão a decisão do profissional sumiria do
+    // panorama por função — que é onde ela mais precisa aparecer.
+    expect(result.classificationLevel).toBe(2)
   })
 })
 
@@ -243,13 +279,32 @@ describe('reprocessamento explícito', () => {
     const result = saveScore(30)
 
     saveRanges(handle, instrumentId, 'percentile', [
-      { classificationName: 'Rebaixado', minValue: 0, maxValue: 20, colorId: colorLowId },
-      { classificationName: 'Preservado', minValue: 20, maxValue: 100, colorId: colorHighId }
+      {
+        classificationName: 'Rebaixado',
+        minValue: 0,
+        maxValue: 20,
+        colorId: colorLowId,
+        level: 2,
+        inverted: false
+      },
+      {
+        classificationName: 'Preservado',
+        minValue: 20,
+        maxValue: 100,
+        colorId: colorHighId,
+        level: 4,
+        inverted: false
+      }
     ])
 
     const preview = previewReprocess(handle, assessmentId)
     expect(preview).toHaveLength(1)
-    expect(preview[0]).toMatchObject({ from: 'Inferior', to: 'Preservado' })
+    expect(preview[0]).toMatchObject({
+      from: 'Inferior',
+      to: 'Preservado',
+      fromLevel: 1,
+      toLevel: 4
+    })
 
     // A prévia não grava.
     const unchanged = listResults(handle, assessmentId).find((row) => row.id === result.id)
@@ -275,11 +330,18 @@ describe('reprocessamento explícito', () => {
       value: 30,
       status: 'applied',
       notes: null,
-      override: { classificationName: 'Decisão do profissional', colorHex: '#123456' }
+      override: { classificationName: 'Decisão do profissional', colorHex: '#123456', level: 2 }
     })
 
     saveRanges(handle, instrumentId, 'percentile', [
-      { classificationName: 'Outra coisa', minValue: 0, maxValue: 100, colorId: colorHighId }
+      {
+        classificationName: 'Outra coisa',
+        minValue: 0,
+        maxValue: 100,
+        colorId: colorHighId,
+        level: 3,
+        inverted: false
+      }
     ])
 
     reprocessAssessment(handle, assessmentId)

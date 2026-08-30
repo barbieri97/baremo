@@ -269,7 +269,33 @@ const initial: Migration = {
   ]
 }
 
-export const MIGRATIONS: readonly Migration[] = [initial]
+/**
+ * Nível de classificação e escala invertida (spec §4.6).
+ *
+ * `classification_ranges.level` é o ordinal 1–5 que dá ordem ao nome livre da
+ * faixa; `inverted` marca o conjunto em que escore alto indica PIOR desempenho.
+ * `inverted` fica denormalizado em cada linha, e não numa tabela de conjunto,
+ * porque o conjunto `(instrument_id, score_type)` não tem tabela própria e já é
+ * gravado inteiro de uma vez — é exatamente o mesmo tratamento que `version`
+ * recebe desde a migration 1.
+ *
+ * `assessment_results.classification_level` é a perna do snapshot (ADR-004): o
+ * nível é copiado para o resultado na gravação, e linhas anteriores a esta
+ * migration ficam NULL de propósito. Preencher retroativamente seria
+ * reclassificar avaliação já emitida em laudo — o reprocessamento explícito,
+ * que já existe e tem prévia, é o caminho.
+ */
+const classificationLevels: Migration = {
+  version: 2,
+  name: 'nivel-de-classificacao',
+  statements: [
+    `ALTER TABLE classification_ranges ADD COLUMN level INTEGER`,
+    `ALTER TABLE classification_ranges ADD COLUMN inverted INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE assessment_results ADD COLUMN classification_level INTEGER`
+  ]
+}
+
+export const MIGRATIONS: readonly Migration[] = [initial, classificationLevels]
 
 /** Versão de schema que este binário conhece. */
 export const TARGET_SCHEMA_VERSION = MIGRATIONS.reduce(

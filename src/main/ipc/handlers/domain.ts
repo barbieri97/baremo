@@ -55,6 +55,7 @@ import {
   updateAssessment
 } from '../../repositories/assessments'
 import { recordAudit } from '../../services/audit'
+import { buildResultsOverview } from '../../services/results-overview'
 
 export function registerDomainHandlers(): void {
   registerPatientHandlers()
@@ -236,6 +237,10 @@ function registerAssessmentHandlers(): void {
     deleteResult(getDatabase(), id)
     return { ok: true as const }
   })
+
+  registerHandler('results:overview', ({ assessmentId, comparisonAssessmentIds }) =>
+    buildResultsOverview(getDatabase(), assessmentId, comparisonAssessmentIds)
+  )
 
   registerHandler('results:reprocessPreview', ({ assessmentId }) =>
     previewReprocess(getDatabase(), assessmentId).map((change) => ({ ...change }))

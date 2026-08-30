@@ -62,21 +62,65 @@ async function saveProfile(): Promise<void> {
   }
 }
 
-/** Logo do cabeçalho de relatório, embutido como data URI. */
-function onLogoSelected(event: Event): void {
-  const file = (event.target as HTMLInputElement).files?.[0]
+/**
+ * Caixa da logo no cabeçalho impresso: 40 × 22 mm a 300 dpi.
+ *
+ * O mesmo limite vale no processo principal (`main/images/logo.ts`), que é a
+ * autoridade. Aqui a redução acontece porque o Chromium decodifica qualquer
+ * formato que ele saiba exibir, e porque encolher antes de enviar evita
+ * atravessar a fronteira IPC com megabytes de base64.
+ */
+const LOGO_MAX_WIDTH = 480
+const LOGO_MAX_HEIGHT = 260
+
+/** Logo do cabeçalho de relatório, reduzida e embutida como data URI. */
+async function onLogoSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file || profile.value === null) return
 
-  if (file.size > 1_000_000) {
-    appStore.notify('warning', 'A imagem deve ter no máximo 1 MB.')
+  if (file.size > 8_000_000) {
+    appStore.notify('warning', 'A imagem deve ter no máximo 8 MB.')
     return
   }
 
-  const reader = new FileReader()
-  reader.onload = () => {
-    if (profile.value !== null) profile.value.logoDataUrl = String(reader.result)
+  try {
+    profile.value.logoDataUrl = await downscaleToPng(file)
+  } catch {
+    appStore.notify('warning', 'Não foi possível ler esta imagem. Tente um arquivo PNG ou JPEG.')
+  } finally {
+    // Sem isto, escolher o MESMO arquivo depois de remover a logo não dispara
+    // `change` de novo, e o campo parece ter travado.
+    input.value = ''
   }
-  reader.readAsDataURL(file)
+}
+
+/**
+ * Reduz proporcionalmente e devolve PNG.
+ *
+ * PNG, e não JPEG, para preservar transparência — uma logo com fundo branco
+ * sólido sobre o cabeçalho denuncia o recorte.
+ */
+async function downscaleToPng(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file)
+
+  try {
+    const scale = Math.min(1, LOGO_MAX_WIDTH / bitmap.width, LOGO_MAX_HEIGHT / bitmap.height)
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext('2d')
+    if (context === null) throw new Error('canvas indisponível')
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    return canvas.toDataURL('image/png')
+  } finally {
+    bitmap.close()
+  }
 }
 
 async function addColor(): Promise<void> {
@@ -275,12 +319,13 @@ const budgetPercent = computed(() => {
               alt="Logotipo"
               class="h-16 w-auto rounded border border-ink-200 object-contain"
             />
-            <input id="profile-logo" type="file" accept="image/*" @change="onLogoSelected" />
-            <BaseButton
-              v-if="profile.logoDataUrl"
-              size="sm"
-              @click="profile.logoDataUrl = null"
-            >
+            <input
+              id="profile-logo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              @change="onLogoSelected"
+            />
+            <BaseButton v-if="profile.logoDataUrl" size="sm" @click="profile.logoDataUrl = null">
               Remover
             </BaseButton>
           </div>
@@ -297,8 +342,8 @@ const budgetPercent = computed(() => {
     <!-- Paleta -->
     <section v-else-if="tab === 'palette'" class="card max-w-3xl p-5">
       <p class="mb-4 text-sm text-ink-600">
-        As cores são associadas livremente às faixas de classificação — o sistema não força
-        vínculo entre cor e classificação. O aviso de contraste é informativo e não bloqueia.
+        As cores são associadas livremente às faixas de classificação — o sistema não força vínculo
+        entre cor e classificação. O aviso de contraste é informativo e não bloqueia.
       </p>
 
       <ul class="mb-5 divide-y divide-ink-200">
@@ -372,9 +417,10 @@ const budgetPercent = computed(() => {
         <p class="mt-1 leading-snug">
           O Baremo é local-first, com processamento em nuvem opcional e consentido. Com o módulo
           ligado, consultas ao assistente enviam dados do prontuário à API do Google Gemini.
-          Recomendamos fortemente usar uma chave de projeto com <strong>faturamento
-          habilitado</strong>: chaves de nível gratuito historicamente têm política de retenção e
-          uso para melhoria de produto distinta — o que é inadequado para dado sensível de saúde.
+          Recomendamos fortemente usar uma chave de projeto com
+          <strong>faturamento habilitado</strong>: chaves de nível gratuito historicamente têm
+          política de retenção e uso para melhoria de produto distinta — o que é inadequado para
+          dado sensível de saúde.
         </p>
       </div>
 
@@ -398,10 +444,13 @@ const budgetPercent = computed(() => {
       <div class="card p-5">
         <h2 class="mb-3 text-sm font-semibold text-ink-800">Chave de API</h2>
 
-        <p v-if="!aiConfig.safeStorageAvailable" class="mb-3 rounded bg-warn-50 p-3 text-xs text-warn-700">
-          A criptografia do sistema não está disponível neste computador (comum em Linux sem
-          keyring configurado). Gravar a chave em disco aqui não teria proteção real — use a opção
-          de não persistir e informe a chave a cada execução.
+        <p
+          v-if="!aiConfig.safeStorageAvailable"
+          class="mb-3 rounded bg-warn-50 p-3 text-xs text-warn-700"
+        >
+          A criptografia do sistema não está disponível neste computador (comum em Linux sem keyring
+          configurado). Gravar a chave em disco aqui não teria proteção real — use a opção de não
+          persistir e informe a chave a cada execução.
         </p>
 
         <p v-if="aiConfig.hasKey" class="mb-3 text-sm text-ink-600">
@@ -524,9 +573,10 @@ const budgetPercent = computed(() => {
             </span>
             <span class="block text-xs leading-snug text-ink-500">
               Nome completo vira iniciais, data de nascimento vira idade, e responsável, escola,
-              endereço e contatos são removidos. Ao redigir documentos, o assistente usa tokens
-              como <span class="font-mono">{{ NAME_TOKEN }}</span>, que o editor resolve
-              localmente — o documento final sai com o nome real sem que ele saia do computador.
+              endereço e contatos são removidos. Ao redigir documentos, o assistente usa tokens como
+              <span class="font-mono">{{ NAME_TOKEN }}</span
+              >, que o editor resolve localmente — o documento final sai com o nome real sem que ele
+              saia do computador.
             </span>
           </span>
         </label>
