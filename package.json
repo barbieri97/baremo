@@ -9,13 +9,9 @@
   "main": "./out/main/index.js",
   "desktopName": "baremo.desktop",
   "scripts": {
-    "predev": "node scripts/native-abi.mjs electron",
     "dev": "electron-vite dev",
-    "prebuild": "node scripts/native-abi.mjs electron",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "pretest": "node scripts/native-abi.mjs node",
-    "pretest:e2e": "node scripts/native-abi.mjs electron",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,vue}\" \"tests/**/*.ts\"",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",

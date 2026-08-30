@@ -15,6 +15,13 @@ files:
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 
+# O better-sqlite3 13 é Node-API: os prebuilds que vêm do npm não têm sufixo de
+# ABI (`win32-x64.node`) e o mesmo binário serve o Node e o Electron. Recompilar
+# não muda nada — só exige uma toolchain C++ em toda máquina que empacota, e
+# quebra o build onde ela não existe. Se algum dia entrar uma dependência nativa
+# que NÃO seja Node-API, este `false` precisa voltar a ser `true`.
+npmRebuild: false
+
 # O usuário escolhe onde instalar e o app não se abre sozinho depois: instalar um
 # software de prontuário não deveria surpreender ninguém.
 nsis:

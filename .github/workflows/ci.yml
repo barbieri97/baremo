@@ -36,7 +36,6 @@ jobs:
         run: npm run typecheck
 
       - name: Testes de unidade e gates de segurança
-        # `pretest` deixa o better-sqlite3 na ABI do Node antes do Vitest.
         run: npm test
 
       - name: Build
@@ -85,6 +84,5 @@ jobs:
         run: npm test
 
       - name: Build
-        # Compila o better-sqlite3 para a ABI do Electron da plataforma-alvo —
-        # é o que confirma que o empacotamento funciona nos três sistemas.
+        # Confirma que main, preload e renderer compilam nos três sistemas.
         run: npm run build

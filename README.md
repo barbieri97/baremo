@@ -78,10 +78,17 @@ npm run dev
 
 ### Sobre o módulo nativo
 
-`better-sqlite3` é compilado, e um binário serve **uma ABI por vez**. O Electron
-e o Node do sistema têm ABIs diferentes, então `scripts/native-abi.mjs` alterna
-entre elas automaticamente: `pretest` deixa na ABI do Node, `predev` e
-`prebuild` deixam na do Electron. Não é preciso fazer nada manualmente.
+`better-sqlite3` é a única dependência nativa, e desde a versão 13 ela é
+**Node-API**: os prebuilds publicados no npm não trazem sufixo de ABI
+(`prebuilds/win32-x64.node`, e não `…-node-v137-…`), então o mesmo binário
+carrega tanto no Node quanto no Electron. Não há nada a recompilar — `npm
+install` basta, e nenhuma toolchain C++ é necessária para desenvolver ou
+empacotar.
+
+Por isso o `electron-builder` roda com `npmRebuild: false`. Se algum dia entrar
+uma dependência nativa que **não** seja Node-API, esse ajuste precisa ser
+revertido e as máquinas que empacotam passarão a exigir compilador C++
+(Visual Studio Build Tools no Windows, Xcode CLT no macOS).
 
 ---
 
