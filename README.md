@@ -152,11 +152,56 @@ prevista na LGPD.
 
 ---
 
+## Levar o catálogo de uma máquina para outra
+
+Instrumentos e faixas de classificação viajam em um arquivo `.json`, pelos
+botões **Exportar catálogo** e **Importar catálogo** na tela de Instrumentos.
+Serve para montar o catálogo em um computador e levá-lo para outro, e para
+mantê-lo em dia entre os dois ao longo do tempo.
+
+O catálogo NÃO é semeado no instalador, e isso é decisão, não pendência: as
+faixas normativas são a tabela do manual do teste, e distribuí-las embutidas no
+release seria entregá-las a quem não comprou o instrumento (a mesma razão
+registrada em `src/main/db/seed.ts`). Em arquivo, quem decide para quem o
+catálogo vai é quem o exportou.
+
+O que o arquivo leva: instrumentos, com a hierarquia; as faixas de cada par
+instrumento + tipo de escore; e as cores usadas por essas faixas. O que ele
+**não** leva: nenhum dado de paciente, avaliação, resultado ou documento — para
+isso existe "Exportar prontuário", que é outra coisa e tem outro cuidado.
+
+Quatro regras valem a pena conhecer antes de usar:
+
+**Importar mostra antes de fazer.** O arquivo é lido e validado, e a tela diz
+quantos instrumentos entram, quantos são atualizados e quantos conjuntos de
+faixas serão substituídos. Nada é gravado até a confirmação.
+
+**Importar nunca exclui.** O que existe no computador e não está no arquivo
+permanece. O arquivo acrescenta e atualiza; quem remove é você, pela tela.
+
+**Reimportar o mesmo arquivo não faz nada.** Os ids viajam junto, então a
+segunda importação reconhece o que já está lá. Um conjunto de faixas idêntico ao
+gravado não é regravado — o que preserva a versão das faixas, que é o rastro que
+liga um resultado ao conjunto com que foi classificado (§4.8).
+
+**As classificações já lançadas não mudam.** Importar faixas novas não
+reclassifica avaliações existentes, pelo ADR-004. Para isso existe o
+reprocessamento, que é ação explícita e com prévia.
+
+A árvore de funções cognitivas não viaja no arquivo. O vínculo do instrumento
+com ela é resolvido pelo NOME no computador de destino — cada instalação semeia
+a própria árvore com ids diferentes, e o id da origem não significaria nada aqui.
+O que não casar por nome é importado sem vínculo e aparece na lista de avisos,
+para você criar a função e refazer o vínculo.
+
+---
+
 ## Fora de escopo
 
-Assinatura digital ICP-Brasil, sincronização entre máquinas, acesso
-multiusuário, aplicação e correção de testes (o app agrega escores já
-convertidos), exportação nativa em DOCX, agendamento e faturamento.
+Assinatura digital ICP-Brasil, sincronização automática entre máquinas (o
+catálogo vai por arquivo, e o prontuário não vai), acesso multiusuário, aplicação
+e correção de testes (o app agrega escores já convertidos), exportação nativa em
+DOCX, agendamento e faturamento.
 
 ## Pendências antes da distribuição
 

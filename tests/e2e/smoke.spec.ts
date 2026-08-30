@@ -11,9 +11,10 @@
 
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 
 let app: ElectronApplication
 let page: Page
@@ -162,4 +163,76 @@ test('salva o perfil profissional', async () => {
 
   await expect(page.getByText('Perfil salvo.')).toBeVisible()
   await expect(page.getByText('An object could not be cloned.')).toHaveCount(0)
+})
+
+test('exporta o catálogo, e o arquivo não leva dado de paciente', async () => {
+  const target = join(userDataDir, 'catalogo.json')
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath })
+  }, target)
+
+  await page.getByRole('link', { name: /Instrumentos/ }).click()
+  await page.getByRole('button', { name: 'Exportar catálogo' }).click()
+  await expect(page.getByText('Catálogo exportado.')).toBeVisible()
+
+  const content = readFileSync(target, 'utf8')
+  expect(content).toContain('Teste de Atenção Concentrada')
+  expect(content).toContain('Média superior')
+  // O paciente e a avaliação existem neste banco desde os testes anteriores: se
+  // vazassem para o catálogo, apareceriam aqui.
+  expect(content).not.toContain('Paciente de Verificação')
+  expect(content).not.toContain('Verificação automatizada')
+})
+
+test('importa um catálogo e a árvore passa a mostrar o que veio do arquivo', async () => {
+  const source = join(userDataDir, 'catalogo.json')
+  const modified = join(userDataDir, 'catalogo-com-novo.json')
+
+  // Um catálogo como o que viria de outra máquina: o mesmo de antes, mais um
+  // instrumento que este computador não conhece.
+  const catalog = JSON.parse(readFileSync(source, 'utf8'))
+  catalog.instruments.push({
+    id: randomUUID(),
+    parentId: null,
+    name: 'Instrumento vindo do arquivo',
+    acronym: null,
+    cognitiveFunctionPath: ['Memória', 'Memória de trabalho'],
+    minAgeYears: null,
+    maxAgeYears: null,
+    reference: null,
+    order: 5
+  })
+  writeFileSync(modified, JSON.stringify(catalog), 'utf8')
+
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, modified)
+
+  await page.getByRole('button', { name: 'Importar catálogo' }).click()
+
+  // A prévia vem antes de qualquer escrita: um instrumento novo, e o conjunto
+  // de faixas já idêntico ao que está gravado não conta como mudança.
+  await expect(page.getByText('Instrumentos novos')).toBeVisible()
+  await expect(page.getByText('Conjuntos de faixas sem mudança')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Importar', exact: true }).click()
+  await expect(page.getByText(/Catálogo importado/)).toBeVisible()
+
+  await expect(
+    page.getByRole('button', { name: 'Instrumento vindo do arquivo', exact: true })
+  ).toBeVisible()
+})
+
+test('reimportar o mesmo catálogo não propõe mudança nenhuma', async () => {
+  const modified = join(userDataDir, 'catalogo-com-novo.json')
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, modified)
+
+  await page.getByRole('button', { name: 'Importar catálogo' }).click()
+
+  await expect(page.getByText('Este catálogo já está inteiramente neste computador.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Importar', exact: true })).toBeDisabled()
+
+  await page.getByRole('button', { name: 'Cancelar' }).click()
 })

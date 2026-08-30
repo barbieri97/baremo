@@ -43,6 +43,7 @@ import {
   aiMessageSchema,
   aiSessionSchema
 } from './entities-ai'
+import { catalogImportPlanSchema } from './catalog'
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES, REPORT_KINDS } from '../labels'
 
 export interface ChannelContract<
@@ -198,6 +199,31 @@ export const contracts = {
       ranges: z.array(classificationRangeDraftSchema)
     }),
     z.array(classificationRangeWithColorSchema)
+  ),
+
+  // ─── catalog:* ─────────────────────────────────────────────────────────────
+  /**
+   * Transferência do catálogo entre instalações.
+   *
+   * A importação é em dois tempos: `pickImport` abre o arquivo, valida e devolve
+   * a PRÉVIA do que aconteceria; `applyImport` executa. Entre um e outro, o
+   * arquivo já validado fica no processo principal, endereçado por um token — o
+   * renderer nunca recebe nem devolve caminho de disco, pela mesma razão que os
+   * anexos são endereçados por `baremo-file://` e não por caminho.
+   */
+  'catalog:export': channel(empty, z.object({ filePath: z.string(), cancelled: z.boolean() })),
+  'catalog:pickImport': channel(
+    empty,
+    z.object({
+      cancelled: z.boolean(),
+      token: z.string().nullable(),
+      fileName: z.string(),
+      plan: catalogImportPlanSchema.nullable()
+    })
+  ),
+  'catalog:applyImport': channel(
+    z.object({ token: z.string().min(1).max(80) }),
+    catalogImportPlanSchema
   ),
 
   // ─── assessments:* ─────────────────────────────────────────────────────────

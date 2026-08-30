@@ -32,6 +32,7 @@ import { registerReportHandlers } from './ipc/handlers/reports'
 import { registerAttachmentHandlers, resolveAttachmentForProtocol } from './ipc/handlers/attachments'
 import { registerDocumentHandlers } from './ipc/handlers/documents'
 import { registerMaintenanceHandlers } from './ipc/handlers/maintenance'
+import { registerCatalogHandlers } from './ipc/handlers/catalog'
 import { registerAiHandlers } from './ipc/handlers/ai'
 import { attachmentsDir } from './paths'
 import { seedTemplatesIfEmpty } from './db/seed-templates'
@@ -86,6 +87,7 @@ async function start(): Promise<void> {
   registerAttachmentHandlers()
   registerDocumentHandlers()
   registerMaintenanceHandlers()
+  registerCatalogHandlers()
   registerAiHandlers()
 
   // Falha alto no boot se um canal do contrato ficou sem handler — melhor do

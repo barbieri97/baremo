@@ -7,11 +7,13 @@ import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
+import BaseDialog from '../components/BaseDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import TreeManager from '../components/TreeManager.vue'
 import RangeEditor from '../components/RangeEditor.vue'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Instrument } from '@shared/contracts/entities'
+import type { CatalogImportPlan } from '@shared/contracts/catalog'
 
 const appStore = useAppStore()
 const catalog = useCatalogStore()
@@ -136,6 +138,111 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+// ─── Catálogo: exportar e importar ───────────────────────────────────────────
+
+const transferring = ref(false)
+const importOpen = ref(false)
+const importToken = ref<string | null>(null)
+const importFileName = ref('')
+const importPlan = ref<CatalogImportPlan | null>(null)
+
+async function exportCatalog(): Promise<void> {
+  transferring.value = true
+  try {
+    const result = await api('catalog:export')
+    if (result.cancelled) return
+    appStore.notify('success', 'Catálogo exportado.')
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    transferring.value = false
+  }
+}
+
+/**
+ * Primeiro tempo da importação: o arquivo é lido e validado, mas nada é gravado.
+ * O que volta é a prévia — e é sobre ela que o usuário decide.
+ */
+async function pickImport(): Promise<void> {
+  transferring.value = true
+  try {
+    const picked = await api('catalog:pickImport')
+    if (picked.cancelled || picked.token === null || picked.plan === null) return
+
+    importToken.value = picked.token
+    importFileName.value = picked.fileName
+    importPlan.value = picked.plan
+    importOpen.value = true
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    transferring.value = false
+  }
+}
+
+async function confirmImport(): Promise<void> {
+  if (importToken.value === null) return
+
+  transferring.value = true
+  try {
+    const report = await api('catalog:applyImport', { token: importToken.value })
+    await catalog.load(true)
+    if (selectedId.value !== null) select(selectedId.value)
+
+    appStore.notify(
+      'success',
+      `Catálogo importado: ${report.instruments.created} instrumento(s) novo(s), ` +
+        `${report.instruments.updated} atualizado(s).`
+    )
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    transferring.value = false
+    importOpen.value = false
+    importToken.value = null
+    importPlan.value = null
+  }
+}
+
+/** Só o que tem contagem: uma lista de zeros não informa nada. */
+const importCounts = computed(() => {
+  const plan = importPlan.value
+  if (plan === null) return []
+
+  return [
+    { label: 'Instrumentos novos', value: plan.instruments.created },
+    { label: 'Instrumentos atualizados', value: plan.instruments.updated },
+    { label: 'Instrumentos sem mudança', value: plan.instruments.unchanged },
+    { label: 'Conjuntos de faixas novos', value: plan.rangeSets.created },
+    { label: 'Conjuntos de faixas substituídos', value: plan.rangeSets.updated },
+    { label: 'Conjuntos de faixas sem mudança', value: plan.rangeSets.unchanged },
+    { label: 'Cores acrescentadas à paleta', value: plan.colors.created }
+  ].filter((entry) => entry.value > 0)
+})
+
+const importOrigin = computed(() => {
+  const plan = importPlan.value
+  if (plan === null) return ''
+  return `Exportado em ${new Date(plan.exportedAt).toLocaleString('pt-BR')}, pelo Baremo ${plan.appVersion}.`
+})
+
+/**
+ * Arquivo idêntico ao que já está no computador: nada a fazer, e vale dizer.
+ * Conjunto "sem mudança" não conta como mudança — é justamente o contrário.
+ */
+const importChangesNothing = computed(() => {
+  const plan = importPlan.value
+  if (plan === null) return false
+
+  return (
+    plan.instruments.created === 0 &&
+    plan.instruments.updated === 0 &&
+    plan.rangeSets.created === 0 &&
+    plan.rangeSets.updated === 0 &&
+    plan.colors.created === 0
+  )
+})
+
 const parentOptions = computed(() => {
   if (selectedId.value === null) return catalog.flatInstruments
 
@@ -157,12 +264,23 @@ const parentOptions = computed(() => {
 
 <template>
   <div class="p-6">
-    <header class="mb-5">
-      <h1 class="text-xl font-bold text-ink-800">Instrumentos</h1>
-      <p class="text-sm text-ink-500">
-        Reflita aqui a estrutura psicométrica do instrumento — bateria, índices compostos e
-        subtestes. Tanto nós folha quanto nós compostos podem receber resultado.
-      </p>
+    <header class="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-ink-800">Instrumentos</h1>
+        <p class="text-sm text-ink-500">
+          Reflita aqui a estrutura psicométrica do instrumento — bateria, índices compostos e
+          subtestes. Tanto nós folha quanto nós compostos podem receber resultado.
+        </p>
+      </div>
+
+      <div class="flex shrink-0 gap-2">
+        <BaseButton size="sm" :disabled="transferring" @click="pickImport">
+          Importar catálogo
+        </BaseButton>
+        <BaseButton size="sm" :disabled="transferring" @click="exportCatalog">
+          Exportar catálogo
+        </BaseButton>
+      </div>
     </header>
 
     <div class="grid grid-cols-5 gap-6">
@@ -319,6 +437,55 @@ const parentOptions = computed(() => {
         </div>
       </div>
     </div>
+
+    <BaseDialog v-model:open="importOpen" title="Importar catálogo" wide>
+      <p class="text-sm text-ink-700">
+        Arquivo: <span class="font-medium">{{ importFileName }}</span>
+      </p>
+      <p v-if="importOrigin !== ''" class="mt-1 text-xs text-ink-500">{{ importOrigin }}</p>
+
+      <p v-if="importChangesNothing" class="mt-4 text-sm text-ink-700">
+        Este catálogo já está inteiramente neste computador. Importar não mudaria nada.
+      </p>
+
+      <div v-else class="mt-4 rounded-md border border-ink-200 bg-ink-50 p-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-ink-600">O que será feito</p>
+        <ul class="mt-2 space-y-1 text-sm text-ink-700">
+          <li v-for="entry in importCounts" :key="entry.label" class="flex justify-between gap-4">
+            <span>{{ entry.label }}</span>
+            <span class="tabular font-semibold">{{ entry.value }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <div
+        v-if="importPlan !== null && importPlan.warnings.length > 0"
+        class="mt-4 rounded-md border border-warn-200 bg-warn-50 p-3"
+      >
+        <p class="text-xs font-semibold uppercase tracking-wide text-warn-700">Avisos</p>
+        <ul class="mt-2 space-y-2 text-sm text-warn-700">
+          <li v-for="(warning, index) in importPlan.warnings" :key="index">{{ warning.message }}</li>
+        </ul>
+      </div>
+
+      <p class="mt-4 text-xs text-ink-500">
+        Importar não exclui nada: instrumentos e faixas que existem aqui e não estão no arquivo
+        permanecem. Os conjuntos de faixas que estiverem no arquivo substituem os equivalentes, e as
+        classificações já gravadas em avaliações não mudam.
+      </p>
+
+      <template #footer>
+        <BaseButton variant="ghost" @click="importOpen = false">Cancelar</BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="transferring"
+          :disabled="importChangesNothing"
+          @click="confirmImport"
+        >
+          Importar
+        </BaseButton>
+      </template>
+    </BaseDialog>
 
     <ConfirmDialog
       v-model:open="deleteOpen"
