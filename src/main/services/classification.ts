@@ -19,6 +19,8 @@ import { resolveRange } from '@shared/domain/ranges'
 import type { RangeLike } from '@shared/domain/ranges'
 import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
+import { toClassificationLevel } from '@shared/domain/levels'
+import type { ClassificationLevel } from '@shared/domain/levels'
 
 export interface ResolvedRange extends RangeLike {
   readonly colorName: string
@@ -37,6 +39,8 @@ export function loadRanges(
       minValue: classificationRanges.minValue,
       maxValue: classificationRanges.maxValue,
       version: classificationRanges.version,
+      level: classificationRanges.level,
+      inverted: classificationRanges.inverted,
       colorHex: colors.hex,
       colorName: colors.name
     })
@@ -50,6 +54,7 @@ export function loadRanges(
     )
     .orderBy(classificationRanges.minValue)
     .all()
+    .map((row) => ({ ...row, level: toClassificationLevel(row.level) }))
 }
 
 /** Carrega as faixas de vários instrumentos de uma vez — usado no reprocessamento. */
@@ -69,6 +74,8 @@ export function loadRangesForInstruments(
       minValue: classificationRanges.minValue,
       maxValue: classificationRanges.maxValue,
       version: classificationRanges.version,
+      level: classificationRanges.level,
+      inverted: classificationRanges.inverted,
       colorHex: colors.hex,
       colorName: colors.name
     })
@@ -86,6 +93,8 @@ export function loadRangesForInstruments(
       minValue: row.minValue,
       maxValue: row.maxValue,
       version: row.version,
+      level: toClassificationLevel(row.level),
+      inverted: row.inverted,
       colorHex: row.colorHex,
       colorName: row.colorName
     }
@@ -106,13 +115,19 @@ export interface ClassificationSnapshot {
   readonly colorHex: string | null
   readonly rangeId: string | null
   readonly rangeVersion: number | null
+  /**
+   * Nível da faixa no momento da gravação (§4.6). Congela junto com o nome e a
+   * cor: dar nível a uma faixa depois não recolore avaliação já emitida.
+   */
+  readonly classificationLevel: ClassificationLevel | null
 }
 
 export const EMPTY_SNAPSHOT: ClassificationSnapshot = {
   classificationName: null,
   colorHex: null,
   rangeId: null,
-  rangeVersion: null
+  rangeVersion: null,
+  classificationLevel: null
 }
 
 /**
@@ -138,7 +153,8 @@ export function classify(
     classificationName: match.classificationName,
     colorHex: match.colorHex,
     rangeId: match.id,
-    rangeVersion: match.version
+    rangeVersion: match.version,
+    classificationLevel: match.level
   }
 }
 

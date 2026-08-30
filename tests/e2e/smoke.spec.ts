@@ -107,9 +107,7 @@ test('cadastra paciente e cria avaliação', async () => {
 test('lança resultado e recebe classificação automática', async () => {
   await page.getByRole('button', { name: 'Lançar resultado' }).click()
 
-  await page
-    .getByLabel('Instrumento')
-    .selectOption({ label: 'Teste de Atenção Concentrada (TAC)' })
+  await page.getByLabel('Instrumento').selectOption({ label: 'Teste de Atenção Concentrada (TAC)' })
   await page.getByLabel('Tipo de escore').selectOption('percentile')
   // Com as cinco faixas geradas em partes iguais, 65 cai em [60, 80) — a quarta,
   // "Média superior".
@@ -123,20 +121,55 @@ test('lança resultado e recebe classificação automática', async () => {
   await expect(page.locator('table').getByText('Média superior').first()).toBeVisible()
 })
 
-test('gera relatório por função cognitiva em PDF', async () => {
+test('abre a visualização de resultados', async () => {
+  // A tela de avaliação deixou de gerar PDF direto: o relatório de resultados
+  // substituiu os dois anteriores e sai daqui, ao lado dos gráficos que ele
+  // reproduz.
+  await page.getByRole('button', { name: 'Visualizar resultados' }).click()
+
+  await expect(page.getByRole('heading', { name: /^Resultados de/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Panorama por função' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Por teste' })).toBeVisible()
+
+  // O resultado lançado no teste anterior aparece na leitura por função.
+  await expect(page.getByText('Média superior').first()).toBeVisible()
+})
+
+test('gera o relatório de resultados em PDF', async () => {
   // O diálogo de salvar é nativo: interceptamos para não travar o teste.
   const target = join(userDataDir, 'relatorio.pdf')
   await app.evaluate(async ({ dialog }, filePath) => {
     dialog.showSaveDialog = async () => ({ canceled: false, filePath })
   }, target)
 
-  await page.getByRole('button', { name: 'PDF por função' }).click()
-  await expect(page.getByText('Relatório gerado.')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: 'Exportar PDF' }).click()
+  await expect(page.getByText('Relatório gerado.')).toBeVisible({ timeout: 20_000 })
 
   // A verificação roda no processo de teste, e não dentro do Electron: é o mesmo
   // sistema de arquivos, e evita serializar `fs` para dentro do main.
   expect(existsSync(target)).toBe(true)
-  expect(statSync(target).size).toBeGreaterThan(1000)
+  // Maior que o limite antigo de propósito: com fonte embutida e SVG, um PDF
+  // pequeno demais indicaria que a tipografia ou os gráficos não entraram.
+  expect(statSync(target).size).toBeGreaterThan(20_000)
+})
+
+test('salva a imagem de um gráfico', async () => {
+  const target = join(userDataDir, 'grafico.png')
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath })
+  }, target)
+
+  // Sem gráfico de comparação (o instrumento do roteiro tem um escore só), o
+  // botão de PNG que existe é o do radar do panorama.
+  const png = page.getByRole('button', { name: 'PNG' }).first()
+  if (await png.isVisible()) {
+    await png.click()
+    await expect(page.getByText(/Imagem salva em/)).toBeVisible({ timeout: 15_000 })
+    expect(existsSync(target)).toBe(true)
+  }
+
+  await page.getByRole('button', { name: /Voltar à avaliação/ }).click()
+  await expect(page.getByRole('heading', { name: /^Avaliação de/ })).toBeVisible()
 })
 
 test('o app funciona inteiro com o módulo de IA desligado', async () => {

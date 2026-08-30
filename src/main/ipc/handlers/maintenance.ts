@@ -13,6 +13,7 @@ import { cleanupStorage, scanStorage } from '../../services/attachments/maintena
 import { exportMedicalRecord } from '../../services/export/medical-record'
 import { getPatient } from '../../repositories/patients'
 import type { AuditAction } from '@shared/labels'
+import { slug } from '../../util/slug'
 
 export function registerMaintenanceHandlers(): void {
   registerHandler('maintenance:listBackups', () => listBackups(backupsDir()))
@@ -112,14 +113,4 @@ export function registerMaintenanceHandlers(): void {
       action: entry.action as AuditAction
     }))
   )
-}
-
-function slug(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
-    .slice(0, 60)
 }

@@ -127,17 +127,18 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
   export: 'Exportação'
 }
 
-export const REPORT_KINDS = [
-  'by_cognitive_function',
-  'by_instrument_hierarchy',
-  'document',
-  'comparative'
-] as const
+/**
+ * `results` substituiu `by_cognitive_function` e `by_instrument_hierarchy`.
+ *
+ * Os dois eram a mesma tabela reorganizada, e nenhum dos dois mostrava o caso —
+ * mostravam a listagem. O relatório novo traz as DUAS organizações no mesmo
+ * documento, com panorama, tabelas e gráficos, e espelha a tela de resultados.
+ */
+export const REPORT_KINDS = ['results', 'document', 'comparative'] as const
 export type ReportKind = (typeof REPORT_KINDS)[number]
 
 export const REPORT_KIND_LABELS: Readonly<Record<ReportKind, string>> = {
-  by_cognitive_function: 'Relatório por função cognitiva',
-  by_instrument_hierarchy: 'Relatório por hierarquia de testes',
+  results: 'Relatório de resultados',
   document: 'Documento',
   comparative: 'Relatório comparativo'
 }

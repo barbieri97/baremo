@@ -8,8 +8,15 @@
  * que o processo principal aplica antes de gravar: a UI não é a autoridade, mas
  * também não deixa o usuário descobrir o erro só ao salvar.
  *
- * Faixas invertidas — escalas em que valor alto indica pior desempenho — não têm
- * tratamento especial: são as mesmas faixas numéricas com outros nomes.
+ * Duas colunas existem para a LEITURA, não para a resolução da faixa:
+ *
+ * **Nível** é o ordinal 1–5 que dá ordem ao nome livre da classificação. Sem
+ * ele o app não sabe o que é bom e o que é ruim, e a visualização de resultados
+ * não tem como pintar nada — "Média inferior" e "Risco clínico" são só texto.
+ *
+ * **Escore alto indica pior desempenho** marca o conjunto invertido, das escalas
+ * de sintoma. Não muda a resolução da faixa, que continua puramente numérica;
+ * muda a normalização dos gráficos e a direção da sugestão de níveis.
  */
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
@@ -19,6 +26,8 @@ import BaseButton from './BaseButton.vue'
 import { SCORE_TYPES, SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
 import { describeRange, suggestNextMin, validateRangeSet } from '@shared/domain/ranges'
+import { CLASSIFICATION_LEVELS, suggestLevels } from '@shared/domain/levels'
+import type { ClassificationLevel } from '@shared/domain/levels'
 import { SCORE_TYPE_LABELS } from '@shared/labels'
 import { checkContrast } from '@shared/domain/color'
 import type { Instrument } from '@shared/contracts/entities'
@@ -34,6 +43,7 @@ interface DraftRow {
   minValue: number
   maxValue: number
   colorId: string
+  level: ClassificationLevel | null
 }
 
 let nextKey = 1
@@ -46,6 +56,8 @@ const rows = ref<DraftRow[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const configured = ref<ScoreType[]>([])
+/** Vale para o conjunto inteiro, não para a linha — daí viver fora de `rows`. */
+const inverted = ref(false)
 
 /** Escore bruto não recebe classificação automática (§4.5). */
 const classifiableTypes = SCORE_TYPES.filter((type) => SCORE_TYPE_DOMAINS[type].autoClassify)
@@ -67,8 +79,10 @@ async function load(): Promise<void> {
       classificationName: range.classificationName,
       minValue: range.minValue,
       maxValue: range.maxValue,
-      colorId: range.colorId
+      colorId: range.colorId,
+      level: range.level
     }))
+    inverted.value = existing[0]?.inverted ?? false
   } catch (error) {
     appStore.notifyError(error)
   } finally {
@@ -116,7 +130,9 @@ const asRangeLike = computed(() =>
     minValue: row.minValue,
     maxValue: row.maxValue,
     colorHex: catalog.colorById.get(row.colorId)?.hex ?? '#000000',
-    version: 1
+    version: 1,
+    level: row.level,
+    inverted: inverted.value
   }))
 )
 
@@ -140,7 +156,8 @@ function addRow(): void {
       classificationName: '',
       minValue: min,
       maxValue: Math.max(min + step(), Math.min(max, min + 10)),
-      colorId: catalog.colors[0]?.id ?? ''
+      colorId: catalog.colors[0]?.id ?? '',
+      level: null
     }
   ]
 }
@@ -160,15 +177,37 @@ function fillDomain(count: number): void {
 
   const span = (max - min) / count
   const decimals = domain.value.decimals
+  const levels = suggestLevels(count, inverted.value)
 
   rows.value = Array.from({ length: count }, (_, index) => ({
     key: nextKey++,
     classificationName: '',
     minValue: Number((min + span * index).toFixed(decimals)),
     maxValue: Number((min + span * (index + 1)).toFixed(decimals)),
-    colorId: catalog.colors[index % Math.max(catalog.colors.length, 1)]?.id ?? ''
+    colorId: catalog.colors[index % Math.max(catalog.colors.length, 1)]?.id ?? '',
+    level: levels[index] ?? null
   }))
 }
+
+/**
+ * Preenche a coluna Nível de uma vez, a partir da ordem das faixas.
+ *
+ * É sugestão, não regra: o usuário ajusta linha a linha depois. Existe porque
+ * sem ela a visualização de resultados nasceria cega — o nível teria de ser
+ * escolhido faixa a faixa, instrumento a instrumento, antes que qualquer
+ * gráfico mostrasse alguma coisa.
+ */
+function applySuggestedLevels(): void {
+  const ordered = [...rows.value].sort((a, b) => a.minValue - b.minValue)
+  const levels = suggestLevels(ordered.length, inverted.value)
+
+  ordered.forEach((row, index) => {
+    row.level = levels[index] ?? null
+  })
+}
+
+/** Quantas faixas ainda não têm nível — o que a visualização não consegue ler. */
+const missingLevels = computed(() => rows.value.filter((row) => row.level === null).length)
 
 function rangeLabel(key: number): string {
   const range = asRangeLike.value.find((entry) => entry.id === String(key))
@@ -193,7 +232,9 @@ async function save(): Promise<void> {
         classificationName: row.classificationName.trim(),
         minValue: row.minValue,
         maxValue: row.maxValue,
-        colorId: row.colorId
+        colorId: row.colorId,
+        level: row.level,
+        inverted: inverted.value
       }))
     })
     await load()
@@ -255,6 +296,17 @@ const canSave = computed(
       </div>
     </div>
 
+    <label class="mb-4 flex max-w-3xl items-start gap-2 text-sm text-ink-700">
+      <input v-model="inverted" type="checkbox" class="mt-0.5" />
+      <span>
+        Escore alto indica <strong>pior</strong> desempenho
+        <span class="mt-0.5 block text-xs text-ink-500">
+          Marque em escalas de sintoma, em que um valor maior é o achado mais grave. Não muda em que
+          faixa o valor cai — muda a direção dos gráficos e a sugestão de níveis abaixo.
+        </span>
+      </span>
+    </label>
+
     <p v-if="loading" class="py-6 text-center text-sm text-ink-400">Carregando faixas…</p>
 
     <div v-else>
@@ -265,6 +317,7 @@ const canSave = computed(
             <th class="w-24 px-2 py-2 text-right font-semibold">Mínimo</th>
             <th class="w-24 px-2 py-2 text-right font-semibold">Máximo</th>
             <th class="w-40 px-2 py-2 text-left font-semibold">Cor</th>
+            <th class="w-48 px-2 py-2 text-left font-semibold">Nível</th>
             <th class="w-28 px-2 py-2 text-left font-semibold">Intervalo</th>
             <th class="w-10 px-2 py-2" />
           </tr>
@@ -304,6 +357,18 @@ const canSave = computed(
                 {{ contrastWarning(row.colorId) }}
               </p>
             </td>
+            <td class="px-2 py-1.5">
+              <select v-model="row.level" class="field-input py-1">
+                <option :value="null">— não definido</option>
+                <option
+                  v-for="entry in CLASSIFICATION_LEVELS"
+                  :key="entry.level"
+                  :value="entry.level"
+                >
+                  {{ entry.level }} · {{ entry.label }}
+                </option>
+              </select>
+            </td>
             <td class="px-2 py-1.5 tabular text-xs text-ink-500">{{ rangeLabel(row.key) }}</td>
             <td class="px-2 py-1.5 text-right">
               <button
@@ -340,6 +405,21 @@ const canSave = computed(
         <ul class="mt-2 space-y-1 text-sm text-danger-600">
           <li v-for="(issue, index) in blockingIssues" :key="index">{{ issue.message }}</li>
         </ul>
+      </div>
+
+      <div
+        v-if="rows.length > 0 && missingLevels > 0"
+        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-200 bg-warn-50 p-3"
+      >
+        <p class="max-w-xl text-sm text-warn-700">
+          <span class="font-medium">
+            {{ missingLevels }} de {{ rows.length }}
+            {{ missingLevels === 1 ? 'faixa está' : 'faixas estão' }} sem nível.
+          </span>
+          Resultados classificados por elas aparecem em cinza na visualização — sem nível, o app não
+          sabe se a faixa é boa ou ruim.
+        </p>
+        <BaseButton size="sm" @click="applySuggestedLevels">Sugerir níveis</BaseButton>
       </div>
 
       <div class="mt-4 flex items-center justify-between">

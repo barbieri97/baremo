@@ -17,15 +17,9 @@
 import { BrowserWindow, protocol } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
-import DOMPurify from 'isomorphic-dompurify'
+import { buildPrintDocument, escapeAttribute, PRINT_CSP } from './document-html'
 
 export const PRINT_SCHEME = 'baremo-print'
-
-/**
- * CSP da janela de impressão (§13.4).
- * Sem `script-src`: com `default-src 'none'`, script nenhum executa.
- */
-const PRINT_CSP = "default-src 'none'; img-src baremo-file: data:; style-src 'unsafe-inline'"
 
 /** Jobs em voo, por id. O HTML nunca toca o disco. */
 const jobs = new Map<string, string>()
@@ -77,7 +71,7 @@ export interface RenderOptions {
  */
 export async function renderPdf(options: RenderOptions): Promise<Buffer> {
   const jobId = randomUUID()
-  const document = buildDocument(options)
+  const document = buildPrintDocument(options)
 
   jobs.set(jobId, document)
 
@@ -114,37 +108,9 @@ export async function renderPdf(options: RenderOptions): Promise<Buffer> {
   }
 }
 
-export async function renderPdfToFile(
-  options: RenderOptions,
-  filePath: string
-): Promise<void> {
+export async function renderPdfToFile(options: RenderOptions, filePath: string): Promise<void> {
   const buffer = await renderPdf(options)
   await writeFile(filePath, buffer)
-}
-
-function buildDocument(options: RenderOptions): string {
-  // Terceira camada: mesmo o HTML que nós mesmos montamos passa pelo
-  // sanitizador. É o que protege o caminho do editor, onde parte do conteúdo
-  // veio de fora — e não custa nada nos relatórios, onde não veio.
-  const safeBody = DOMPurify.sanitize(options.bodyHtml, {
-    USE_PROFILES: { html: true },
-    // `baremo-file:` é o esquema dos anexos do usuário; `data:` cobre o logo do
-    // perfil profissional.
-    ALLOWED_URI_REGEXP: /^(?:baremo-file|data|https?|mailto):/i,
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'link'],
-    FORBID_ATTR: ['srcset', 'formaction', 'form', 'ping']
-  })
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${PRINT_CSP}">
-<title>${escapeAttribute(options.title)}</title>
-<style>${options.css}</style>
-</head>
-<body>${safeBody}</body>
-</html>`
 }
 
 /**
@@ -165,21 +131,4 @@ function footerTemplate(issuedAt: string): string {
     <span>Emitido em ${escapeAttribute(issuedAt)}</span>
     <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
   </div>`
-}
-
-function escapeAttribute(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => {
-    switch (char) {
-      case '&':
-        return '&amp;'
-      case '<':
-        return '&lt;'
-      case '>':
-        return '&gt;'
-      case '"':
-        return '&quot;'
-      default:
-        return '&#39;'
-    }
-  })
 }

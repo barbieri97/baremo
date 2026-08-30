@@ -102,7 +102,11 @@ export const classificationRanges = sqliteTable(
     minValue: real('min_value').notNull(),
     maxValue: real('max_value').notNull(),
     colorId: text('color_id').notNull(),
-    version: integer('version').notNull().default(1)
+    version: integer('version').notNull().default(1),
+    /** Ordinal 1–5 que dá ordem ao nome livre da faixa (§4.6). Nulo = não definido. */
+    level: integer('level'),
+    /** Escore alto indica PIOR desempenho — escalas de sintoma. */
+    inverted: integer('inverted', { mode: 'boolean' }).notNull().default(false)
   },
   (table) => [index('idx_ranges_instrument_type').on(table.instrumentId, table.scoreType)]
 )
@@ -139,7 +143,9 @@ export const assessmentResults = sqliteTable(
     manuallyOverridden: integer('manually_overridden', { mode: 'boolean' })
       .notNull()
       .default(false),
-    notes: text('notes')
+    notes: text('notes'),
+    /** Nível 1–5 da faixa que classificou, copiado no snapshot. Nulo antes da migration 2. */
+    classificationLevel: integer('classification_level')
   },
   (table) => [
     index('idx_results_assessment').on(table.assessmentId),

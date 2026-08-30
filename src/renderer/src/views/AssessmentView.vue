@@ -133,20 +133,6 @@ async function confirmReprocess(): Promise<void> {
   }
 }
 
-async function generate(kind: 'by_cognitive_function' | 'by_instrument_hierarchy'): Promise<void> {
-  try {
-    const result = await api('reports:generate', {
-      kind,
-      assessmentId: props.id,
-      comparisonAssessmentId: null,
-      documentId: null
-    })
-    if (!result.cancelled) appStore.notify('success', 'Relatório gerado.')
-  } catch (error) {
-    appStore.notifyError(error)
-  }
-}
-
 function openMeta(): void {
   if (assessment.value === null) return
   metaForm.value = {
@@ -205,11 +191,12 @@ async function saveMeta(): Promise<void> {
       <div class="flex flex-wrap items-center justify-end gap-2">
         <BaseButton size="sm" @click="openMeta">Editar dados</BaseButton>
         <BaseButton size="sm" @click="openReprocess">Reprocessar classificações</BaseButton>
-        <BaseButton size="sm" @click="generate('by_cognitive_function')">
-          PDF por função
-        </BaseButton>
-        <BaseButton size="sm" @click="generate('by_instrument_hierarchy')">
-          PDF por hierarquia
+        <BaseButton
+          size="sm"
+          variant="primary"
+          @click="router.push(`/avaliacoes/${id}/resultados`)"
+        >
+          Visualizar resultados
         </BaseButton>
       </div>
     </header>
@@ -220,22 +207,20 @@ async function saveMeta(): Promise<void> {
           Resultados
           <span class="ml-1 text-sm font-normal text-ink-500">({{ results.length }})</span>
         </h2>
-        <BaseButton
-          v-if="!addingRow"
-          size="sm"
-          variant="primary"
-          @click="addingRow = true"
-        >
+        <BaseButton v-if="!addingRow" size="sm" variant="primary" @click="addingRow = true">
           Lançar resultado
         </BaseButton>
       </div>
 
       <p class="mb-3 text-xs text-ink-500">
-        A classificação e a cor são gravadas no momento do lançamento. Alterar as faixas depois
-        não altera resultados já registrados — use "Reprocessar classificações" para isso.
+        A classificação e a cor são gravadas no momento do lançamento. Alterar as faixas depois não
+        altera resultados já registrados — use "Reprocessar classificações" para isso.
       </p>
 
-      <div v-if="results.length === 0 && !addingRow" class="card p-8 text-center text-sm text-ink-400">
+      <div
+        v-if="results.length === 0 && !addingRow"
+        class="card p-8 text-center text-sm text-ink-400"
+      >
         Nenhum resultado lançado ainda.
       </div>
 
@@ -384,7 +369,11 @@ async function saveMeta(): Promise<void> {
         </div>
         <div>
           <label class="field-label" for="meta-reason">Motivo do encaminhamento</label>
-          <textarea id="meta-reason" v-model="metaForm.referralReason" class="field-input min-h-20" />
+          <textarea
+            id="meta-reason"
+            v-model="metaForm.referralReason"
+            class="field-input min-h-20"
+          />
         </div>
         <div>
           <label class="field-label" for="meta-complaint">Queixa</label>

@@ -22,6 +22,8 @@ import { escapeHtml, html, raw, safeColor, toString } from '../pdf/html'
 import { ageAt, formatAge, formatIsoDate } from '@shared/domain/dates'
 import { readableTextColor } from '@shared/domain/color'
 import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
+import { normalizeScore } from '@shared/domain/normalize'
+import { loadRangesForInstruments, rangeKey } from './classification'
 import type { ScoreType } from '@shared/domain/score-types'
 import {
   DOCUMENT_TYPE_LABELS,
@@ -39,18 +41,11 @@ export interface DocumentReport {
   readonly contentHtml: string
 }
 
-export function buildDocumentReport(
-  handle: BaremoDatabase,
-  documentId: string
-): DocumentReport {
+export function buildDocumentReport(handle: BaremoDatabase, documentId: string): DocumentReport {
   const document = handle.db.select().from(documents).where(eq(documents.id, documentId)).get()
   if (!document) throw notFound('Documento não encontrado.')
 
-  const patient = handle.db
-    .select()
-    .from(patients)
-    .where(eq(patients.id, document.patientId))
-    .get()
+  const patient = handle.db.select().from(patients).where(eq(patients.id, document.patientId)).get()
   if (!patient) throw notFound('Paciente do documento não encontrado.')
 
   const profile = getProfile(handle)
@@ -168,23 +163,25 @@ function renderResultsTable(
           return html`
             <tr>
               <td>
-                ${result.instrumentName}${result.instrumentAcronym
-                  ? ` (${result.instrumentAcronym})`
-                  : ''}
+                ${result.instrumentName}${
+                  result.instrumentAcronym ? ` (${result.instrumentAcronym})` : ''
+                }
               </td>
               <td>${result.cognitiveFunctionName ?? '—'}</td>
               <td>${SCORE_TYPE_SHORT_LABELS[result.scoreType]}</td>
               <td class="numeric">${formatValue(result.value, result.scoreType)}</td>
               <td>
-                ${result.classificationName === null
-                  ? html`<span class="empty">—</span>`
-                  : html`<span
-                      class="classification"
-                      style="background-color:${raw(background)};color:${raw(
+                ${
+                  result.classificationName === null
+                    ? html`<span class="empty">—</span>`
+                    : html`<span
+                        class="classification"
+                        style="background-color:${raw(background)};color:${raw(
                         readableTextColor(background)
                       )}"
-                      >${result.classificationName}</span
-                    >`}
+                        >${result.classificationName}</span
+                      >`
+                }
               </td>
               <td>${RESULT_STATUS_LABELS[result.status]}</td>
             </tr>
@@ -257,20 +254,25 @@ interface ProfilePoint {
  * não é equivalência psicométrica, e o gráfico serve para leitura de perfil, não
  * para comparação de magnitude entre instrumentos.
  */
-export function computeProfile(
-  handle: BaremoDatabase,
-  assessmentId: string
-): ProfilePoint[] {
+export function computeProfile(handle: BaremoDatabase, assessmentId: string): ProfilePoint[] {
   const results = listResults(handle, assessmentId)
   const functions = listCognitiveFunctions(handle)
   const nameById = new Map(functions.map((node) => [node.id, node.name]))
+
+  // A inversão vive no conjunto de faixas do instrumento, não no resultado.
+  // Carregada em lote antes do laço: uma consulta, e não uma por resultado.
+  const rangesByKey = loadRangesForInstruments(handle, [
+    ...new Set(results.map((result) => result.instrumentId))
+  ])
+  const invertedByKey = (result: ResultRow): boolean =>
+    rangesByKey.get(rangeKey(result.instrumentId, result.scoreType))?.[0]?.inverted ?? false
 
   const buckets = new Map<string, number[]>()
 
   for (const result of results) {
     if (result.value === null || result.cognitiveFunctionId === null) continue
 
-    const normalized = normalize(result)
+    const normalized = normalizeScore(result.value, result.scoreType, invertedByKey(result))
     if (normalized === null) continue
 
     const name = nameById.get(result.cognitiveFunctionId)
@@ -288,17 +290,6 @@ export function computeProfile(
       sampleCount: values.length
     }))
     .sort((a, b) => a.cognitiveFunctionName.localeCompare(b.cognitiveFunctionName, 'pt-BR'))
-}
-
-function normalize(result: ResultRow): number | null {
-  const domain = SCORE_TYPE_DOMAINS[result.scoreType]
-  if (result.value === null || domain.min === null || domain.max === null) return null
-
-  const span = domain.max - domain.min
-  if (span <= 0) return null
-
-  const ratio = (result.value - domain.min) / span
-  return Math.min(100, Math.max(0, ratio * 100))
 }
 
 function truncate(value: string, max: number): string {

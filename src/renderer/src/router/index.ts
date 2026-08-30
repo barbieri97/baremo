@@ -30,6 +30,12 @@ const routes: RouteRecordRaw[] = [
     props: true
   },
   {
+    path: '/avaliacoes/:id/resultados',
+    name: 'assessment-results',
+    component: () => import('../views/ResultsView.vue'),
+    props: true
+  },
+  {
     path: '/documentos/:id',
     name: 'document',
     component: () => import('../views/DocumentView.vue'),
