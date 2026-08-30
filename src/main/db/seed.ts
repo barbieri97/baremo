@@ -5,6 +5,10 @@
  * inteiramente editáveis. NÃO semeamos instrumentos nem faixas normativas: as
  * tabelas de normas são material protegido dos manuais dos testes, e cada
  * profissional trabalha com a edição e a normatização que possui.
+ *
+ * Quem precisa levar o próprio catálogo de uma instalação para outra usa
+ * exportar/importar catálogo (`services/catalog/`), que é transferência
+ * escolhida caso a caso — e não distribuição embutida no instalador.
  */
 
 import { randomUUID } from 'node:crypto'
