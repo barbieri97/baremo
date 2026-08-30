@@ -14,7 +14,6 @@
 
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'node:path'
-import { protocol } from 'electron'
 import { bootDatabase, closeDatabase } from './db'
 import type { BootFailure } from './db'
 import {
@@ -46,8 +45,8 @@ const DEV_SERVER_URL = process.env['ELECTRON_RENDERER_URL']
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  registerPrivilegedSchemes()
-  protocol.registerSchemesAsPrivileged([PRINT_SCHEME_PRIVILEGES])
+  // Uma única chamada, com todos os esquemas: ver `registerPrivilegedSchemes`.
+  registerPrivilegedSchemes([PRINT_SCHEME_PRIVILEGES])
 
   app.on('second-instance', () => {
     const [window] = BrowserWindow.getAllWindows()

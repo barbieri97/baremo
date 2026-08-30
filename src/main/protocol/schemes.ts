@@ -14,6 +14,7 @@
  */
 
 import { protocol, net } from 'electron'
+import type { CustomScheme } from 'electron'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
@@ -30,8 +31,16 @@ export const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`
 
 export const FILE_SCHEME = 'baremo-file'
 
-/** Precisa rodar ANTES de `app.whenReady()`. */
-export function registerPrivilegedSchemes(): void {
+/**
+ * Precisa rodar ANTES de `app.whenReady()`.
+ *
+ * `registerSchemesAsPrivileged` vale uma vez por processo: a segunda chamada
+ * substitui a lista da primeira em vez de somar a ela. Por isso todo esquema
+ * privilegiado do app — inclusive o de impressão — entra por aqui, numa
+ * chamada só. Registrar em duas chamadas apagava `secure: true` do `app://`, e
+ * um renderer fora de contexto seguro perde APIs como `crypto.randomUUID`.
+ */
+export function registerPrivilegedSchemes(extra: readonly CustomScheme[] = []): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: APP_SCHEME,
@@ -46,7 +55,8 @@ export function registerPrivilegedSchemes(): void {
     {
       scheme: FILE_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
-    }
+    },
+    ...extra
   ])
 }
 
