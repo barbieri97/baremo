@@ -38,7 +38,10 @@ interface DraftRow {
 
 let nextKey = 1
 
-const scoreType = ref<ScoreType>('percentile')
+/** Tipo mostrado quando o instrumento ainda não tem faixa nenhuma. */
+const FALLBACK_SCORE_TYPE: ScoreType = 'percentile'
+
+const scoreType = ref<ScoreType>(FALLBACK_SCORE_TYPE)
 const rows = ref<DraftRow[]>([])
 const loading = ref(false)
 const saving = ref(false)
@@ -73,7 +76,38 @@ async function load(): Promise<void> {
   }
 }
 
-watch(() => [props.instrument.id, scoreType.value], load, { immediate: true })
+/**
+ * Ao abrir um instrumento, a aba mostra o primeiro tipo de escore que TEM
+ * faixas — e só cai no percentil quando não há nenhuma.
+ *
+ * Abrir sempre no percentil escondia faixas que existem: um instrumento cujo
+ * catálogo configura escore padrão e z aparecia com "nenhuma faixa cadastrada",
+ * e o único indício do contrário era o ✓ dentro do seletor fechado. Quem acabou
+ * de importar um catálogo lê isso como "a importação não trouxe as faixas".
+ */
+async function openInstrument(): Promise<void> {
+  loading.value = true
+  try {
+    configured.value = await api('classifications:listConfigured', {
+      instrumentId: props.instrument.id
+    })
+  } catch (error) {
+    appStore.notifyError(error)
+    configured.value = []
+  }
+
+  const preferred = classifiableTypes.find((type) => configured.value.includes(type))
+  // Trocar o tipo dispara o watch abaixo, que é quem carrega as faixas.
+  if (preferred !== undefined && preferred !== scoreType.value) {
+    scoreType.value = preferred
+    return
+  }
+
+  await load()
+}
+
+watch(() => props.instrument.id, openInstrument, { immediate: true })
+watch(scoreType, load)
 
 const asRangeLike = computed(() =>
   rows.value.map((row) => ({
@@ -174,8 +208,23 @@ async function save(): Promise<void> {
   }
 }
 
+/**
+ * Outros tipos de escore deste instrumento que TÊM faixas.
+ *
+ * Sem isso, "nenhuma faixa cadastrada" é ambíguo entre "este instrumento não
+ * tem faixas" e "tem, mas em outro tipo de escore" — e é a segunda leitura que
+ * o vazio costuma esconder.
+ */
+const configuredElsewhere = computed(() =>
+  classifiableTypes
+    .filter((type) => type !== scoreType.value && configured.value.includes(type))
+    .map((type) => SCORE_TYPE_LABELS[type])
+)
+
 const canSave = computed(
-  () => blockingIssues.value.length === 0 && rows.value.every((row) => row.classificationName.trim() !== '')
+  () =>
+    blockingIssues.value.length === 0 &&
+    rows.value.every((row) => row.classificationName.trim() !== '')
 )
 </script>
 
@@ -269,10 +318,17 @@ const canSave = computed(
         </tbody>
       </table>
 
-      <p v-else class="py-8 text-center text-sm text-ink-400">
-        Nenhuma faixa cadastrada para {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas, os resultados
-        deste instrumento são gravados sem classificação automática.
-      </p>
+      <div v-else class="py-8 text-center text-sm text-ink-400">
+        <p>
+          Nenhuma faixa cadastrada para {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas, os
+          resultados deste instrumento são gravados sem classificação automática.
+        </p>
+        <p v-if="configuredElsewhere.length > 0" class="mt-2 text-ink-600">
+          Este instrumento tem faixas em
+          <span class="font-medium">{{ configuredElsewhere.join(', ') }}</span> — troque o tipo de
+          escore acima para vê-las.
+        </p>
+      </div>
 
       <div
         v-if="blockingIssues.length > 0"
