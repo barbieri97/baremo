@@ -528,6 +528,10 @@ function normalizeName(value: string): string {
  * Serve para não incrementar a versão das faixas à toa: a versão é o que liga um
  * resultado já lançado ao conjunto com que foi classificado (§4.8), e subi-la
  * sem mudança nenhuma esvazia esse rastro.
+ *
+ * "Igual" precisa cobrir TODA coluna que a importação grava. O que ficar de
+ * fora vira uma mudança invisível: o conjunto é dado por inalterado, `saveRanges`
+ * não é chamado e o campo omitido nunca chega ao banco.
  */
 function matchesExisting(
   handle: BaremoDatabase,
@@ -550,7 +554,14 @@ function matchesExisting(
       row.classificationName === draft.classificationName &&
       row.minValue === draft.minValue &&
       row.maxValue === draft.maxValue &&
-      row.colorId === draft.colorId
+      row.colorId === draft.colorId &&
+      // Nível e inversão entram na comparação porque são o conteúdo de uma
+      // edição inteira que não muda mais nada: preencher os níveis de um
+      // catálogo exportado deixa nome, limites e cor exatamente como estavam.
+      // Fora daqui, esse arquivo voltaria como "inalterado" e a importação
+      // descartaria a edição em silêncio — sem erro e sem aviso.
+      row.level === draft.level &&
+      row.inverted === draft.inverted
     )
   })
 }

@@ -295,6 +295,70 @@ describe('reimportação do mesmo catálogo', () => {
     expect(listRanges(target, id, 'percentile')[0]!.version).toBe(versionAfterFirst)
   })
 
+  it('leva nível e inversão para um destino que já tinha o conjunto sem eles', () => {
+    // O caso real: o catálogo foi exportado, os níveis foram preenchidos no
+    // arquivo e ele volta para a MESMA instalação. Tudo o que define a faixa —
+    // nome, limites, cor — continua idêntico ao que está gravado; só nível e
+    // inversão mudaram. Se a comparação de "já é igual" ignorar esses dois
+    // campos, o conjunto é dado como inalterado e a edição do usuário some sem
+    // erro nenhum — que é o pior desfecho possível para uma importação.
+    const id = seedInstrumentWithRanges(origin, { name: 'Escala de Sintomas' })
+    applyCatalogImport(target, exportFile())
+
+    const file = exportFile()
+    const set = file.ranges.find((entry) => entry.instrumentId === id)!
+    const graded = {
+      ...file,
+      ranges: file.ranges.map((entry) =>
+        entry === set
+          ? {
+              ...entry,
+              entries: entry.entries.map((range, index) => ({
+                ...range,
+                level: ([3, 2, 1] as const)[index]!,
+                inverted: true
+              }))
+            }
+          : entry
+      )
+    }
+
+    const report = applyCatalogImport(target, graded)
+    expect(report.rangeSets).toEqual({ created: 0, updated: 1, unchanged: 0 })
+
+    const ranges = listRanges(target, id, 'percentile')
+    expect(ranges.map((range) => range.level)).toEqual([3, 2, 1])
+    expect(ranges.every((range) => range.inverted)).toBe(true)
+  })
+
+  it('dá o conjunto por inalterado quando nível e inversão também são iguais', () => {
+    // A contrapartida do teste acima: incluir os dois campos na comparação não
+    // pode fazer toda reimportação parecer uma mudança. A versão da faixa é o
+    // rastro do snapshot (§4.8) e não pode subir à toa.
+    const id = seedInstrumentWithRanges(origin, { name: 'Escala de Sintomas' })
+    saveRanges(
+      origin,
+      id,
+      'percentile',
+      listRanges(origin, id, 'percentile').map((range, index) => ({
+        classificationName: range.classificationName,
+        minValue: range.minValue,
+        maxValue: range.maxValue,
+        colorId: range.colorId,
+        level: ([1, 3, 5] as const)[index]!,
+        inverted: false
+      }))
+    )
+
+    const file = exportFile()
+    applyCatalogImport(target, file)
+    const versionAfterFirst = listRanges(target, id, 'percentile')[0]!.version
+
+    const second = applyCatalogImport(target, file)
+    expect(second.rangeSets).toEqual({ created: 0, updated: 0, unchanged: 1 })
+    expect(listRanges(target, id, 'percentile')[0]!.version).toBe(versionAfterFirst)
+  })
+
   it('atualiza só o que mudou na origem, e deixa o resto quieto', () => {
     const id = seedInstrumentWithRanges(origin, { name: 'Teste de Trilhas' })
     seedInstrumentWithRanges(origin, { name: 'Teste que não vai mudar' })
