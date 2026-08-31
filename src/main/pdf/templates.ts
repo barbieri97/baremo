@@ -247,7 +247,10 @@ function deltaCell(a: ResultRow | null, b: ResultRow | null): SafeHtml {
  * testá-lo sem instanciar biblioteca de gráfico nenhuma.
  */
 export interface ResultsReportCharts {
+  /** O radar geral, comparando as funções raiz. */
   readonly radar: string | null
+  /** Radar das filhas, por `parentId` da função pai. */
+  readonly functionRadars: Readonly<Record<string, string>>
   /** Por `instrumentId` da raiz do teste. */
   readonly comparison: Readonly<Record<string, string>>
   readonly evolution: Readonly<Record<string, string>>
@@ -277,7 +280,7 @@ export function renderResultsReport(
         ? html`<p class="empty">Esta avaliação ainda não possui resultados registrados.</p>`
         : html`
             ${comparing ? comparisonNote(overview) : null}
-            ${panoramaSection(overview, charts.radar)} ${functionDetailSections(overview)}
+            ${panoramaSection(overview, charts.radar)} ${functionDetailSections(overview, charts)}
             ${testSections(overview, charts)} ${anyOverride ? OVERRIDE_NOTE : null}
             ${overview.missingLevels > 0 ? missingLevelsNote(overview) : null}
           `
@@ -434,40 +437,66 @@ function levelLegend(): SafeHtml {
   </p>`
 }
 
-/** Uma seção por função, com a tabela de resultados daquela função. */
-function functionDetailSections(overview: ResultsOverview): SafeHtml {
+/**
+ * O detalhe, agrupado por função raiz.
+ *
+ * A hierarquia é o ponto: o radar de uma função pai compara as filhas dela, e
+ * só faz sentido lido junto das tabelas dessas filhas. Uma lista plana
+ * obrigaria o leitor a reconstruir a árvore de cabeça para saber a que o
+ * polígono se refere — e um pai sem instrumentos próprios não teria sequer onde
+ * ser desenhado.
+ */
+function functionDetailSections(overview: ResultsOverview, charts: ResultsReportCharts): SafeHtml {
   return html`
     <h2 class="section__title">Detalhe por função</h2>
-    ${overview.functions.map(
-      (summary) => html`
-        <div class="section avoid-break">
-          <h3 class="section__subtitle">${summary.name}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Instrumento</th>
-                <th style="width:16mm">Escore</th>
-                <th style="width:14mm">Valor</th>
-                <th style="width:30mm">Classificação</th>
-                <th style="width:30mm">Nível</th>
-                <th style="width:20mm">Situação</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${summary.points.map(
-                (point) => html`
-                  <tr>
-                    <td>${point.instrumentPath}</td>
-                    <td>${point.scoreTypeLabel}</td>
-                    <td class="numeric">${formatValue(point)}</td>
-                    <td>${classificationBadge(point)}</td>
-                    <td>${levelInline(point)}</td>
-                    <td>${point.statusLabel}</td>
-                  </tr>
-                `
-              )}
-            </tbody>
-          </table>
+    ${overview.functionGroups.map(
+      (group) => html`
+        <div class="section">
+          <h3 class="section__subtitle">${group.name}</h3>
+          ${group.radars.map((radar) => {
+            const svg = radar.parentId === null ? undefined : charts.functionRadars[radar.parentId]
+            return svg === undefined
+              ? null
+              : html`<figure class="chart-figure avoid-break">
+                  ${raw(svg)}
+                  <figcaption class="chart-figure__caption">
+                    ${radar.title} — nível médio por subfunção
+                  </figcaption>
+                </figure>`
+          })}
+          ${group.functions.map(
+            (summary) => html`
+              <div class="function-block avoid-break">
+                <h4 class="function-block__title">${summary.name}</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Instrumento</th>
+                      <th style="width:16mm">Escore</th>
+                      <th style="width:14mm">Valor</th>
+                      <th style="width:30mm">Classificação</th>
+                      <th style="width:30mm">Nível</th>
+                      <th style="width:20mm">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${summary.points.map(
+                      (point) => html`
+                        <tr>
+                          <td>${point.instrumentPath}</td>
+                          <td>${point.scoreTypeLabel}</td>
+                          <td class="numeric">${formatValue(point)}</td>
+                          <td>${classificationBadge(point)}</td>
+                          <td>${levelInline(point)}</td>
+                          <td>${point.statusLabel}</td>
+                        </tr>
+                      `
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            `
+          )}
         </div>
       `
     )}
@@ -558,10 +587,10 @@ function testTable(group: TestGroup, overview: ResultsOverview): SafeHtml {
                   ? null
                   : html`<td>
                       ${
-                      entry.values[0] != null
-                        ? classificationBadge(entry.values[0])
-                        : html`<span class="empty">—</span>`
-                    }
+                        entry.values[0] != null
+                          ? classificationBadge(entry.values[0])
+                          : html`<span class="empty">—</span>`
+                      }
                     </td>`
               }
             </tr>

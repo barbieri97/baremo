@@ -24,8 +24,11 @@
 import type { BaremoDatabase } from '../db/gateway'
 import { buildContext } from './reports'
 import type {
+  FunctionGroup,
+  FunctionRadar,
   FunctionSummary,
   OverviewAssessment,
+  RadarAxis,
   ResultPoint,
   ResultsOverview,
   TestEntry,
@@ -36,9 +39,11 @@ import { getAssessment, listResultsForAssessments } from '../repositories/assess
 import type { ResultRow } from '../repositories/assessments'
 import { listCognitiveFunctions, listInstruments } from '../repositories/trees'
 import type { CognitiveFunction, Instrument } from '@shared/contracts/entities'
-import { ancestorPath, flatten } from '@shared/domain/tree'
+import { ancestorPath, buildTree, flatten } from '@shared/domain/tree'
+import type { TreeNode } from '@shared/domain/tree'
 import { normalizeScore } from '@shared/domain/normalize'
 import { aggregateLevel, countBelowExpected, levelDistribution } from '@shared/domain/levels'
+import type { ClassificationLevel } from '@shared/domain/levels'
 import { formatIsoDate } from '@shared/domain/dates'
 import { RESULT_STATUS_LABELS, SCORE_TYPE_SHORT_LABELS } from '@shared/labels'
 
@@ -76,11 +81,20 @@ export function buildResultsOverview(
 
   const primaryPoints = points.filter((point) => point.assessmentId === assessmentId)
 
+  // Um balde só, lido pelas duas organizações por função. Reagrupar os mesmos
+  // pontos duas vezes seria a forma mais barata de o panorama e o detalhe
+  // passarem a discordar sobre quanta coisa existe.
+  const byFunction = bucketByFunction(primaryPoints)
+  const functions = summarizeFunctions(byFunction, functionCatalog)
+  const { overallRadar, groups } = buildFunctionGroups(byFunction, functionCatalog, functions)
+
   return {
     ...context,
     assessmentId,
     assessments,
-    functions: summarizeFunctions(primaryPoints, functionCatalog),
+    functions,
+    overallRadar,
+    functionGroups: groups,
     tests: groupByTest(points, instrumentCatalog, assessments, rangesByKey),
     missingLevels: primaryPoints.filter(
       (point) => point.classificationLevel === null && point.value !== null
@@ -143,16 +157,9 @@ function instrumentPathResolver(catalog: readonly Instrument[]): (id: string) =>
  * posição para elas seria pior do que admitir a ausência.
  */
 function summarizeFunctions(
-  points: readonly ResultPoint[],
+  byFunction: PointsByFunction,
   catalog: readonly CognitiveFunction[]
 ): FunctionSummary[] {
-  const byFunction = new Map<string | null, ResultPoint[]>()
-  for (const point of points) {
-    const bucket = byFunction.get(point.cognitiveFunctionId)
-    if (bucket) bucket.push(point)
-    else byFunction.set(point.cognitiveFunctionId, [point])
-  }
-
   const summaries: FunctionSummary[] = []
 
   for (const { node, depth } of flatten(catalog)) {
@@ -163,18 +170,46 @@ function summarizeFunctions(
 
   const unassigned = byFunction.get(null)
   if (unassigned !== undefined && unassigned.length > 0) {
-    summaries.push(summarize(null, 'Sem função cognitiva associada', 0, unassigned))
+    summaries.push(summarize(null, UNASSIGNED_NAME, 0, unassigned))
   }
 
-  return summaries.sort((a, b) => {
-    if (a.averageLevel === null && b.averageLevel === null) {
-      return a.name.localeCompare(b.name, 'pt-BR')
-    }
-    if (a.averageLevel === null) return 1
-    if (b.averageLevel === null) return -1
-    if (a.averageLevel !== b.averageLevel) return a.averageLevel - b.averageLevel
+  return summaries.sort(byLevelThenName)
+}
+
+export type PointsByFunction = ReadonlyMap<string | null, ResultPoint[]>
+
+const UNASSIGNED_NAME = 'Sem função cognitiva associada'
+
+/** Os pontos de uma avaliação, indexados pela função a que estão atribuídos. */
+function bucketByFunction(points: readonly ResultPoint[]): PointsByFunction {
+  const byFunction = new Map<string | null, ResultPoint[]>()
+  for (const point of points) {
+    const bucket = byFunction.get(point.cognitiveFunctionId)
+    if (bucket) bucket.push(point)
+    else byFunction.set(point.cognitiveFunctionId, [point])
+  }
+  return byFunction
+}
+
+/**
+ * Da mais rebaixada para a mais preservada, sem nível por último.
+ *
+ * Estrutural de propósito: a mesma ordem vale para os resumos de função e para
+ * os grupos por raiz, e são duas leituras que têm de concordar — um cartão
+ * apontando para um bloco que aparece noutra posição é exatamente o tipo de
+ * inconsistência que ninguém reporta e todo mundo estranha.
+ */
+function byLevelThenName(
+  a: { readonly averageLevel: number | null; readonly name: string },
+  b: { readonly averageLevel: number | null; readonly name: string }
+): number {
+  if (a.averageLevel === null && b.averageLevel === null) {
     return a.name.localeCompare(b.name, 'pt-BR')
-  })
+  }
+  if (a.averageLevel === null) return 1
+  if (b.averageLevel === null) return -1
+  if (a.averageLevel !== b.averageLevel) return a.averageLevel - b.averageLevel
+  return a.name.localeCompare(b.name, 'pt-BR')
 }
 
 function summarize(
@@ -200,6 +235,144 @@ function summarize(
         : normalized.reduce((sum, value) => sum + value, 0) / normalized.length,
     distribution: levelDistribution(levels),
     belowExpected: countBelowExpected(levels)
+  }
+}
+
+// ─── Radares hierárquicos por função ──────────────────────────────
+
+/**
+ * Um polígono precisa de três vértices. Com dois eixos o radar vira um traço, e
+ * um traço não é uma leitura — por isso o radar some em vez de degenerar.
+ *
+ * O corte mora aqui, e não na tela nem no PDF: os dois desenham o que este
+ * módulo entregar, e uma regra em dois lugares é uma regra que vai divergir.
+ */
+const MIN_RADAR_AXES = 3
+
+/** Níveis e contagem de toda a subárvore de um nó. */
+interface Rollup {
+  readonly levels: (ClassificationLevel | null)[]
+  readonly count: number
+}
+
+/**
+ * Monta o radar geral e os grupos por função raiz.
+ *
+ * A soma da subárvore existe SOMENTE aqui, e não toca `FunctionSummary`. É
+ * deliberado: uma função pai com os instrumentos todos nas filhas precisa
+ * aparecer no radar — senão "Atenção" nunca seria comparável a "Memória" —,
+ * mas o cartão e a tabela continuam contando só o que foi de fato aplicado
+ * naquela função. Fundir as duas contagens faria a tabela de um pai listar
+ * resultados que ninguém lançou nele.
+ */
+function buildFunctionGroups(
+  byFunction: PointsByFunction,
+  catalog: readonly CognitiveFunction[],
+  summaries: readonly FunctionSummary[]
+): { overallRadar: FunctionRadar | null; groups: FunctionGroup[] } {
+  const tree = buildTree(catalog)
+  const rollups = new Map<string, Rollup>()
+
+  // Pós-ordem: uma passagem só pela árvore inteira. `descendantIds` faria o
+  // mesmo, mas reconstruindo o índice a cada nó e devolvendo ordem de pilha.
+  const collect = (branch: TreeNode<CognitiveFunction>): Rollup => {
+    const own = byFunction.get(branch.node.id) ?? []
+    const levels = own.map((point) => point.classificationLevel)
+    let count = own.length
+
+    for (const child of branch.children) {
+      const sub = collect(child)
+      levels.push(...sub.levels)
+      count += sub.count
+    }
+
+    const rollup: Rollup = { levels, count }
+    rollups.set(branch.node.id, rollup)
+    return rollup
+  }
+  for (const root of tree) collect(root)
+
+  const axisOf = (node: CognitiveFunction): RadarAxis | null => {
+    const rollup = rollups.get(node.id)
+    const averageLevel = rollup === undefined ? null : aggregateLevel(rollup.levels)
+    if (rollup === undefined || averageLevel === null) return null
+    return { id: node.id, name: node.name, averageLevel, resultCount: rollup.count }
+  }
+
+  // A ordem dos eixos é a do catálogo, e não a do nível: o formato do polígono
+  // só diz alguma coisa se o mesmo eixo estiver no mesmo lugar entre uma
+  // avaliação e a seguinte. Ordenar por nível faria a figura mudar de forma a
+  // cada reavaliação sem que o desempenho tivesse mudado.
+  const radarOf = (
+    parentId: string | null,
+    title: string,
+    children: readonly TreeNode<CognitiveFunction>[]
+  ): FunctionRadar | null => {
+    const axes = children
+      .map((child) => axisOf(child.node))
+      .filter((axis): axis is RadarAxis => axis !== null)
+    return axes.length >= MIN_RADAR_AXES ? { parentId, title, axes } : null
+  }
+
+  const summaryById = new Map(
+    summaries.filter((summary) => summary.id !== null).map((summary) => [summary.id, summary])
+  )
+
+  const groups: FunctionGroup[] = []
+
+  for (const root of tree) {
+    const rollup = rollups.get(root.node.id)
+    if (rollup === undefined || rollup.count === 0) continue
+
+    const radars: FunctionRadar[] = []
+    const functions: FunctionSummary[] = []
+
+    // Uma travessia só para as duas coletas: todo nó com filhas pode render um
+    // radar, e todo nó com resultados diretos rende uma tabela.
+    const walk = (branch: TreeNode<CognitiveFunction>): void => {
+      if (branch.children.length > 0) {
+        const radar = radarOf(branch.node.id, branch.node.name, branch.children)
+        if (radar !== null) radars.push(radar)
+      }
+
+      const summary = summaryById.get(branch.node.id)
+      if (summary !== undefined) functions.push(summary)
+
+      for (const child of branch.children) walk(child)
+    }
+    walk(root)
+
+    groups.push({
+      rootId: root.node.id,
+      name: root.node.name,
+      averageLevel: aggregateLevel(rollup.levels),
+      distribution: levelDistribution(rollup.levels),
+      belowExpected: countBelowExpected(rollup.levels),
+      resultCount: rollup.count,
+      radars,
+      functions: functions.sort(byLevelThenName)
+    })
+  }
+
+  // Os instrumentos sem função continuam visíveis, mas fora de qualquer radar:
+  // não são uma função do domínio, e dar-lhes um eixo seria afirmar que são.
+  const unassigned = summaries.find((summary) => summary.id === null)
+  if (unassigned !== undefined) {
+    groups.push({
+      rootId: null,
+      name: unassigned.name,
+      averageLevel: unassigned.averageLevel,
+      distribution: unassigned.distribution,
+      belowExpected: unassigned.belowExpected,
+      resultCount: unassigned.points.length,
+      radars: [],
+      functions: [unassigned]
+    })
+  }
+
+  return {
+    overallRadar: radarOf(null, 'Perfil por função', tree),
+    groups: groups.sort(byLevelThenName)
   }
 }
 

@@ -296,6 +296,21 @@ export const REPORT_CSS = `
     text-align: left;
   }
 
+  /* A função filha recua sob a raiz: a indentação é o que diz que a tabela
+     pertence àquele bloco, e não é mais uma seção de mesmo nível. */
+  .function-block {
+    margin: 3mm 0 0;
+    padding-left: 4mm;
+    border-left: 0.3mm solid #e2e8f0;
+  }
+
+  .function-block__title {
+    margin: 0 0 1.5mm;
+    font-size: 9pt;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
   .indent-1 { padding-left: 5mm; }
   .indent-2 { padding-left: 10mm; }
   .indent-3 { padding-left: 15mm; }

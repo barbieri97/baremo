@@ -24,7 +24,7 @@
  */
 
 import type { EChartsOption } from 'echarts'
-import type { FunctionSummary, TestGroup, OverviewAssessment } from '../contracts/results'
+import type { TestGroup, OverviewAssessment } from '../contracts/results'
 import { CLASSIFICATION_LEVELS, levelColor, LEVEL_UNKNOWN_HEX } from '../domain/levels'
 import { EXPECTED_BAND } from '../domain/normalize'
 
@@ -94,6 +94,19 @@ export function truncateLabel(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`
 }
 
+/**
+ * O mínimo que o radar lê de cada eixo.
+ *
+ * Deliberadamente estrutural, e não `FunctionSummary`: o mesmo desenho serve o
+ * panorama (que passa resumos de função) e os radares hierárquicos (que passam
+ * eixos já agregados). Pedir o tipo largo obrigaria um dos dois a inventar
+ * campos que o gráfico nunca lê.
+ */
+export interface RadarSlice {
+  readonly name: string
+  readonly averageLevel: number | null
+}
+
 // ─── Panorama por função ─────────────────────────────────────────────────────
 
 /**
@@ -104,10 +117,10 @@ export function truncateLabel(value: string, max: number): string {
  * reinterpretar a figura a cada olhada.
  */
 export function functionRadarOption(
-  functions: readonly FunctionSummary[],
+  slices: readonly RadarSlice[],
   style: ChartStyle
 ): EChartsOption {
-  const withLevel = functions.filter((entry) => entry.averageLevel !== null)
+  const withLevel = slices.filter((entry) => entry.averageLevel !== null)
 
   return {
     ...base(style),
