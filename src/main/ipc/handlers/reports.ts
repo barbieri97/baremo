@@ -165,13 +165,26 @@ function renderCharts(overview: ResultsOverview): ResultsReportCharts {
     }
   }
 
-  const withLevel = overview.functions.filter((entry) => entry.averageLevel !== null)
+  // O corte de eixo mínimo já veio aplicado do view-model: se o radar existe,
+  // ele é desenhável. Repetir a regra aqui era como a tela e o laudo passariam
+  // a mostrar conjuntos diferentes de gráficos.
+  const functionRadars: Record<string, string> = {}
+  for (const group of overview.functionGroups) {
+    for (const radar of group.radars) {
+      if (radar.parentId === null) continue
+      functionRadars[radar.parentId] = renderChartSvg(
+        functionRadarOption(radar.axes, style),
+        CHART_SIZE.radar
+      )
+    }
+  }
 
   return {
     radar:
-      withLevel.length >= 3
-        ? renderChartSvg(functionRadarOption(overview.functions, style), CHART_SIZE.radar)
-        : null,
+      overview.overallRadar === null
+        ? null
+        : renderChartSvg(functionRadarOption(overview.overallRadar.axes, style), CHART_SIZE.radar),
+    functionRadars,
     comparison,
     evolution
   }

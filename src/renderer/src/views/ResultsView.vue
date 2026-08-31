@@ -34,7 +34,8 @@ import { CLASSIFICATION_LEVELS, levelColor, levelLabel } from '@shared/domain/le
 import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import { formatIsoDate } from '@shared/domain/dates'
 import type { ChannelOutput } from '@shared/contracts'
-import type { ResultPoint, TestGroup } from '@shared/contracts/results'
+import type { FunctionRadar, ResultPoint, TestGroup } from '@shared/contracts/results'
+import type { EChartsOption } from 'echarts'
 
 const props = defineProps<{ id: string }>()
 
@@ -90,13 +91,17 @@ const comparableSiblings = computed(() =>
   siblings.value.filter((assessment) => assessment.id !== props.id)
 )
 
+// O corte de eixo mínimo não mora mais aqui: o view-model só entrega radar que
+// dá para desenhar, e é o mesmo objeto que o PDF recebe.
 const radarOption = computed(() =>
-  overview.value === null ? null : functionRadarOption(overview.value.functions, SCREEN)
+  overview.value?.overallRadar == null
+    ? null
+    : functionRadarOption(overview.value.overallRadar.axes, SCREEN)
 )
 
-const functionsWithLevel = computed(
-  () => overview.value?.functions.filter((entry) => entry.averageLevel !== null).length ?? 0
-)
+function radarOptionFor(radar: FunctionRadar): EChartsOption {
+  return functionRadarOption(radar.axes, SCREEN)
+}
 
 function kindFor(group: TestGroup): ChartKind {
   return kindByTest.value[group.instrumentId] ?? 'column'
@@ -232,7 +237,7 @@ async function exportPdf(): Promise<void> {
             </div>
 
             <ChartCard
-              v-if="radarOption !== null && functionsWithLevel >= 3"
+              v-if="radarOption !== null"
               title="Perfil por função"
               subtitle="Nível médio, de 1 a 5"
               :option="radarOption"
@@ -258,66 +263,100 @@ async function exportPdf(): Promise<void> {
         <section class="mb-8">
           <h2 class="mb-3 text-base font-semibold text-ink-800">Detalhe por função</h2>
 
+          <!-- Agrupado por função raiz: o radar de um pai compara as filhas dele,
+               e só se lê junto das tabelas dessas filhas. Uma função pai sem
+               instrumentos próprios não teria bloco nenhum numa lista plana. -->
           <div
-            v-for="summary in overview.functions"
-            :id="`funcao-${summary.id ?? 'sem-funcao'}`"
-            :key="summary.id ?? '__none__'"
-            class="mb-4 scroll-mt-4"
+            v-for="group in overview.functionGroups"
+            :key="group.rootId ?? '__none__'"
+            class="mb-6"
           >
-            <div class="mb-1 flex items-center gap-3">
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                {{ summary.name }}
-              </h3>
+            <div class="mb-2 flex items-center gap-3">
+              <h3 class="text-sm font-semibold text-ink-800">{{ group.name }}</h3>
               <LevelHeatBar
-                :distribution="summary.distribution"
+                :distribution="group.distribution"
                 class="max-w-40 flex-1"
                 :height="6"
               />
+              <span class="text-xs text-ink-500">
+                {{ group.resultCount }}
+                {{ group.resultCount === 1 ? 'resultado' : 'resultados' }}
+              </span>
             </div>
 
-            <div class="card overflow-hidden">
-              <table class="w-full text-sm">
-                <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-                    <th class="w-24 px-3 py-2 text-left font-semibold">Escore</th>
-                    <th class="w-20 px-3 py-2 text-right font-semibold">Valor</th>
-                    <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
-                    <th class="w-32 px-3 py-2 text-left font-semibold">Nível</th>
-                    <th class="w-28 px-3 py-2 text-left font-semibold">Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="point in summary.points"
-                    :key="point.resultId"
-                    class="border-t border-ink-200"
-                  >
-                    <td class="px-3 py-2 text-ink-800">{{ point.instrumentPath }}</td>
-                    <td class="px-3 py-2 text-ink-600">{{ point.scoreTypeLabel }}</td>
-                    <td class="tabular px-3 py-2 text-right font-medium text-ink-800">
-                      {{ formatValue(point) }}
-                    </td>
-                    <td class="px-3 py-2">
-                      <ClassificationBadge
-                        :name="point.classificationName"
-                        :color-hex="point.colorHex"
-                        :overridden="point.manuallyOverridden"
-                      />
-                    </td>
-                    <td class="px-3 py-2">
-                      <span class="flex items-center gap-1.5 text-xs text-ink-600">
-                        <span
-                          class="h-2.5 w-2.5 shrink-0 rounded-sm"
-                          :style="{ backgroundColor: levelColor(point.classificationLevel) }"
+            <ChartCard
+              v-for="radar in group.radars"
+              :key="radar.parentId ?? '__root__'"
+              class="mb-3"
+              :title="radar.title"
+              subtitle="Nível médio por subfunção, de 1 a 5"
+              :option="radarOptionFor(radar)"
+              :file-name="`perfil-${radar.title}-${overview.patient.fullName}`"
+              :height="340"
+              :kinds="[]"
+            />
+
+            <div
+              v-for="summary in group.functions"
+              :id="`funcao-${summary.id ?? 'sem-funcao'}`"
+              :key="summary.id ?? '__none__'"
+              class="mb-4 scroll-mt-4 border-l border-ink-200 pl-3"
+            >
+              <div class="mb-1 flex items-center gap-3">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                  {{ summary.name }}
+                </h4>
+                <LevelHeatBar
+                  :distribution="summary.distribution"
+                  class="max-w-40 flex-1"
+                  :height="6"
+                />
+              </div>
+
+              <div class="card overflow-hidden">
+                <table class="w-full text-sm">
+                  <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
+                    <tr>
+                      <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
+                      <th class="w-24 px-3 py-2 text-left font-semibold">Escore</th>
+                      <th class="w-20 px-3 py-2 text-right font-semibold">Valor</th>
+                      <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
+                      <th class="w-32 px-3 py-2 text-left font-semibold">Nível</th>
+                      <th class="w-28 px-3 py-2 text-left font-semibold">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="point in summary.points"
+                      :key="point.resultId"
+                      class="border-t border-ink-200"
+                    >
+                      <td class="px-3 py-2 text-ink-800">{{ point.instrumentPath }}</td>
+                      <td class="px-3 py-2 text-ink-600">{{ point.scoreTypeLabel }}</td>
+                      <td class="tabular px-3 py-2 text-right font-medium text-ink-800">
+                        {{ formatValue(point) }}
+                      </td>
+                      <td class="px-3 py-2">
+                        <ClassificationBadge
+                          :name="point.classificationName"
+                          :color-hex="point.colorHex"
+                          :overridden="point.manuallyOverridden"
                         />
-                        {{ levelLabel(point.classificationLevel) }}
-                      </span>
-                    </td>
-                    <td class="px-3 py-2 text-ink-600">{{ point.statusLabel }}</td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="flex items-center gap-1.5 text-xs text-ink-600">
+                          <span
+                            class="h-2.5 w-2.5 shrink-0 rounded-sm"
+                            :style="{ backgroundColor: levelColor(point.classificationLevel) }"
+                          />
+                          {{ levelLabel(point.classificationLevel) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2 text-ink-600">{{ point.statusLabel }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
