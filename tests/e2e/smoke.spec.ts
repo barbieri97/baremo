@@ -378,6 +378,25 @@ test('lança o teste completo escolhendo só o pai', async () => {
   await expect(childType).toHaveValue('scaledScore')
   await expect(childType.locator('option')).toHaveCount(2)
 
+  // "Para todos" troca de uma vez as linhas que têm o tipo; as outras ficam.
+  const parentType = page.getByLabel('Tipo de escore — Bateria de Verificação (BV)')
+  const bulk = page.getByLabel('Tipo de escore para todos')
+  await bulk.selectOption('raw')
+  await expect(parentType).toHaveValue('raw')
+  await expect(childType).toHaveValue('raw')
+  await expect(page.getByLabel('Tipo de escore — Subteste Dois')).toHaveValue('raw')
+  await expect(bulk).toHaveValue('')
+
+  await bulk.selectOption('scaledScore')
+  await expect(childType).toHaveValue('scaledScore')
+  await expect(page.getByLabel('Tipo de escore — Subteste Dois')).toHaveValue('scaledScore')
+  await expect(parentType).toHaveValue('raw')
+  await expect(page.getByText(/em 1 linha\(s\); elas mantiveram o tipo anterior/)).toBeVisible()
+
+  await bulk.selectOption('standardScore')
+  await expect(parentType).toHaveValue('standardScore')
+  await expect(childType).toHaveValue('scaledScore')
+
   // Enter avança de linha em linha; no último, lança tudo.
   await page.getByLabel('Valor — Bateria de Verificação (BV)').fill('85')
   await page.getByLabel('Valor — Bateria de Verificação (BV)').press('Enter')
