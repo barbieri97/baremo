@@ -350,6 +350,26 @@ test('importa uma bateria com subtestes e faixas próprias', async () => {
   await expect(page.getByText(/Catálogo importado: 3 instrumento/)).toBeVisible()
 })
 
+test('a árvore de instrumentos começa recolhida e abre sob demanda', async () => {
+  // Recarrega a tela para ver o estado inicial, sem expansões desta sessão.
+  await page.getByRole('link', { name: /Pacientes/ }).click()
+  await page.getByRole('link', { name: /Instrumentos/ }).click()
+
+  const battery = page.getByRole('button', { name: 'Bateria de Verificação', exact: true })
+  const child = page.getByRole('button', { name: 'Subteste Um', exact: true })
+  const expand = page.getByRole('button', { name: 'Expandir Bateria de Verificação' })
+
+  await expect(battery).toBeVisible()
+  await expect(child).toHaveCount(0)
+  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+
+  await expand.click()
+  await expect(child).toBeVisible()
+
+  await page.getByRole('button', { name: 'Recolher Bateria de Verificação' }).click()
+  await expect(child).toHaveCount(0)
+})
+
 test('lança o teste completo escolhendo só o pai', async () => {
   await page.getByRole('link', { name: /Pacientes/ }).click()
   await page.getByText('Paciente de Verificação').click()

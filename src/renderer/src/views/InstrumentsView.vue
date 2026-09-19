@@ -289,6 +289,7 @@ const parentOptions = computed(() => {
           :nodes="catalog.instruments"
           :tree="catalog.instrumentTree"
           :selected-id="selectedId"
+          collapsed-by-default
           empty-message="Nenhum instrumento cadastrado. Cadastre os testes que você utiliza e as faixas de classificação correspondentes à normatização que possui."
           @select="select"
           @add-child="startNew"
