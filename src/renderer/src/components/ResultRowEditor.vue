@@ -17,10 +17,21 @@ import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from './BaseButton.vue'
 import ClassificationBadge from './ClassificationBadge.vue'
-import { RESULT_STATUSES, RESULT_STATUS_LABELS, SCORE_TYPE_LABELS, requiresValue } from '@shared/labels'
+import {
+  RESULT_STATUSES,
+  RESULT_STATUS_LABELS,
+  SCORE_TYPE_LABELS,
+  requiresValue
+} from '@shared/labels'
 import type { ResultStatus } from '@shared/labels'
-import { SCORE_TYPES, SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
+import { SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
+import {
+  availableScoreTypes,
+  defaultScoreType,
+  formatDecimalInput,
+  parseDecimalInput
+} from '@shared/domain/result-entry'
 import { resolveRange } from '@shared/domain/ranges'
 import type { ChannelOutput } from '@shared/contracts'
 import type { ClassificationRangeWithColor } from '@shared/contracts/entities'
@@ -42,12 +53,14 @@ const lastScoreTypeByInstrument = new Map<string, ScoreType>()
 
 const instrumentId = ref(props.result?.instrumentId ?? '')
 const scoreType = ref<ScoreType>(props.result?.scoreType ?? 'percentile')
-const rawValue = ref(props.result?.value !== null && props.result !== null ? String(props.result.value).replace('.', ',') : '')
+const rawValue = ref(formatDecimalInput(props.result?.value ?? null))
 const status = ref<ResultStatus>(props.result?.status ?? 'applied')
 const notes = ref(props.result?.notes ?? '')
 
 const overriding = ref(props.result?.manuallyOverridden ?? false)
-const overrideName = ref(props.result?.manuallyOverridden ? (props.result.classificationName ?? '') : '')
+const overrideName = ref(
+  props.result?.manuallyOverridden ? (props.result.classificationName ?? '') : ''
+)
 const overrideColor = ref(props.result?.colorHex ?? '#2B6CB0')
 
 const ranges = ref<ClassificationRangeWithColor[]>([])
@@ -63,9 +76,14 @@ onMounted(() => {
   else valueInput.value?.focus()
 })
 
+/** Só os tipos que o instrumento tem — mais o do resultado em edição, se for outro. */
+const availableTypes = computed(() =>
+  availableScoreTypes(configuredTypes.value, props.result?.scoreType)
+)
+
 /**
  * Ao trocar de instrumento, adota o tipo de escore mais provável: o último usado
- * para ele, ou o único que tem faixas cadastradas.
+ * para ele, ou o primeiro que tem faixas cadastradas.
  */
 watch(instrumentId, async (id) => {
   if (id === '') {
@@ -74,18 +92,23 @@ watch(instrumentId, async (id) => {
     return
   }
 
+  await loadConfiguredTypes(id)
+  scoreType.value = defaultScoreType(
+    availableTypes.value,
+    configuredTypes.value,
+    lastScoreTypeByInstrument.get(id)
+  )
+
+  await loadRanges()
+})
+
+async function loadConfiguredTypes(id: string): Promise<void> {
   try {
     configuredTypes.value = await api('classifications:listConfigured', { instrumentId: id })
   } catch {
     configuredTypes.value = []
   }
-
-  const remembered = lastScoreTypeByInstrument.get(id)
-  if (remembered !== undefined) scoreType.value = remembered
-  else if (configuredTypes.value.length === 1) scoreType.value = configuredTypes.value[0]!
-
-  await loadRanges()
-})
+}
 
 watch(scoreType, loadRanges)
 
@@ -106,16 +129,14 @@ async function loadRanges(): Promise<void> {
 }
 
 onMounted(() => {
-  if (instrumentId.value !== '') void loadRanges()
+  // Em edição o instrumento já vem definido e o watch não dispara: a lista de
+  // tipos disponíveis precisa ser carregada aqui, sem mexer no tipo gravado.
+  if (instrumentId.value === '') return
+  void loadConfiguredTypes(instrumentId.value)
+  void loadRanges()
 })
 
-/** Aceita vírgula decimal — é como se digita número em português. */
-const parsedValue = computed<number | null>(() => {
-  const text = rawValue.value.trim().replace(',', '.')
-  if (text === '') return null
-  const parsed = Number(text)
-  return Number.isFinite(parsed) ? parsed : null
-})
+const parsedValue = computed(() => parseDecimalInput(rawValue.value))
 
 const valueError = computed(() => {
   if (!requiresValue(status.value)) return null
@@ -210,7 +231,11 @@ async function save(): Promise<void> {
         class="field-input"
       >
         <option value="">Selecione…</option>
-        <option v-for="entry in catalog.flatInstruments" :key="entry.node.id" :value="entry.node.id">
+        <option
+          v-for="entry in catalog.flatInstruments"
+          :key="entry.node.id"
+          :value="entry.node.id"
+        >
           {{ '— '.repeat(entry.depth) }}{{ entry.node.name
           }}{{ entry.node.acronym ? ` (${entry.node.acronym})` : '' }}
         </option>
@@ -220,16 +245,9 @@ async function save(): Promise<void> {
     <div class="col-span-2">
       <label class="field-label" :for="`score-type-${assessmentId}`">Tipo de escore</label>
       <select :id="`score-type-${assessmentId}`" v-model="scoreType" class="field-input">
-        <optgroup v-if="configuredTypes.length > 0" label="Com faixas cadastradas">
-          <option v-for="type in configuredTypes" :key="type" :value="type">
-            {{ SCORE_TYPE_LABELS[type] }}
-          </option>
-        </optgroup>
-        <optgroup label="Todos">
-          <option v-for="type in SCORE_TYPES" :key="type" :value="type">
-            {{ SCORE_TYPE_LABELS[type] }}
-          </option>
-        </optgroup>
+        <option v-for="type in availableTypes" :key="type" :value="type">
+          {{ SCORE_TYPE_LABELS[type] }}
+        </option>
       </select>
     </div>
 
@@ -290,12 +308,22 @@ async function save(): Promise<void> {
           class="field-input max-w-48 py-1 text-sm"
           placeholder="Nome da classificação"
         />
-        <input v-model="overrideColor" type="color" class="h-8 w-12 rounded border border-ink-300" />
+        <input
+          v-model="overrideColor"
+          type="color"
+          class="h-8 w-12 rounded border border-ink-300"
+        />
       </template>
 
       <div class="ml-auto flex items-center gap-2">
         <BaseButton size="sm" variant="ghost" @click="emit('cancel')">Fechar</BaseButton>
-        <BaseButton size="sm" variant="primary" :disabled="!canSave" :loading="saving" @click="save">
+        <BaseButton
+          size="sm"
+          variant="primary"
+          :disabled="!canSave"
+          :loading="saving"
+          @click="save"
+        >
           {{ props.result === null ? 'Lançar' : 'Salvar' }}
         </BaseButton>
       </div>

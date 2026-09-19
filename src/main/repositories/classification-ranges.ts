@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
 import { classificationRanges, colors } from '../db/schema'
 import type {
@@ -26,6 +26,36 @@ export function listRanges(
   instrumentId: string,
   scoreType: ScoreType
 ): ClassificationRangeWithColor[] {
+  return selectRangesWithColor(handle)
+    .where(
+      and(
+        eq(classificationRanges.instrumentId, instrumentId),
+        eq(classificationRanges.scoreType, scoreType)
+      )
+    )
+    .orderBy(asc(classificationRanges.minValue))
+    .all() as ClassificationRangeWithColor[]
+}
+
+/**
+ * Todas as faixas, de todos os tipos, de um conjunto de instrumentos.
+ *
+ * Alimenta o lançamento de um teste completo: uma chamada só traz o que a grade
+ * inteira precisa para oferecer os tipos de escore e prever a classificação.
+ */
+export function listRangesForInstruments(
+  handle: BaremoDatabase,
+  instrumentIds: readonly string[]
+): ClassificationRangeWithColor[] {
+  if (instrumentIds.length === 0) return []
+
+  return selectRangesWithColor(handle)
+    .where(inArray(classificationRanges.instrumentId, [...instrumentIds]))
+    .orderBy(asc(classificationRanges.minValue))
+    .all() as ClassificationRangeWithColor[]
+}
+
+function selectRangesWithColor(handle: BaremoDatabase) {
   return handle.db
     .select({
       id: classificationRanges.id,
@@ -43,14 +73,7 @@ export function listRanges(
     })
     .from(classificationRanges)
     .innerJoin(colors, eq(colors.id, classificationRanges.colorId))
-    .where(
-      and(
-        eq(classificationRanges.instrumentId, instrumentId),
-        eq(classificationRanges.scoreType, scoreType)
-      )
-    )
-    .orderBy(asc(classificationRanges.minValue))
-    .all() as ClassificationRangeWithColor[]
+    .$dynamic()
 }
 
 /** Tipos de escore que já têm faixas para o instrumento — alimenta o seletor da UI. */

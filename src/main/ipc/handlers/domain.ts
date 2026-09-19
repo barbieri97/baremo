@@ -37,6 +37,7 @@ import {
 import {
   listConfiguredScoreTypes,
   listRanges,
+  listRangesForInstruments,
   saveRanges,
   validateDraft
 } from '../../repositories/classification-ranges'
@@ -51,6 +52,7 @@ import {
   previewReprocess,
   reprocessAssessment,
   saveResult,
+  saveResults,
   setAssessmentArchived,
   updateAssessment
 } from '../../repositories/assessments'
@@ -175,6 +177,9 @@ function registerClassificationHandlers(): void {
   registerHandler('classifications:listConfigured', ({ instrumentId }) =>
     listConfiguredScoreTypes(getDatabase(), instrumentId)
   )
+  registerHandler('classifications:listForInstruments', ({ instrumentIds }) =>
+    listRangesForInstruments(getDatabase(), instrumentIds)
+  )
   registerHandler('classifications:validate', ({ scoreType, ranges }) =>
     validateDraft(scoreType, ranges).map((issue) => ({
       code: issue.code,
@@ -233,6 +238,9 @@ function registerAssessmentHandlers(): void {
     listResults(getDatabase(), assessmentId)
   )
   registerHandler('results:save', ({ id, input }) => saveResult(getDatabase(), id, input))
+  registerHandler('results:saveMany', ({ assessmentId, items }) =>
+    saveResults(getDatabase(), assessmentId, items)
+  )
   registerHandler('results:delete', ({ id }) => {
     deleteResult(getDatabase(), id)
     return { ok: true as const }

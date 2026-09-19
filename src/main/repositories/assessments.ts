@@ -21,7 +21,7 @@ import type { ScoreType } from '@shared/domain/score-types'
 import { SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
 import { toClassificationLevel } from '@shared/domain/levels'
 import type { ClassificationLevel } from '@shared/domain/levels'
-import { conflict, notFound } from '../ipc/register'
+import { conflict, HandlerError, notFound } from '../ipc/register'
 import { countWhere, nowIso } from './helpers'
 import type { Impact } from './helpers'
 import {
@@ -278,6 +278,54 @@ export function saveResult(
   if (updated.changes === 0) throw notFound('Resultado não encontrado.')
 
   return getResultRow(handle, id)
+}
+
+export interface ResultBatchItem {
+  readonly id: string | null
+  readonly input: AssessmentResultInput
+}
+
+/**
+ * Grava de uma vez os resultados de um teste completo — tudo ou nada.
+ *
+ * Gravar parte de uma bateria e parar no meio deixaria o profissional sem saber
+ * o que entrou; na transação, um item recusado desfaz os anteriores e a mensagem
+ * diz qual instrumento foi o culpado.
+ */
+export function saveResults(
+  handle: BaremoDatabase,
+  assessmentId: string,
+  items: readonly ResultBatchItem[]
+): ResultRow[] {
+  getAssessment(handle, assessmentId)
+
+  const apply = handle.raw.transaction(() =>
+    items.map((item) => {
+      if (item.input.assessmentId !== assessmentId) {
+        throw conflict('Todos os resultados do lote precisam ser da mesma avaliação.')
+      }
+      try {
+        return saveResult(handle, item.id, item.input).id
+      } catch (error) {
+        if (error instanceof HandlerError) {
+          const instrument = handle.db
+            .select({ name: instruments.name })
+            .from(instruments)
+            .where(eq(instruments.id, item.input.instrumentId))
+            .get()
+          throw new HandlerError(
+            error.code,
+            `${instrument?.name ?? 'Instrumento'}: ${error.message}`,
+            error.details
+          )
+        }
+        throw error
+      }
+    })
+  )
+
+  const savedIds = new Set(apply())
+  return listResults(handle, assessmentId).filter((row) => savedIds.has(row.id))
 }
 
 function resolveSnapshot(
