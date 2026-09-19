@@ -179,6 +179,11 @@ export const contracts = {
     z.object({ instrumentId: idSchema }),
     z.array(scoreTypeSchema)
   ),
+  /** Faixas de todos os tipos de vários instrumentos — a grade do teste completo. */
+  'classifications:listForInstruments': channel(
+    z.object({ instrumentIds: z.array(idSchema).max(500) }),
+    z.array(classificationRangeWithColorSchema)
+  ),
   /** Validação sem gravar, para a UI dar retorno enquanto o usuário digita. */
   'classifications:validate': channel(
     z.object({
@@ -248,6 +253,17 @@ export const contracts = {
   'results:save': channel(
     z.object({ id: idSchema.nullable(), input: assessmentResultInputSchema }),
     resultRowSchema
+  ),
+  /** Lançamento de um teste completo: grava todos os itens numa transação só. */
+  'results:saveMany': channel(
+    z.object({
+      assessmentId: idSchema,
+      items: z
+        .array(z.object({ id: idSchema.nullable(), input: assessmentResultInputSchema }))
+        .min(1)
+        .max(500)
+    }),
+    z.array(resultRowSchema)
   ),
   'results:delete': channel(z.object({ id: idSchema }), ok),
   /**

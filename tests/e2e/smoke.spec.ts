@@ -106,9 +106,13 @@ test('cadastra paciente e cria avaliação', async () => {
 
 test('lança resultado e recebe classificação automática', async () => {
   await page.getByRole('button', { name: 'Lançar resultado' }).click()
+  await page.getByRole('radio', { name: 'Item individual' }).click()
 
   await page.getByLabel('Instrumento').selectOption({ label: 'Teste de Atenção Concentrada (TAC)' })
-  await page.getByLabel('Tipo de escore').selectOption('percentile')
+  // Só há faixas de percentil: o tipo vem autoselecionado e a lista oferece só
+  // ele e o escore bruto.
+  await expect(page.getByLabel('Tipo de escore')).toHaveValue('percentile')
+  await expect(page.getByLabel('Tipo de escore').locator('option')).toHaveCount(2)
   // Com as cinco faixas geradas em partes iguais, 65 cai em [60, 80) — a quarta,
   // "Média superior".
   await page.getByLabel('Valor').fill('65')
@@ -268,4 +272,126 @@ test('reimportar o mesmo catálogo não propõe mudança nenhuma', async () => {
   await expect(page.getByRole('button', { name: 'Importar', exact: true })).toBeDisabled()
 
   await page.getByRole('button', { name: 'Cancelar' }).click()
+})
+
+test('importa uma bateria com subtestes e faixas próprias', async () => {
+  // Pai com índice em escore padrão, filhos em escore ponderado — o formato das
+  // baterias reais, e o que exercita a escolha de tipo por linha.
+  const parentId = randomUUID()
+  const colorLow = randomUUID()
+  const colorHigh = randomUUID()
+  const bands = (scoreType: string, cut: number, min: number, max: number) => ({
+    scoreType,
+    entries: [
+      {
+        classificationName: 'Rebaixado',
+        minValue: min,
+        maxValue: cut,
+        colorId: colorLow,
+        level: 1
+      },
+      {
+        classificationName: 'Preservado',
+        minValue: cut,
+        maxValue: max,
+        colorId: colorHigh,
+        level: 3
+      }
+    ]
+  })
+  const children = ['Subteste Um', 'Subteste Dois'].map((name, order) => ({
+    id: randomUUID(),
+    parentId,
+    name,
+    acronym: null,
+    cognitiveFunctionPath: null,
+    minAgeYears: null,
+    maxAgeYears: null,
+    reference: null,
+    order
+  }))
+  const file = {
+    schema: 'baremo/catalog@1',
+    exportedAt: new Date().toISOString(),
+    appVersion: 'e2e',
+    colors: [
+      { id: colorLow, name: 'Vermelho de teste', hex: '#C53030' },
+      { id: colorHigh, name: 'Verde de teste', hex: '#2F855A' }
+    ],
+    instruments: [
+      {
+        id: parentId,
+        parentId: null,
+        name: 'Bateria de Verificação',
+        acronym: 'BV',
+        cognitiveFunctionPath: null,
+        minAgeYears: null,
+        maxAgeYears: null,
+        reference: null,
+        order: 10
+      },
+      ...children
+    ],
+    ranges: [
+      { instrumentId: parentId, ...bands('standardScore', 90, 40, 160) },
+      ...children.map((child) => ({ instrumentId: child.id, ...bands('scaledScore', 8, 1, 19) }))
+    ]
+  }
+  const target = join(userDataDir, 'bateria.json')
+  writeFileSync(target, JSON.stringify(file), 'utf8')
+
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, target)
+
+  await page.getByRole('link', { name: /Instrumentos/ }).click()
+  await page.getByRole('button', { name: 'Importar catálogo' }).click()
+  await page.getByRole('button', { name: 'Importar', exact: true }).click()
+  await expect(page.getByText(/Catálogo importado: 3 instrumento/)).toBeVisible()
+})
+
+test('lança o teste completo escolhendo só o pai', async () => {
+  await page.getByRole('link', { name: /Pacientes/ }).click()
+  await page.getByText('Paciente de Verificação').click()
+  await page.getByText('Verificação automatizada').click()
+  await expect(page.getByRole('heading', { name: /^Avaliação de/ })).toBeVisible()
+
+  // Depois de um lançamento a linha de entrada fica aberta; numa visita nova,
+  // abre-se pelo botão.
+  const open = page.getByRole('button', { name: 'Lançar resultado' })
+  if (await open.isVisible()) await open.click()
+
+  // "Teste completo" é o modo padrão, e o seletor só lista quem tem subtestes.
+  await expect(page.getByRole('radio', { name: 'Teste completo' })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  )
+  const root = page.getByLabel('Teste', { exact: true })
+  await expect(root.locator('option', { hasText: 'Teste de Atenção Concentrada' })).toHaveCount(0)
+  await root.selectOption({ label: 'Bateria de Verificação (BV)' })
+
+  // Pai e filhos na grade, cada um já no tipo que tem faixas.
+  await expect(page.getByLabel('Tipo de escore — Bateria de Verificação (BV)')).toHaveValue(
+    'standardScore'
+  )
+  const childType = page.getByLabel('Tipo de escore — Subteste Um')
+  await expect(childType).toHaveValue('scaledScore')
+  await expect(childType.locator('option')).toHaveCount(2)
+
+  // Enter avança de linha em linha; no último, lança tudo.
+  await page.getByLabel('Valor — Bateria de Verificação (BV)').fill('85')
+  await page.getByLabel('Valor — Bateria de Verificação (BV)').press('Enter')
+  await expect(page.getByLabel('Valor — Subteste Um')).toBeFocused()
+  await page.getByLabel('Valor — Subteste Um').fill('12')
+  await page.getByLabel('Valor — Subteste Um').press('Enter')
+  await page.getByLabel('Valor — Subteste Dois').fill('5')
+  await page.getByLabel('Valor — Subteste Dois').press('Enter')
+
+  await expect(page.getByText('3 resultado(s) lançado(s).')).toBeVisible()
+  const table = page.locator('table')
+  await expect(table.getByText('Bateria de Verificação', { exact: true })).toBeVisible()
+  await expect(table.getByText('Bateria de Verificação › Subteste Um')).toBeVisible()
+  await expect(table.getByText('Bateria de Verificação › Subteste Dois')).toBeVisible()
+  await expect(table.getByText('Preservado')).toHaveCount(1)
+  await expect(table.getByText('Rebaixado')).toHaveCount(2)
 })

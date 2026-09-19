@@ -16,6 +16,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
 import ResultRowEditor from '../components/ResultRowEditor.vue'
+import ResultBatchEditor from '../components/ResultBatchEditor.vue'
 import AttachmentsPanel from '../components/AttachmentsPanel.vue'
 import DocumentsPanel from '../components/DocumentsPanel.vue'
 import { formatIsoDate } from '@shared/domain/dates'
@@ -39,6 +40,17 @@ const loading = ref(true)
 
 const editingId = ref<string | null>(null)
 const addingRow = ref(false)
+
+/**
+ * Lançar um teste inteiro é o caso comum — uma bateria com dezenas de
+ * subtestes — e por isso é o padrão. O item individual continua para o avulso e
+ * para a sobrescrita manual de classificação.
+ */
+const ENTRY_MODES = [
+  { value: 'battery', label: 'Teste completo' },
+  { value: 'single', label: 'Item individual' }
+] as const
+const entryMode = ref<(typeof ENTRY_MODES)[number]['value']>('battery')
 
 const reprocessOpen = ref(false)
 const reprocessPreview = ref<ChannelOutput<'results:reprocessPreview'>>([])
@@ -296,7 +308,38 @@ async function saveMeta(): Promise<void> {
       </div>
 
       <div v-if="addingRow" class="card border-brand-200 bg-brand-50/40 p-3">
+        <div
+          class="mb-3 inline-flex rounded-md border border-ink-300 bg-white p-0.5 text-xs"
+          role="radiogroup"
+          aria-label="Modo de lançamento"
+        >
+          <button
+            v-for="option in ENTRY_MODES"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="entryMode === option.value"
+            class="rounded px-3 py-1 font-medium"
+            :class="
+              entryMode === option.value
+                ? 'bg-brand-500 text-white'
+                : 'text-ink-600 hover:bg-ink-100'
+            "
+            @click="entryMode = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+
+        <ResultBatchEditor
+          v-if="entryMode === 'battery'"
+          :assessment-id="id"
+          :results="results"
+          @saved="onSaved"
+          @cancel="addingRow = false"
+        />
         <ResultRowEditor
+          v-else
           :assessment-id="id"
           :result="null"
           @saved="onSaved"
