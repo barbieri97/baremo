@@ -23,12 +23,14 @@ export const READ_TOOL_NAMES = [
   'listar_arquivos',
   'ler_arquivo',
   'obter_faixas_classificacao',
-  'listar_instrumentos_utilizados'
+  'listar_instrumentos_utilizados',
+  'buscar_instrumentos'
 ] as const
 
 export const WRITE_TOOL_NAMES = [
   'criar_rascunho_documento',
-  'sugerir_edicao_documento'
+  'sugerir_edicao_documento',
+  'registrar_resultados'
 ] as const
 
 export type ReadToolName = (typeof READ_TOOL_NAMES)[number]
@@ -150,6 +152,20 @@ const READ_DECLARATIONS: FunctionDeclaration[] = [
     description:
       'Lista os instrumentos que aparecem nos resultados deste paciente, com seus IDs e tipos de escore. Use para obter instrumentoId antes de obter_faixas_classificacao.',
     parameters: { type: Type.OBJECT, properties: {} }
+  },
+  {
+    name: 'buscar_instrumentos',
+    description:
+      'Busca no catálogo de instrumentos do aplicativo por nome ou sigla (sem diferenciar acentos). Retorna ID, instrumento pai (subtestes), função cognitiva e os tipos de escore que têm faixas de classificação. Dado de catálogo, não clínico. Use para obter o instrumentoId de um teste que aparece num arquivo antes de registrar_resultados.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        termo: {
+          type: Type.STRING,
+          description: 'Opcional. Parte do nome ou da sigla. Vazio lista os primeiros 50.'
+        }
+      }
+    }
   }
 ]
 
@@ -198,6 +214,54 @@ const WRITE_DECLARATIONS: FunctionDeclaration[] = [
         }
       },
       required: ['documentoId', 'conteudo', 'justificativa']
+    }
+  },
+  {
+    name: 'registrar_resultados',
+    description:
+      'Propõe registrar resultados de testes numa avaliação do paciente desta sessão — por exemplo, os escores transcritos de um PDF anexado. Abre uma tabela para o profissional aceitar linha a linha; nada é gravado sem essa confirmação, e resultados já existentes só são sobrescritos se ele marcar. Informe avaliacaoId OU novaAvaliacao, nunca os dois.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        avaliacaoId: {
+          type: Type.STRING,
+          description: 'ID de uma avaliação existente, obtido por listar_avaliacoes.'
+        },
+        novaAvaliacao: {
+          type: Type.OBJECT,
+          description: 'Use apenas quando nenhuma avaliação existente for adequada.',
+          properties: {
+            data: { type: Type.STRING, description: 'Data da aplicação, no formato AAAA-MM-DD.' },
+            motivo: { type: Type.STRING, description: 'Opcional. Motivo do encaminhamento.' }
+          },
+          required: ['data']
+        },
+        arquivoOrigemId: {
+          type: Type.STRING,
+          description: 'Opcional. ID (de listar_arquivos) do arquivo de onde os valores foram lidos.'
+        },
+        resultados: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              instrumentoId: {
+                type: Type.STRING,
+                description: 'ID obtido por buscar_instrumentos. Não invente IDs.'
+              },
+              tipoEscore: {
+                type: Type.STRING,
+                description:
+                  'Um de: percentile, zScore, tScore, standardScore, scaledScore, stanine, decile, raw (escore bruto).'
+              },
+              valor: { type: Type.NUMBER, description: 'Valor exatamente como aparece na fonte.' },
+              observacao: { type: Type.STRING, description: 'Opcional. Nota curta sobre o item.' }
+            },
+            required: ['instrumentoId', 'tipoEscore', 'valor']
+          }
+        }
+      },
+      required: ['resultados']
     }
   }
 ]
@@ -249,6 +313,14 @@ export function systemInstruction(options: { pseudonymized: boolean }): string {
     '- Não substitua o julgamento clínico. Quem assina o documento é o profissional, e a responsabilidade técnica é integralmente dele.',
     '- Quando os dados disponíveis forem insuficientes para a pergunta, diga isso explicitamente e aponte o que faltaria.',
     '- Não converta escores entre métricas diferentes nem invente normas. Use apenas as classificações registradas no prontuário e as faixas cadastradas.',
+    '',
+    '## Importar resultados de um arquivo',
+    'Quando o profissional pedir para lançar os resultados de um teste que está num arquivo anexado:',
+    '1. Localize o arquivo com listar_arquivos e leia-o com ler_arquivo.',
+    '2. Identifique o teste e, para cada escore, o instrumento (ou subteste) correspondente com buscar_instrumentos. Se um instrumento não estiver no catálogo, diga isso ao profissional em vez de escolher um ID parecido.',
+    '3. Verifique com listar_avaliacoes em qual avaliação gravar. Se houver mais de uma candidata e o pedido não deixar claro, pergunte antes. Se nenhuma servir, proponha uma nova avaliação com a data de aplicação que consta no arquivo.',
+    '4. Chame registrar_resultados uma única vez com todos os itens.',
+    'Transcreva apenas valores que aparecem literalmente no arquivo, com o tipo de escore que o próprio arquivo declara; escore bruto vai como raw. Nunca calcule, converta ou estime um escore. Se um valor estiver ilegível ou ambíguo, deixe-o de fora e avise.',
     '',
     '## Estilo',
     'Responda em português do Brasil, com a terminologia técnica da neuropsicologia. Seja direto e conciso.'

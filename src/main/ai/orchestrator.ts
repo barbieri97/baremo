@@ -33,7 +33,7 @@ import { recordAiAudit } from './audit'
 import { addTokenUsage, budgetExhausted, getAiConfig } from '../repositories/ai-config'
 import { markdownToTiptap } from './markdown'
 import { resolveBlobPath } from '../services/attachments/storage'
-import type { AiStreamEvent } from '@shared/contracts/entities-ai'
+import type { AiResultImportRow, AiStreamEvent } from '@shared/contracts/entities-ai'
 import { nowIso } from '../repositories/helpers'
 
 /** Acima disto, o arquivo iria pela Files API; hoje o app recusa e explica. */
@@ -71,6 +71,8 @@ interface PendingConfirmation {
 export interface WritePreview {
   readonly description: string
   readonly blockDiff: BlockDiffEntry[] | null
+  /** Tabela de `registrar_resultados`; `null` nas demais tools. */
+  readonly resultPreview?: AiResultImportRow[] | null
 }
 
 export interface BlockDiffEntry {
@@ -198,7 +200,9 @@ export class AgentOrchestrator {
     const request: ActiveRequest = { controller, pending: null }
     this.active.set(requestId, request)
 
-    this.appendMessage(sessionId, 'user', text, null)
+    // As chamadas de tool do turno ficam presas a esta mensagem: é por ela que a
+    // conversa agrupa, depois, o que o assistente consultou para responder.
+    const turnMessageId = this.appendMessage(sessionId, 'user', text, null)
 
     const toolCallsForAudit: { name: string; args: unknown }[] = []
     let inputTokens = 0
@@ -262,17 +266,20 @@ export class AgentOrchestrator {
         for (const call of calls) {
           const name = call.name ?? ''
           const args = (call.args ?? {}) as Record<string, unknown>
+          const callId = randomUUID()
           toolCallsForAudit.push({ name, args })
 
           this.emit({
             kind: 'tool_start',
             requestId,
+            callId,
             toolName: name,
             argumentsJson: JSON.stringify(args)
           })
 
           let payload: unknown
           let ok = true
+          let rejected = false
           let summary = ''
           // `ler_arquivo` devolve bytes, não JSON: o conteúdo vai como uma parte
           // inline separada, ao lado da resposta da tool.
@@ -280,8 +287,16 @@ export class AgentOrchestrator {
 
           try {
             if (isWriteTool(name)) {
-              payload = await this.runWriteTool(requestId, request, session.patientId, name, args)
-              summary = 'Confirmado e gravado.'
+              const outcome = await this.runWriteTool(
+                requestId,
+                request,
+                session.patientId,
+                name,
+                args
+              )
+              payload = outcome
+              rejected = outcome.status === 'recusado'
+              summary = rejected ? 'Recusado pelo profissional.' : outcome.detalhe
             } else if (name === 'ler_arquivo') {
               const attachmentId = args['arquivoId']
               if (typeof attachmentId !== 'string' || attachmentId.length === 0) {
@@ -314,8 +329,9 @@ export class AgentOrchestrator {
             }
           }
 
-          this.recordToolCall(sessionId, name, args, ok, summary)
-          this.emit({ kind: 'tool_end', requestId, toolName: name, ok, summary })
+          const status = !ok ? 'failed' : rejected ? 'rejected' : 'executed'
+          this.recordToolCall(callId, sessionId, turnMessageId, name, args, status, summary)
+          this.emit({ kind: 'tool_end', requestId, callId, toolName: name, ok, rejected, summary })
 
           responseParts.push({
             functionResponse: {
@@ -399,6 +415,8 @@ export class AgentOrchestrator {
         return repository.getClassificationRanges(text('instrumentoId'), text('tipoEscore'))
       case 'listar_instrumentos_utilizados':
         return repository.listUsedInstruments()
+      case 'buscar_instrumentos':
+        return repository.searchInstruments(optional('termo'))
       default:
         throw new Error(`Ferramenta desconhecida: ${name}.`)
     }
@@ -417,7 +435,7 @@ export class AgentOrchestrator {
     patientId: string,
     toolName: string,
     args: Record<string, unknown>
-  ): Promise<unknown> {
+  ): Promise<{ status: 'gravado' | 'recusado'; detalhe: string }> {
     const confirmationId = randomUUID()
     const preview = this.writes.prepare(patientId, toolName, args)
 
@@ -431,7 +449,8 @@ export class AgentOrchestrator {
         toolName,
         preview: preview.description,
         argumentsJson: JSON.stringify(args),
-        blockDiff: preview.blockDiff
+        blockDiff: preview.blockDiff,
+        resultPreview: preview.resultPreview ?? null
       })
     })
 
@@ -495,29 +514,33 @@ export class AgentOrchestrator {
     role: 'user' | 'model' | 'tool',
     text: string,
     toolName: string | null
-  ): void {
+  ): string {
+    const id = randomUUID()
     this.handle.db
       .insert(aiMessages)
-      .values({ id: randomUUID(), sessionId, role, text, toolName, createdAt: nowIso() })
+      .values({ id, sessionId, role, text, toolName, createdAt: nowIso() })
       .run()
+    return id
   }
 
   private recordToolCall(
+    callId: string,
     sessionId: string,
+    turnMessageId: string,
     toolName: string,
     args: Record<string, unknown>,
-    ok: boolean,
+    status: 'executed' | 'rejected' | 'failed',
     summary: string
   ): void {
     this.handle.db
       .insert(aiToolCalls)
       .values({
-        id: randomUUID(),
+        id: callId,
         sessionId,
-        messageId: null,
+        messageId: turnMessageId,
         toolName,
         argumentsJson: JSON.stringify(args),
-        status: ok ? 'executed' : 'failed',
+        status,
         resultSummary: summary.slice(0, 2000),
         createdAt: nowIso()
       })
