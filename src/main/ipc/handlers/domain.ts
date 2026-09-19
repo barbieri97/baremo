@@ -35,9 +35,11 @@ import {
   updateInstrument
 } from '../../repositories/trees'
 import {
-  listConfiguredScoreTypes,
-  listRanges,
-  listRangesForInstruments,
+  detachRanges,
+  listResolvedRanges,
+  listResolvedRangesForInstruments,
+  listResolvedScoreTypes,
+  reattachRanges,
   saveRanges,
   validateDraft
 } from '../../repositories/classification-ranges'
@@ -172,14 +174,37 @@ function registerTreeHandlers(): void {
 
 function registerClassificationHandlers(): void {
   registerHandler('classifications:list', ({ instrumentId, scoreType }) =>
-    listRanges(getDatabase(), instrumentId, scoreType)
+    listResolvedRanges(getDatabase(), instrumentId, scoreType)
   )
   registerHandler('classifications:listConfigured', ({ instrumentId }) =>
-    listConfiguredScoreTypes(getDatabase(), instrumentId)
+    listResolvedScoreTypes(getDatabase(), instrumentId)
   )
   registerHandler('classifications:listForInstruments', ({ instrumentIds }) =>
-    listRangesForInstruments(getDatabase(), instrumentIds)
+    listResolvedRangesForInstruments(getDatabase(), instrumentIds)
   )
+  registerHandler('classifications:detach', ({ instrumentId }) => {
+    const handle = getDatabase()
+    const origin = detachRanges(handle, instrumentId)
+    recordAudit(handle, {
+      entity: 'classification_range',
+      entityId: instrumentId,
+      action: 'update',
+      summary:
+        'Faixas personalizadas para este instrumento: ele deixou de acompanhar as faixas do instrumento pai.'
+    })
+    return origin
+  })
+  registerHandler('classifications:reattach', ({ instrumentId }) => {
+    const handle = getDatabase()
+    const origin = reattachRanges(handle, instrumentId)
+    recordAudit(handle, {
+      entity: 'classification_range',
+      entityId: instrumentId,
+      action: 'delete',
+      summary: `Faixas próprias descartadas: o instrumento voltou a herdar as faixas de ${origin.ownerName}. Resultados já gravados não foram reclassificados.`
+    })
+    return origin
+  })
   registerHandler('classifications:validate', ({ scoreType, ranges }) =>
     validateDraft(scoreType, ranges).map((issue) => ({
       code: issue.code,

@@ -75,7 +75,8 @@ export function buildCatalogFile(handle: BaremoDatabase, appVersion: string): Ca
       minAgeYears: instrument.minAgeYears,
       maxAgeYears: instrument.maxAgeYears,
       reference: instrument.reference,
-      order: instrument.order
+      order: instrument.order,
+      inheritsRanges: instrument.inheritsRanges
     })),
     ranges: rangeSets
   }

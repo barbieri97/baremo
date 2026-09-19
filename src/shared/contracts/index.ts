@@ -19,6 +19,9 @@ import {
   classificationLevelSchema,
   classificationRangeDraftSchema,
   classificationRangeWithColorSchema,
+  rangeOriginSchema,
+  rangeSourceSchema,
+  resolvedClassificationRangeSchema,
   cognitiveFunctionInputSchema,
   cognitiveFunctionSchema,
   colorSchema,
@@ -178,11 +181,18 @@ export const contracts = {
   'instruments:delete': channel(z.object({ id: idSchema }), ok),
 
   // ─── classifications:* ─────────────────────────────────────────────────────
+  /**
+   * Faixas que VALEM para o instrumento, com a herança já resolvida (§4.6), mais
+   * a declaração de onde elas vêm. A origem viaja junto porque toda tela que
+   * mostra faixa precisa dizer se está olhando para o cadastro do instrumento ou
+   * para o do teste pai — e a aba de faixas ainda decide, por ela, se libera a
+   * edição.
+   */
   'classifications:list': channel(
     z.object({ instrumentId: idSchema, scoreType: scoreTypeSchema }),
-    z.array(classificationRangeWithColorSchema)
+    rangeSourceSchema
   ),
-  /** Tipos de escore que já têm faixas para o instrumento — alimenta o seletor. */
+  /** Tipos de escore que classificam o instrumento — próprios ou herdados. */
   'classifications:listConfigured': channel(
     z.object({ instrumentId: idSchema }),
     z.array(scoreTypeSchema)
@@ -190,8 +200,15 @@ export const contracts = {
   /** Faixas de todos os tipos de vários instrumentos — a grade do teste completo. */
   'classifications:listForInstruments': channel(
     z.object({ instrumentIds: z.array(idSchema).max(500) }),
-    z.array(classificationRangeWithColorSchema)
+    z.array(resolvedClassificationRangeSchema)
   ),
+  /**
+   * Para de herdar: copia para o instrumento os conjuntos que ele vinha usando
+   * do ancestral, e a partir daí editá-los não afeta mais ninguém.
+   */
+  'classifications:detach': channel(z.object({ instrumentId: idSchema }), rangeOriginSchema),
+  /** Volta a herdar: descarta as faixas próprias e reacompanha o ancestral. */
+  'classifications:reattach': channel(z.object({ instrumentId: idSchema }), rangeOriginSchema),
   /** Validação sem gravar, para a UI dar retorno enquanto o usuário digita. */
   'classifications:validate': channel(
     z.object({

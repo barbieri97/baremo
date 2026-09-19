@@ -35,6 +35,10 @@ import { ageAt, formatAge, formatIsoDate } from '@shared/domain/dates'
 import { SCORE_TYPE_SHORT_LABELS, RESULT_STATUS_LABELS } from '@shared/labels'
 import type { ResultStatus } from '@shared/labels'
 import type { ScoreType } from '@shared/domain/score-types'
+import {
+  listResolvedRangesForInstruments,
+  rangeOwnerOf
+} from '../repositories/classification-ranges'
 import { identifiedPatient, pseudonymizePatient, scrubText } from './pseudonymize'
 import type { IdentifiedPatient, PseudonymizedPatient } from './pseudonymize'
 import { extractPlainText } from '../pdf/serialize'
@@ -468,6 +472,10 @@ export class AgentReadRepository {
    * É a única leitura sem filtro por paciente, e de propósito: a tabela de
    * faixas de um instrumento não pertence a nenhum prontuário. Nada aqui revela
    * quem foi avaliado, nem com que resultado.
+   *
+   * A herança (§4.6) é resolvida antes da consulta: sem isso o modelo leria
+   * "este subteste não tem faixas" sobre um subteste que classifica muito bem,
+   * pelas faixas do teste pai.
    */
   getClassificationRanges(
     instrumentId: string,
@@ -484,7 +492,7 @@ export class AgentReadRepository {
       .innerJoin(colors, eq(colors.id, classificationRanges.colorId))
       .where(
         and(
-          eq(classificationRanges.instrumentId, instrumentId),
+          eq(classificationRanges.instrumentId, rangeOwnerOf(this.handle, instrumentId)),
           eq(classificationRanges.scoreType, scoreType)
         )
       )
@@ -562,23 +570,15 @@ export class AgentReadRepository {
       })
       .slice(0, MAX_INSTRUMENT_MATCHES)
 
+    // Por instrumento PEDIDO, com a herança já resolvida: o subteste que usa as
+    // faixas do pai precisa aparecer como classificável, senão o modelo desiste
+    // de propor um tipo de escore para ele.
     const typesByInstrument = new Map<string, Set<string>>()
     if (matches.length > 0) {
-      const ranges = this.handle.db
-        .selectDistinct({
-          instrumentId: classificationRanges.instrumentId,
-          scoreType: classificationRanges.scoreType
-        })
-        .from(classificationRanges)
-        .where(
-          inArray(
-            classificationRanges.instrumentId,
-            matches.map((row) => row.id)
-          )
-        )
-        .all()
-
-      for (const range of ranges) {
+      for (const range of listResolvedRangesForInstruments(
+        this.handle,
+        matches.map((row) => row.id)
+      )) {
         const types = typesByInstrument.get(range.instrumentId) ?? new Set<string>()
         types.add(range.scoreType)
         typesByInstrument.set(range.instrumentId, types)

@@ -119,10 +119,14 @@ async function loadRanges(): Promise<void> {
   }
 
   try {
-    ranges.value = await api('classifications:list', {
-      instrumentId: instrumentId.value,
-      scoreType: scoreType.value
-    })
+    // As faixas já vêm com a herança resolvida (§4.6): para a prévia tanto faz
+    // se foi este instrumento ou o teste pai que as cadastrou.
+    ranges.value = (
+      await api('classifications:list', {
+        instrumentId: instrumentId.value,
+        scoreType: scoreType.value
+      })
+    ).ranges
   } catch {
     ranges.value = []
   }

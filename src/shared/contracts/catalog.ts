@@ -53,7 +53,18 @@ export const catalogInstrumentSchema = z.object({
   minAgeYears: z.number().int().min(0).max(120).nullable(),
   maxAgeYears: z.number().int().min(0).max(120).nullable(),
   reference: z.string().trim().max(20_000).nullable(),
-  order: z.number().int().min(0).max(1_000_000)
+  order: z.number().int().min(0).max(1_000_000),
+  /**
+   * Herança das faixas (§4.6). OPCIONAL pelo mesmo motivo que `level` e
+   * `inverted` abaixo: manter o formato em `@1`.
+   *
+   * Ausente, a importação DEDUZ em vez de assumir um padrão: o instrumento é
+   * dono se o arquivo traz algum conjunto para ele, e herdeiro se não traz.
+   * É o que faz um arquivo exportado antes desta versão — em que cada subteste
+   * repetia as faixas do pai — entrar com exatamente o comportamento que tinha
+   * quando foi gravado, sem inventar uma herança que ele não declara.
+   */
+  inheritsRanges: z.boolean().optional()
 })
 
 /**

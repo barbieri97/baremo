@@ -14,10 +14,12 @@
 
 import { and, eq, inArray } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
-import { classificationRanges, colors } from '../db/schema'
+import { classificationRanges, colors, instruments } from '../db/schema'
 import { resolveRange } from '@shared/domain/ranges'
 import type { RangeLike } from '@shared/domain/ranges'
-import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
+import { indexRangeOwnerNodes, resolveRangeOwners } from '@shared/domain/inheritance'
+import { rangeOwnerOf } from '../repositories/classification-ranges'
+import { SCORE_TYPES, SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
 import { toClassificationLevel } from '@shared/domain/levels'
 import type { ClassificationLevel } from '@shared/domain/levels'
@@ -26,12 +28,21 @@ export interface ResolvedRange extends RangeLike {
   readonly colorName: string
 }
 
-/** Faixas de um par instrumento + tipo de escore, com a cor já resolvida. */
+/**
+ * Faixas de um par instrumento + tipo de escore, com a cor e a HERANÇA já
+ * resolvidas (§4.6).
+ *
+ * Resolver o dono aqui, e não em cada chamador, é o que faz a herança valer em
+ * toda a cadeia de uma vez: gravação de resultado, reprocessamento, panorama,
+ * laudo e importação por IA entram todos por estas duas funções.
+ */
 export function loadRanges(
   handle: BaremoDatabase,
   instrumentId: string,
   scoreType: ScoreType
 ): ResolvedRange[] {
+  const ownerId = rangeOwnerOf(handle, instrumentId)
+
   return handle.db
     .select({
       id: classificationRanges.id,
@@ -48,7 +59,7 @@ export function loadRanges(
     .innerJoin(colors, eq(colors.id, classificationRanges.colorId))
     .where(
       and(
-        eq(classificationRanges.instrumentId, instrumentId),
+        eq(classificationRanges.instrumentId, ownerId),
         eq(classificationRanges.scoreType, scoreType)
       )
     )
@@ -57,13 +68,33 @@ export function loadRanges(
     .map((row) => ({ ...row, level: toClassificationLevel(row.level) }))
 }
 
-/** Carrega as faixas de vários instrumentos de uma vez — usado no reprocessamento. */
+/**
+ * Carrega as faixas de vários instrumentos de uma vez — usado no reprocessamento.
+ *
+ * O mapa sai chaveado pelo instrumento PEDIDO, e não pelo dono: quem chama
+ * pergunta "quais faixas valem para este subteste?" e não precisa saber que a
+ * resposta veio do pai.
+ */
 export function loadRangesForInstruments(
   handle: BaremoDatabase,
   instrumentIds: readonly string[]
 ): Map<string, ResolvedRange[]> {
   const byKey = new Map<string, ResolvedRange[]>()
   if (instrumentIds.length === 0) return byKey
+
+  const owners = resolveRangeOwners(
+    indexRangeOwnerNodes(
+      handle.db
+        .select({
+          id: instruments.id,
+          parentId: instruments.parentId,
+          inheritsRanges: instruments.inheritsRanges
+        })
+        .from(instruments)
+        .all()
+    ),
+    instrumentIds
+  )
 
   const rows = handle.db
     .select({
@@ -81,12 +112,15 @@ export function loadRangesForInstruments(
     })
     .from(classificationRanges)
     .innerJoin(colors, eq(colors.id, classificationRanges.colorId))
-    .where(inArray(classificationRanges.instrumentId, [...instrumentIds]))
+    .where(inArray(classificationRanges.instrumentId, [...new Set(owners.values())]))
     .all()
 
+  // Primeiro por dono; depois espalhado para cada instrumento que resolve nele —
+  // vários subtestes costumam compartilhar o mesmo conjunto do pai.
+  const byOwner = new Map<string, ResolvedRange[]>()
   for (const row of rows) {
     const key = rangeKey(row.instrumentId, row.scoreType as ScoreType)
-    const bucket = byKey.get(key)
+    const bucket = byOwner.get(key)
     const value: ResolvedRange = {
       id: row.id,
       classificationName: row.classificationName,
@@ -99,7 +133,14 @@ export function loadRangesForInstruments(
       colorName: row.colorName
     }
     if (bucket) bucket.push(value)
-    else byKey.set(key, [value])
+    else byOwner.set(key, [value])
+  }
+
+  for (const [instrumentId, ownerId] of owners) {
+    for (const scoreType of SCORE_TYPES) {
+      const owned = byOwner.get(rangeKey(ownerId, scoreType))
+      if (owned !== undefined) byKey.set(rangeKey(instrumentId, scoreType), owned)
+    }
   }
 
   return byKey

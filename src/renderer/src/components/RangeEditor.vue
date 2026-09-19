@@ -17,6 +17,13 @@
  * **Escore alto indica pior desempenho** marca o conjunto invertido, das escalas
  * de sintoma. Não muda a resolução da faixa, que continua puramente numérica;
  * muda a normalização dos gráficos e a direção da sugestão de níveis.
+ *
+ * Herança (§4.6): dentro de um teste as faixas costumam ser as mesmas para todos
+ * os subtestes, então um subteste não cadastra nada — ele usa as faixas do
+ * ancestral. Enquanto herda, esta tela mostra as faixas do pai TRAVADAS, com a
+ * origem declarada: editar aqui daria a impressão de mexer só neste subteste
+ * quando, na verdade, a alteração teria de ir para o pai e atingiria os irmãos.
+ * Personalizar é um ato explícito, com botão próprio — e reversível.
  */
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
@@ -30,7 +37,7 @@ import { CLASSIFICATION_LEVELS, suggestLevels } from '@shared/domain/levels'
 import type { ClassificationLevel } from '@shared/domain/levels'
 import { SCORE_TYPE_LABELS } from '@shared/labels'
 import { checkContrast } from '@shared/domain/color'
-import type { Instrument } from '@shared/contracts/entities'
+import type { Instrument, RangeOrigin } from '@shared/contracts/entities'
 
 const props = defineProps<{ instrument: Instrument }>()
 
@@ -58,6 +65,9 @@ const saving = ref(false)
 const configured = ref<ScoreType[]>([])
 /** Vale para o conjunto inteiro, não para a linha — daí viver fora de `rows`. */
 const inverted = ref(false)
+/** Origem das faixas (§4.6): de quem elas vêm e se este instrumento pode herdar. */
+const origin = ref<RangeOrigin>({ ownerId: '', ownerName: '', inherited: false, canInherit: false })
+const changingSource = ref(false)
 
 /** Escore bruto não recebe classificação automática (§4.5). */
 const classifiableTypes = SCORE_TYPES.filter((type) => SCORE_TYPE_DOMAINS[type].autoClassify)
@@ -69,10 +79,17 @@ async function load(): Promise<void> {
       instrumentId: props.instrument.id
     })
 
-    const existing = await api('classifications:list', {
+    const source = await api('classifications:list', {
       instrumentId: props.instrument.id,
       scoreType: scoreType.value
     })
+    const existing = source.ranges
+    origin.value = {
+      ownerId: source.ownerId,
+      ownerName: source.ownerName,
+      inherited: source.inherited,
+      canInherit: source.canInherit
+    }
 
     rows.value = existing.map((range) => ({
       key: nextKey++,
@@ -262,15 +279,86 @@ const configuredElsewhere = computed(() =>
     .map((type) => SCORE_TYPE_LABELS[type])
 )
 
+/** Enquanto herda, a tabela é leitura: o cadastro vive no ancestral. */
+const locked = computed(() => origin.value.inherited)
+
 const canSave = computed(
   () =>
+    !locked.value &&
     blockingIssues.value.length === 0 &&
     rows.value.every((row) => row.classificationName.trim() !== '')
 )
+
+/**
+ * Passa a ter faixas próprias, partindo de uma cópia das que vinha herdando.
+ *
+ * Copiar em vez de começar do zero é o que torna a personalização barata: quase
+ * sempre o usuário quer o conjunto do pai com um limite diferente, e não uma
+ * tabela nova.
+ */
+async function detach(): Promise<void> {
+  changingSource.value = true
+  try {
+    await api('classifications:detach', { instrumentId: props.instrument.id })
+    await load()
+    appStore.notify(
+      'success',
+      'Faixas copiadas para este instrumento. As alterações daqui em diante não afetam os outros subtestes.'
+    )
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    changingSource.value = false
+  }
+}
+
+/** Descarta as faixas próprias e volta a acompanhar o ancestral. */
+async function reattach(): Promise<void> {
+  const confirmed = window.confirm(
+    'As faixas cadastradas neste instrumento serão apagadas e ele voltará a usar as do instrumento pai.\n\n' +
+      'Resultados já lançados mantêm a classificação com que foram gravados.'
+  )
+  if (!confirmed) return
+
+  changingSource.value = true
+  try {
+    await api('classifications:reattach', { instrumentId: props.instrument.id })
+    await openInstrument()
+    appStore.notify('success', 'Este instrumento voltou a herdar as faixas do instrumento pai.')
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    changingSource.value = false
+  }
+}
 </script>
 
 <template>
   <div>
+    <div
+      v-if="origin.inherited"
+      class="mb-4 flex flex-wrap items-start justify-between gap-3 rounded border border-ink-200 bg-ink-50 p-3"
+    >
+      <p class="max-w-2xl text-sm text-ink-700">
+        <span class="font-medium">Este subteste usa as faixas de {{ origin.ownerName }}.</span>
+        Editá-las lá vale para este e para os demais subtestes que herdam. Personalize só se as
+        faixas deste subteste forem diferentes das do teste.
+      </p>
+      <BaseButton size="sm" :loading="changingSource" @click="detach">
+        Personalizar para este subteste
+      </BaseButton>
+    </div>
+
+    <div
+      v-else-if="origin.canInherit"
+      class="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500"
+    >
+      <p>Faixas próprias deste subteste — alterá-las não afeta o teste nem os outros subtestes.</p>
+      <button class="text-ink-600 hover:underline" :disabled="changingSource" @click="reattach">
+        Voltar a herdar do teste pai
+      </button>
+    </div>
+
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <div>
         <label class="field-label" for="range-score-type">Tipo de escore</label>
@@ -289,7 +377,7 @@ const canSave = computed(
         · {{ domain.decimals === 0 ? 'inteiros' : `${domain.decimals} casa(s) decimal(is)` }}
       </div>
 
-      <div class="ml-auto flex gap-2">
+      <div v-if="!locked" class="ml-auto flex gap-2">
         <BaseButton size="sm" @click="fillDomain(5)">Gerar 5 faixas</BaseButton>
         <BaseButton size="sm" @click="fillDomain(7)">Gerar 7 faixas</BaseButton>
         <BaseButton size="sm" @click="addRow">Adicionar faixa</BaseButton>
@@ -297,7 +385,7 @@ const canSave = computed(
     </div>
 
     <label class="mb-4 flex max-w-3xl items-start gap-2 text-sm text-ink-700">
-      <input v-model="inverted" type="checkbox" class="mt-0.5" />
+      <input v-model="inverted" type="checkbox" class="mt-0.5" :disabled="locked" />
       <span>
         Escore alto indica <strong>pior</strong> desempenho
         <span class="mt-0.5 block text-xs text-ink-500">
@@ -329,6 +417,7 @@ const canSave = computed(
                 v-model="row.classificationName"
                 class="field-input py-1"
                 placeholder="Ex.: Média superior"
+                :disabled="locked"
               />
             </td>
             <td class="px-2 py-1.5">
@@ -337,6 +426,7 @@ const canSave = computed(
                 type="number"
                 :step="step()"
                 class="field-input tabular py-1 text-right"
+                :disabled="locked"
               />
             </td>
             <td class="px-2 py-1.5">
@@ -345,10 +435,11 @@ const canSave = computed(
                 type="number"
                 :step="step()"
                 class="field-input tabular py-1 text-right"
+                :disabled="locked"
               />
             </td>
             <td class="px-2 py-1.5">
-              <select v-model="row.colorId" class="field-input py-1">
+              <select v-model="row.colorId" class="field-input py-1" :disabled="locked">
                 <option v-for="color in catalog.colors" :key="color.id" :value="color.id">
                   {{ color.name }}
                 </option>
@@ -358,7 +449,7 @@ const canSave = computed(
               </p>
             </td>
             <td class="px-2 py-1.5">
-              <select v-model="row.level" class="field-input py-1">
+              <select v-model="row.level" class="field-input py-1" :disabled="locked">
                 <option :value="null">— não definido</option>
                 <option
                   v-for="entry in CLASSIFICATION_LEVELS"
@@ -372,6 +463,7 @@ const canSave = computed(
             <td class="px-2 py-1.5 tabular text-xs text-ink-500">{{ rangeLabel(row.key) }}</td>
             <td class="px-2 py-1.5 text-right">
               <button
+                v-if="!locked"
                 class="text-xs text-danger-500 hover:underline"
                 :aria-label="`Remover faixa ${row.classificationName}`"
                 @click="removeRow(row.key)"
@@ -384,14 +476,31 @@ const canSave = computed(
       </table>
 
       <div v-else class="py-8 text-center text-sm text-ink-400">
-        <p>
+        <p v-if="origin.inherited">
+          {{ origin.ownerName }} não tem faixas de {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas,
+          os resultados deste instrumento são gravados sem classificação automática.
+        </p>
+        <p v-else>
           Nenhuma faixa cadastrada para {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas, os
           resultados deste instrumento são gravados sem classificação automática.
         </p>
         <p v-if="configuredElsewhere.length > 0" class="mt-2 text-ink-600">
-          Este instrumento tem faixas em
+          {{ origin.inherited ? `${origin.ownerName} tem` : 'Este instrumento tem' }} faixas em
           <span class="font-medium">{{ configuredElsewhere.join(', ') }}</span> — troque o tipo de
           escore acima para vê-las.
+        </p>
+        <!--
+          Um subteste próprio e sem faixa nenhuma quase sempre é engano: ele
+          herdava e alguém salvou um conjunto vazio. Dizer só "nenhuma faixa"
+          esconderia que as faixas do pai estão a um clique de distância.
+        -->
+        <p
+          v-else-if="origin.canInherit && !origin.inherited"
+          class="mx-auto mt-2 max-w-xl text-ink-600"
+        >
+          Este subteste está marcado como tendo faixas próprias, mas não tem nenhuma cadastrada.
+          Use <span class="font-medium">Voltar a herdar do teste pai</span>, acima, para usar as
+          faixas do teste.
         </p>
       </div>
 
@@ -408,7 +517,7 @@ const canSave = computed(
       </div>
 
       <div
-        v-if="rows.length > 0 && missingLevels > 0"
+        v-if="rows.length > 0 && missingLevels > 0 && !locked"
         class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-200 bg-warn-50 p-3"
       >
         <p class="max-w-xl text-sm text-warn-700">
@@ -422,7 +531,7 @@ const canSave = computed(
         <BaseButton size="sm" @click="applySuggestedLevels">Sugerir níveis</BaseButton>
       </div>
 
-      <div class="mt-4 flex items-center justify-between">
+      <div v-if="!locked" class="mt-4 flex items-center justify-between">
         <p class="max-w-lg text-xs text-ink-500">
           O limite inferior é inclusivo e o superior exclusivo; a última faixa da série inclui o
           máximo. Faixas contíguas devem se encostar — o máximo de uma é o mínimo da seguinte.

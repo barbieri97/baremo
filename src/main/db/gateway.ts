@@ -17,6 +17,13 @@ import * as schema from './schema'
 
 export type DrizzleDb = BetterSQLite3Database<typeof schema>
 
+/**
+ * O handle cru, exposto como tipo próprio para que os outros módulos falem dele
+ * sem importar `better-sqlite3` — a regra do ADR-002 é sobre o pacote, não sobre
+ * o tipo.
+ */
+export type RawDatabase = Database.Database
+
 export interface BaremoDatabase {
   /** Consultas tipadas. Caminho preferencial em repositórios e serviços. */
   readonly db: DrizzleDb
