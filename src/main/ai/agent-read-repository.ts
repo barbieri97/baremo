@@ -17,7 +17,8 @@
  * quanto a implementação.
  */
 
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
 import {
   assessmentResults,
@@ -380,30 +381,57 @@ export class AgentReadRepository {
     }
   }
 
-  listAttachments(): {
+  /**
+   * Anexos não arquivados do prontuário — os gerais do paciente e os de cada
+   * avaliação, que moram na mesma tabela. `assessmentId` nulo = anexo geral.
+   */
+  listAttachments(assessmentId: string | null): {
     attachmentId: string
     name: string
     mime: string
     sizeBytes: number
     description: string | null
+    assessmentId: string | null
+    assessmentDate: string | null
   }[] {
+    if (assessmentId !== null) this.assertOwnedAssessment(assessmentId)
+
+    const filters: SQL[] = [
+      eq(attachments.patientId, this.patientId),
+      isNull(attachments.archivedAt)
+    ]
+    if (assessmentId !== null) filters.push(eq(attachments.assessmentId, assessmentId))
+
     return this.handle.db
       .select({
         id: attachments.id,
         originalName: attachments.originalName,
         detectedMime: attachments.detectedMime,
         sizeBytes: attachments.sizeBytes,
-        description: attachments.description
+        description: attachments.description,
+        assessmentId: attachments.assessmentId,
+        assessmentDate: assessments.date
       })
       .from(attachments)
-      .where(eq(attachments.patientId, this.patientId))
+      // O filtro por paciente vai também no JOIN: nenhuma consulta sai sem ele.
+      .leftJoin(
+        assessments,
+        and(
+          eq(assessments.id, attachments.assessmentId),
+          eq(assessments.patientId, this.patientId)
+        )
+      )
+      .where(and(...filters))
+      .orderBy(desc(attachments.createdAt))
       .all()
       .map((row) => ({
         attachmentId: row.id,
         name: this.scrub(row.originalName) ?? row.originalName,
         mime: row.detectedMime,
         sizeBytes: row.sizeBytes,
-        description: this.scrub(row.description)
+        description: this.scrub(row.description),
+        assessmentId: row.assessmentId,
+        assessmentDate: row.assessmentDate !== null ? formatIsoDate(row.assessmentDate) : null
       }))
   }
 

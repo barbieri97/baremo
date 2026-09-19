@@ -306,7 +306,7 @@ describe('camada 2 — toda consulta filtra pelo paciente da sessão', () => {
   })
 
   it('listar_arquivos devolve apenas os anexos da sessão', () => {
-    const list = repositoryFor('a').listAttachments()
+    const list = repositoryFor('a').listAttachments(null)
     expect(list).toHaveLength(1)
     assertNoForeignData(list)
   })
@@ -363,6 +363,7 @@ describe('camada 3 — revalidação de IDs vindos do modelo', () => {
     it('recusa qualquer ID de avaliação forjado', () => {
       for (const id of adversarial) {
         expect(() => repository().getAssessment(id)).toThrow(ScopeViolationError)
+        expect(() => repository().listAttachments(id)).toThrow(ScopeViolationError)
       }
     })
 
@@ -384,6 +385,7 @@ describe('camada 3 — revalidação de IDs vindos do modelo', () => {
       for (const foreignId of [...fixtures.b.assessmentIds, ...fixtures.c.assessmentIds]) {
         expect(() => repository().getAssessment(foreignId)).toThrow(ScopeViolationError)
         expect(() => repository().listResults(foreignId, null)).toThrow(ScopeViolationError)
+        expect(() => repository().listAttachments(foreignId)).toThrow(ScopeViolationError)
       }
     })
 

@@ -414,7 +414,7 @@ export class AgentOrchestrator {
       case 'ler_documento':
         return repository.readDocument(text('documentoId'))
       case 'listar_arquivos':
-        return repository.listAttachments()
+        return repository.listAttachments(optional('avaliacaoId'))
       case 'obter_faixas_classificacao':
         return repository.getClassificationRanges(text('instrumentoId'), text('tipoEscore'))
       case 'listar_instrumentos_utilizados':

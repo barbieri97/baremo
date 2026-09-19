@@ -115,8 +115,18 @@ const READ_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: 'listar_arquivos',
-    description: 'Lista os arquivos anexados ao prontuário: nome, tipo, tamanho e descrição.',
-    parameters: { type: Type.OBJECT, properties: {} }
+    description:
+      'Lista os arquivos anexados ao prontuário (exceto arquivados): nome, tipo, tamanho, descrição e a avaliação a que o arquivo está vinculado (assessmentId e assessmentDate; nulos = arquivo geral do paciente, sem avaliação).',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        avaliacaoId: {
+          type: Type.STRING,
+          description:
+            'Opcional. ID obtido por listar_avaliacoes; restringe a lista aos arquivos dessa avaliação.'
+        }
+      }
+    }
   },
   {
     name: 'ler_arquivo',
@@ -318,7 +328,7 @@ export function systemInstruction(options: { pseudonymized: boolean }): string {
     'Quando o profissional pedir para lançar os resultados de um teste que está num arquivo anexado:',
     '1. Localize o arquivo com listar_arquivos e leia-o com ler_arquivo.',
     '2. Identifique o teste e, para cada escore, o instrumento (ou subteste) correspondente com buscar_instrumentos. Se um instrumento não estiver no catálogo, diga isso ao profissional em vez de escolher um ID parecido.',
-    '3. Verifique com listar_avaliacoes em qual avaliação gravar. Se houver mais de uma candidata e o pedido não deixar claro, pergunte antes. Se nenhuma servir, proponha uma nova avaliação com a data de aplicação que consta no arquivo.',
+    '3. Se o arquivo já estiver vinculado a uma avaliação (assessmentId em listar_arquivos), grave nela, a menos que o pedido indique outra. Caso contrário, verifique com listar_avaliacoes em qual avaliação gravar. Se houver mais de uma candidata e o pedido não deixar claro, pergunte antes. Se nenhuma servir, proponha uma nova avaliação com a data de aplicação que consta no arquivo.',
     '4. Chame registrar_resultados uma única vez com todos os itens.',
     'Transcreva apenas valores que aparecem literalmente no arquivo, com o tipo de escore que o próprio arquivo declara; escore bruto vai como raw. Nunca calcule, converta ou estime um escore. Se um valor estiver ilegível ou ambíguo, deixe-o de fora e avise.',
     '',
