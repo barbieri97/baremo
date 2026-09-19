@@ -239,15 +239,30 @@ function assertNoForeignData(payload: unknown): void {
 
 // ─── Camada 1 ──────────────────────────────────────────────────────────────
 
+interface SchemaNode {
+  properties?: Record<string, SchemaNode>
+  items?: SchemaNode
+}
+
+/** Nomes de todas as propriedades de um schema, em qualquer profundidade. */
+function propertyNames(schema: SchemaNode | undefined): string[] {
+  if (schema === undefined) return []
+  const own = Object.entries(schema.properties ?? {}).flatMap(([name, child]) => [
+    name,
+    ...propertyNames(child)
+  ])
+  return [...own, ...propertyNames(schema.items)]
+}
+
 describe('camada 1 — nenhuma tool recebe patientId do modelo', () => {
   it('nenhuma declaração expõe um parâmetro de paciente', () => {
     const declarations = toolDeclarations(true)
     expect(declarations.length).toBeGreaterThan(0)
 
     for (const declaration of declarations) {
-      const properties = Object.keys(declaration.parameters?.properties ?? {})
-
-      for (const property of properties) {
+      // Inclui os parâmetros aninhados — a lista `resultados` de
+      // registrar_resultados, por exemplo, não pode esconder um paciente.
+      for (const property of propertyNames(declaration.parameters)) {
         // Nem `patientId`, nem `pacienteId`, nem variação com underline.
         expect(property.toLowerCase().replace(/_/g, '')).not.toContain('patientid')
         expect(property.toLowerCase().replace(/_/g, '')).not.toContain('pacienteid')
@@ -298,6 +313,22 @@ describe('camada 2 — toda consulta filtra pelo paciente da sessão', () => {
 
   it('listar_instrumentos_utilizados não vaza dados de outro prontuário', () => {
     assertNoForeignData(repositoryFor('a').listUsedInstruments())
+  })
+
+  it('buscar_instrumentos devolve só catálogo, sem dado clínico de ninguém', () => {
+    const found = repositoryFor('a').searchInstruments('atencao')
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({
+      instrumentId: INSTRUMENT_ID,
+      nome: 'Teste de Atenção',
+      tiposEscoreComFaixa: ['percentile']
+    })
+
+    const serialized = JSON.stringify(repositoryFor('a').searchInstruments(null))
+    for (const marker of ['ALFA', 'BRAVO', 'CHARLIE', 'Ana', 'Bruno', 'Carla']) {
+      expect(serialized).not.toContain(marker)
+    }
+    expect(repositoryFor('a').searchInstruments('inexistente')).toHaveLength(0)
   })
 
   it('cada sessão enxerga o seu próprio paciente, e só ele', () => {

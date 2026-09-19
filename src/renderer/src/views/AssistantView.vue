@@ -15,7 +15,10 @@ import { api, onAiStream } from '../api'
 import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
-import type { AiStreamEvent } from '@shared/contracts/entities-ai'
+import ToolActivityAccordion from '../components/ToolActivityAccordion.vue'
+import type { ToolActivityItem } from '../components/ToolActivityAccordion.vue'
+import { groupToolCallsByMessage } from '@shared/ai/tool-activity'
+import type { AiResultImportRow, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Patient } from '@shared/contracts/entities'
 
@@ -40,7 +43,10 @@ const consentOpen = ref(false)
 
 const streaming = ref(false)
 const streamText = ref('')
-const toolActivity = ref<string[]>([])
+/** Tools do turno em andamento, pareadas por `callId`. */
+const liveCalls = ref<ToolActivityItem[]>([])
+/** Tools já gravadas da conversa — o histórico que fica depois da resposta. */
+const toolCalls = ref<AiToolCall[]>([])
 const currentRequestId = ref<string | null>(null)
 
 interface BlockDiffEntry {
@@ -55,6 +61,7 @@ const confirmation = ref<{
   toolName: string
   preview: string
   blockDiff: BlockDiffEntry[] | null
+  resultPreview: AiResultImportRow[] | null
 } | null>(null)
 
 /** Blocos que o profissional aceitou. Começa vazio: aceitar é ato deliberado. */
@@ -74,6 +81,41 @@ function toggleBlock(index: number): void {
 function acceptAllBlocks(): void {
   acceptedBlocks.value = new Set(changedBlocks.value.map((entry) => entry.index))
 }
+
+const resultRows = computed(() => confirmation.value?.resultPreview ?? [])
+const selectableRows = computed(() => resultRows.value.filter((row) => row.status !== 'invalid'))
+
+/** Com diff ou tabela de resultados, autorizar exige ter marcado alguma coisa. */
+const needsSelection = computed(
+  () => changedBlocks.value.length > 0 || resultRows.value.length > 0
+)
+
+function acceptAllRows(): void {
+  acceptedBlocks.value = new Set(selectableRows.value.map((row) => row.index))
+}
+
+function formatScore(value: number | null): string {
+  return value === null ? '—' : value.toLocaleString('pt-BR')
+}
+
+/** Histórico gravado, agrupado pela pergunta que abriu cada turno. */
+const callsByMessage = computed(() => {
+  const grouped = groupToolCallsByMessage(messages.value, toolCalls.value)
+  const items = new Map<string, ToolActivityItem[]>()
+  for (const [messageId, calls] of grouped) {
+    items.set(
+      messageId,
+      calls.map((call) => ({
+        id: call.id,
+        toolName: call.toolName,
+        argumentsJson: call.argumentsJson,
+        status: call.status,
+        summary: call.resultSummary
+      }))
+    )
+  }
+  return items
+})
 
 const DIFF_LABELS: Record<BlockDiffEntry['kind'], string> = {
   keep: 'Sem alteração',
@@ -117,14 +159,29 @@ function handleStream(event: AiStreamEvent): void {
       break
 
     case 'tool_start':
-      toolActivity.value = [...toolActivity.value, `Consultando: ${event.toolName}`]
+      liveCalls.value = [
+        ...liveCalls.value,
+        {
+          id: event.callId,
+          toolName: event.toolName,
+          argumentsJson: event.argumentsJson,
+          status: 'running',
+          summary: null
+        }
+      ]
+      void scrollToBottom()
       break
 
     case 'tool_end':
-      toolActivity.value = [
-        ...toolActivity.value.slice(0, -1),
-        `${event.ok ? '✓' : '✗'} ${event.toolName} — ${event.summary}`
-      ]
+      liveCalls.value = liveCalls.value.map((call) =>
+        call.id === event.callId
+          ? {
+              ...call,
+              status: !event.ok ? 'failed' : event.rejected ? 'rejected' : 'executed',
+              summary: event.summary
+            }
+          : call
+      )
       break
 
     case 'confirmation_required':
@@ -132,9 +189,14 @@ function handleStream(event: AiStreamEvent): void {
         confirmationId: event.confirmationId,
         toolName: event.toolName,
         preview: event.preview,
-        blockDiff: event.blockDiff
+        blockDiff: event.blockDiff,
+        resultPreview: event.resultPreview
       }
-      acceptedBlocks.value = new Set()
+      // Linhas novas já vêm marcadas; sobrescrever um resultado existente, não —
+      // substituir o que já estava gravado é sempre um ato deliberado.
+      acceptedBlocks.value = new Set(
+        (event.resultPreview ?? []).filter((row) => row.status === 'new').map((row) => row.index)
+      )
       break
 
     case 'done':
@@ -159,9 +221,17 @@ async function scrollToBottom(): Promise<void> {
 
 async function refreshMessages(): Promise<void> {
   if (activeSessionId.value === null) return
-  messages.value = await api('ai:listMessages', { sessionId: activeSessionId.value })
+  const sessionId = activeSessionId.value
+  const [loadedMessages, loadedCalls] = await Promise.all([
+    api('ai:listMessages', { sessionId }),
+    api('ai:listToolCalls', { sessionId })
+  ])
+  messages.value = loadedMessages
+  toolCalls.value = loadedCalls
   streamText.value = ''
-  toolActivity.value = []
+  // O histórico gravado substitui o ao vivo — as mesmas chamadas, agora presas
+  // à pergunta que as originou.
+  liveCalls.value = []
   await scrollToBottom()
 }
 
@@ -211,7 +281,7 @@ async function send(): Promise<void> {
   currentRequestId.value = requestId
   streaming.value = true
   streamText.value = ''
-  toolActivity.value = []
+  liveCalls.value = []
 
   messages.value = [
     ...messages.value,
@@ -244,13 +314,15 @@ async function cancel(): Promise<void> {
 async function respondToConfirmation(approved: boolean): Promise<void> {
   if (confirmation.value === null) return
 
-  const hasDiff = confirmation.value.blockDiff !== null
+  const hasSelection =
+    confirmation.value.blockDiff !== null || confirmation.value.resultPreview !== null
   try {
     await api('ai:confirmToolCall', {
       confirmationId: confirmation.value.confirmationId,
       approved,
-      // Sem diff, a proposta é aplicada inteira; com diff, só o que foi marcado.
-      acceptedBlocks: hasDiff && approved ? [...acceptedBlocks.value] : null
+      // Sem diff nem tabela, a proposta é aplicada inteira; com eles, só o que
+      // foi marcado.
+      acceptedBlocks: hasSelection && approved ? [...acceptedBlocks.value] : null
     })
   } catch (error) {
     appStore.notifyError(error)
@@ -267,6 +339,7 @@ async function deleteSession(sessionId: string): Promise<void> {
     if (activeSessionId.value === sessionId) {
       activeSessionId.value = null
       messages.value = []
+      toolCalls.value = []
     }
   } catch (error) {
     appStore.notifyError(error)
@@ -341,33 +414,31 @@ async function deleteSession(sessionId: string): Promise<void> {
 
         <template v-else>
           <div ref="transcript" class="flex-1 space-y-4 overflow-y-auto px-6 py-4">
-            <div
-              v-for="message in messages"
-              :key="message.id"
-              class="flex"
-              :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-            >
+            <template v-for="message in messages" :key="message.id">
               <div
-                class="max-w-2xl whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm"
-                :class="
-                  message.role === 'user'
-                    ? 'bg-brand-500 text-white'
-                    : 'border border-ink-200 bg-white text-ink-800'
-                "
+                class="flex"
+                :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
               >
-                {{ message.text }}
+                <div
+                  class="max-w-2xl whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm"
+                  :class="
+                    message.role === 'user'
+                      ? 'bg-brand-500 text-white'
+                      : 'border border-ink-200 bg-white text-ink-800'
+                  "
+                >
+                  {{ message.text }}
+                </div>
               </div>
-            </div>
 
-            <div v-if="toolActivity.length > 0" class="space-y-1">
-              <p
-                v-for="(activity, index) in toolActivity"
-                :key="index"
-                class="text-xs text-ink-500"
-              >
-                {{ activity }}
-              </p>
-            </div>
+              <!-- O que o assistente consultou para responder a esta pergunta. -->
+              <ToolActivityAccordion
+                v-if="callsByMessage.has(message.id)"
+                :calls="callsByMessage.get(message.id) ?? []"
+              />
+            </template>
+
+            <ToolActivityAccordion v-if="liveCalls.length > 0" :calls="liveCalls" open />
 
             <div v-if="streamText !== ''" class="flex justify-start">
               <div
@@ -510,6 +581,83 @@ async function deleteSession(sessionId: string): Promise<void> {
         </p>
       </div>
 
+      <!-- Resultados propostos: aceitos linha a linha, como no lançamento manual. -->
+      <div v-if="resultRows.length > 0" class="mt-4" data-testid="result-import-preview">
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Resultados propostos ({{ acceptedBlocks.size }} de {{ selectableRows.length }}
+            aceitos)
+          </p>
+          <button class="text-xs text-brand-500 hover:underline" @click="acceptAllRows">
+            Aceitar todos
+          </button>
+        </div>
+
+        <div class="max-h-80 overflow-y-auto rounded border border-ink-200">
+          <table class="w-full text-left text-xs">
+            <thead class="sticky top-0 bg-ink-50 text-ink-500">
+              <tr>
+                <th class="w-8 px-2 py-1.5"></th>
+                <th class="px-2 py-1.5 font-semibold">Instrumento</th>
+                <th class="px-2 py-1.5 font-semibold">Tipo</th>
+                <th class="px-2 py-1.5 text-right font-semibold">Valor</th>
+                <th class="px-2 py-1.5 font-semibold">Classificação</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in resultRows"
+                :key="row.index"
+                class="border-t border-ink-100 align-top"
+                :class="{
+                  'bg-warn-50': row.status === 'overwrite',
+                  'bg-danger-50 text-ink-500': row.status === 'invalid'
+                }"
+              >
+                <td class="px-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    class="rounded border-ink-300"
+                    :aria-label="`Aceitar ${row.instrumentName}`"
+                    :disabled="row.status === 'invalid'"
+                    :checked="acceptedBlocks.has(row.index)"
+                    @change="toggleBlock(row.index)"
+                  />
+                </td>
+                <td class="px-2 py-1.5 text-ink-800">
+                  {{ row.instrumentName }}
+                  <span v-if="row.error" class="block text-danger-600">{{ row.error }}</span>
+                  <span v-else-if="row.status === 'overwrite'" class="block text-warn-700">
+                    Substitui o valor gravado: {{ formatScore(row.existingValue) }}
+                    <template v-if="row.existingClassification">
+                      ({{ row.existingClassification }})
+                    </template>
+                  </span>
+                  <span v-if="row.warning" class="block text-warn-700">{{ row.warning }}</span>
+                </td>
+                <td class="px-2 py-1.5">{{ row.scoreType }}</td>
+                <td class="px-2 py-1.5 text-right font-mono">{{ formatScore(row.value) }}</td>
+                <td class="px-2 py-1.5">
+                  <span v-if="row.classificationName" class="inline-flex items-center gap-1">
+                    <span
+                      class="inline-block h-2.5 w-2.5 rounded-full"
+                      :style="{ backgroundColor: row.colorHex ?? undefined }"
+                    ></span>
+                    {{ row.classificationName }}
+                  </span>
+                  <span v-else class="text-ink-400">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="mt-2 text-xs text-ink-500">
+          Linhas em amarelo substituem um resultado já gravado e vêm desmarcadas. A classificação é
+          calculada pelas faixas cadastradas, como no lançamento manual.
+        </p>
+      </div>
+
       <p class="mt-3 text-xs text-ink-500">
         Ferramenta: <span class="font-mono">{{ confirmation?.toolName }}</span>
       </p>
@@ -522,10 +670,16 @@ async function deleteSession(sessionId: string): Promise<void> {
         <BaseButton variant="ghost" @click="respondToConfirmation(false)">Recusar</BaseButton>
         <BaseButton
           variant="primary"
-          :disabled="changedBlocks.length > 0 && acceptedBlocks.size === 0"
+          :disabled="needsSelection && acceptedBlocks.size === 0"
           @click="respondToConfirmation(true)"
         >
-          {{ changedBlocks.length > 0 ? `Aplicar ${acceptedBlocks.size} bloco(s)` : 'Autorizar' }}
+          {{
+            changedBlocks.length > 0
+              ? `Aplicar ${acceptedBlocks.size} bloco(s)`
+              : resultRows.length > 0
+                ? `Gravar ${acceptedBlocks.size} resultado(s)`
+                : 'Autorizar'
+          }}
         </BaseButton>
       </template>
     </BaseDialog>

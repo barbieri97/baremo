@@ -53,6 +53,18 @@ export interface AgentRepositoryOptions {
   readonly pseudonymize: boolean
 }
 
+/** Teto da busca no catálogo, para uma busca vazia não despejar tudo no contexto. */
+const MAX_INSTRUMENT_MATCHES = 50
+
+/** Minúsculas e sem acento: "Atenção" e "atencao" precisam se encontrar. */
+function normalizeForSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 export class AgentReadRepository {
   /**
    * `patientId` é `readonly` e privado: nem o orquestrador nem uma tool
@@ -480,6 +492,78 @@ export class AgentReadRepository {
       instrumentId,
       name: entry.name,
       scoreTypes: [...entry.scoreTypes]
+    }))
+  }
+
+  /**
+   * Busca no catálogo de instrumentos — dado de CATÁLOGO, não clínico.
+   *
+   * Como `getClassificationRanges`, não filtra por paciente, e de propósito: é o
+   * que permite ao modelo mapear o teste de um PDF anexado a um instrumento que
+   * este paciente ainda não fez. Nada aqui revela quem foi avaliado.
+   */
+  searchInstruments(term: string | null): {
+    instrumentId: string
+    nome: string
+    sigla: string | null
+    instrumentoPai: string | null
+    funcaoCognitiva: string | null
+    tiposEscoreComFaixa: string[]
+  }[] {
+    const rows = this.handle.db
+      .select({
+        id: instruments.id,
+        parentId: instruments.parentId,
+        name: instruments.name,
+        acronym: instruments.acronym,
+        functionName: cognitiveFunctions.name
+      })
+      .from(instruments)
+      .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
+      .orderBy(instruments.order, instruments.name)
+      .all()
+
+    const names = new Map(rows.map((row) => [row.id, row.name]))
+    const needle = term === null ? '' : normalizeForSearch(term)
+
+    const matches = rows
+      .filter((row) => {
+        if (needle === '') return true
+        const parent = row.parentId === null ? '' : (names.get(row.parentId) ?? '')
+        return normalizeForSearch(`${row.name} ${row.acronym ?? ''} ${parent}`).includes(needle)
+      })
+      .slice(0, MAX_INSTRUMENT_MATCHES)
+
+    const typesByInstrument = new Map<string, Set<string>>()
+    if (matches.length > 0) {
+      const ranges = this.handle.db
+        .selectDistinct({
+          instrumentId: classificationRanges.instrumentId,
+          scoreType: classificationRanges.scoreType
+        })
+        .from(classificationRanges)
+        .where(
+          inArray(
+            classificationRanges.instrumentId,
+            matches.map((row) => row.id)
+          )
+        )
+        .all()
+
+      for (const range of ranges) {
+        const types = typesByInstrument.get(range.instrumentId) ?? new Set<string>()
+        types.add(range.scoreType)
+        typesByInstrument.set(range.instrumentId, types)
+      }
+    }
+
+    return matches.map((row) => ({
+      instrumentId: row.id,
+      nome: row.name,
+      sigla: row.acronym,
+      instrumentoPai: row.parentId === null ? null : (names.get(row.parentId) ?? null),
+      funcaoCognitiva: row.functionName,
+      tiposEscoreComFaixa: [...(typesByInstrument.get(row.id) ?? [])]
     }))
   }
 

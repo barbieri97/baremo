@@ -43,6 +43,7 @@ import {
   aiAuditSchema,
   aiConfigSchema,
   aiMessageSchema,
+  aiToolCallSchema,
   aiSessionSchema
 } from './entities-ai'
 import { catalogImportPlanSchema } from './catalog'
@@ -563,6 +564,8 @@ export const contracts = {
   ),
   'ai:deleteSession': channel(z.object({ sessionId: idSchema }), ok),
   'ai:listMessages': channel(z.object({ sessionId: idSchema }), z.array(aiMessageSchema)),
+  /** Tools usadas em cada turno, para o histórico recolhível da conversa. */
+  'ai:listToolCalls': channel(z.object({ sessionId: idSchema }), z.array(aiToolCallSchema)),
   /** Dispara o turno; a resposta chega pelo canal de streaming, por `requestId`. */
   'ai:sendMessage': channel(
     z.object({
@@ -578,7 +581,8 @@ export const contracts = {
       confirmationId: z.string().min(1).max(80),
       approved: z.boolean(),
       /**
-       * Índices dos blocos aceitos, quando a confirmação traz um diff (§10.6).
+       * Índices dos blocos aceitos, quando a confirmação traz um diff (§10.6),
+       * ou das linhas aceitas, quando traz uma tabela de resultados.
        * `null` significa "aplicar a proposta inteira" — o caso das tools que não
        * produzem diff, como a criação de rascunho.
        */

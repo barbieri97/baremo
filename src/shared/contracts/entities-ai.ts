@@ -73,6 +73,7 @@ export type AiMessage = z.infer<typeof aiMessageSchema>
 export const aiToolCallSchema = z.object({
   id: idSchema,
   sessionId: idSchema,
+  /** Mensagem do USUÁRIO que abriu o turno — agrupa as chamadas na conversa. */
   messageId: idSchema.nullable(),
   toolName: z.string().max(80),
   argumentsJson: z.string(),
@@ -115,20 +116,49 @@ export type AiAudit = z.infer<typeof aiAuditSchema>
 
 // ─── Transporte do chat ──────────────────────────────────────────────────────
 
+/**
+ * Uma linha da proposta de `registrar_resultados`, como o diálogo de confirmação
+ * a mostra. Calculada no processo principal, com as mesmas validações e a mesma
+ * classificação do formulário — o renderer só devolve os índices aceitos.
+ */
+export const aiResultImportRowSchema = z.object({
+  index: z.number().int(),
+  instrumentId: z.string().nullable(),
+  instrumentName: z.string(),
+  scoreType: z.string(),
+  value: z.number().nullable(),
+  classificationName: z.string().nullable(),
+  colorHex: z.string().nullable(),
+  /** `overwrite` substitui um resultado já gravado; `invalid` não pode ser aceita. */
+  status: z.enum(['new', 'overwrite', 'invalid']),
+  existingValue: z.number().nullable(),
+  existingClassification: z.string().nullable(),
+  /** Motivo de uma linha `invalid`. */
+  error: z.string().nullable(),
+  /** Alerta que não impede a gravação, como uma classificação manual que será perdida. */
+  warning: z.string().nullable()
+})
+export type AiResultImportRow = z.infer<typeof aiResultImportRowSchema>
+
 /** Eventos do canal de streaming, multiplexados por `requestId` (§10.4). */
 export const aiStreamEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('delta'), requestId: z.string(), text: z.string() }),
   z.object({
     kind: z.literal('tool_start'),
     requestId: z.string(),
+    /** Pareia início e fim da mesma chamada; é também o id em `ai_tool_calls`. */
+    callId: z.string(),
     toolName: z.string(),
     argumentsJson: z.string()
   }),
   z.object({
     kind: z.literal('tool_end'),
     requestId: z.string(),
+    callId: z.string(),
     toolName: z.string(),
     ok: z.boolean(),
+    /** Gravação recusada pelo profissional — não é falha, mas também não gravou. */
+    rejected: z.boolean(),
     summary: z.string()
   }),
   z.object({
@@ -153,7 +183,12 @@ export const aiStreamEventSchema = z.discriminatedUnion('kind', [
           after: z.string().nullable()
         })
       )
-      .nullable()
+      .nullable(),
+    /**
+     * Tabela de resultados, quando a tool propõe registrar escores. O usuário
+     * aceita linha a linha; os índices voltam em `acceptedBlocks`.
+     */
+    resultPreview: z.array(aiResultImportRowSchema).nullable()
   }),
   z.object({
     kind: z.literal('done'),

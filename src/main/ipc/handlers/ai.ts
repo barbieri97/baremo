@@ -11,7 +11,7 @@ import { GoogleGenAI } from '@google/genai'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import { getDatabase } from '../../db'
 import { conflict, notFound, registerHandler } from '../register'
-import { aiMessages, aiSessions, consents } from '../../db/schema'
+import { aiMessages, aiSessions, aiToolCalls, consents } from '../../db/schema'
 import { getAiConfig, updateAiConfig } from '../../repositories/ai-config'
 import { getPatient } from '../../repositories/patients'
 import { clearKey, encryptionAvailable, keyHint, saveKey } from '../../ai/key-store'
@@ -21,9 +21,10 @@ import { applyAcceptedChanges, countChanges, diffBlocks } from '@shared/domain/b
 import { listAiAudit, recordAiEvent } from '../../ai/audit'
 import { createAiDraft, getDocument, saveContent } from '../../repositories/documents'
 import { nowIso } from '../../repositories/helpers'
+import { applyResultImport, previewResultImport } from '../../services/ai-result-import'
 import { AI_STREAM_CHANNEL } from '@shared/contracts'
 import { AI_MODELS } from '@shared/contracts/entities-ai'
-import type { AiModel, AiSession, AiStreamEvent } from '@shared/contracts/entities-ai'
+import type { AiModel, AiSession, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
 import type { DocumentType } from '@shared/labels'
 import { DOCUMENT_TYPES } from '@shared/labels'
 
@@ -233,6 +234,16 @@ export function registerAiHandlers(): void {
       .map((row) => ({ ...row, role: row.role as 'user' | 'model' | 'tool' | 'system' }))
   )
 
+  registerHandler('ai:listToolCalls', ({ sessionId }) =>
+    getDatabase()
+      .db.select()
+      .from(aiToolCalls)
+      .where(eq(aiToolCalls.sessionId, sessionId))
+      .orderBy(asc(aiToolCalls.createdAt))
+      .all()
+      .map((row) => ({ ...row, status: row.status as AiToolCall['status'] }))
+  )
+
   registerHandler('ai:sendMessage', ({ sessionId, text, requestId }) => {
     // O turno roda solto: a resposta chega pelo canal de streaming, e travar o
     // `invoke` até o fim impediria o cancelamento.
@@ -337,6 +348,13 @@ function prepareWriteTool(
     }
   }
 
+  if (toolName === 'registrar_resultados') {
+    // Lança quando a proposta é inviável (avaliação de outro paciente, datas ou
+    // listas malformadas): o erro volta ao modelo e nenhum diálogo abre.
+    const preview = previewResultImport(getDatabase(), patientId, args)
+    return { description: preview.description, blockDiff: null, resultPreview: preview.rows }
+  }
+
   return { description: 'Gravação solicitada pelo assistente.', blockDiff: null }
 }
 
@@ -403,6 +421,11 @@ async function applyWriteTool(
 
     const applied = acceptedBlocks === null ? countChanges(changes) : acceptedBlocks.length
     return `Documento "${document.title}" atualizado: ${applied} bloco(s) aplicado(s). A versão anterior foi preservada no histórico.`
+  }
+
+  if (toolName === 'registrar_resultados') {
+    // `acceptedBlocks` aqui são os índices das linhas aceitas na tabela.
+    return applyResultImport(handle, patientId, args, acceptedBlocks)
   }
 
   throw new Error(`Ferramenta de escrita desconhecida: ${toolName}.`)
