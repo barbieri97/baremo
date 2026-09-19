@@ -9,7 +9,7 @@
  * e inacessível por teclado, e este app tem requisito explícito de teclado
  * (§16.4).
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BaseButton from './BaseButton.vue'
 import type { TreeNode, TreeNodeLike } from '@shared/domain/tree'
 
@@ -18,23 +18,61 @@ interface Props {
   tree: readonly TreeNode<TreeNodeLike & { name: string }>[]
   selectedId: string | null
   emptyMessage: string
+  /**
+   * Começa com todos os ramos recolhidos. Em catálogos grandes, a lista de
+   * raízes é o que interessa à primeira vista; os filhos abrem sob demanda.
+   */
+  collapsedByDefault?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { collapsedByDefault: false })
 const emit = defineEmits<{
   select: [id: string]
   addChild: [parentId: string | null]
   move: [payload: { id: string; parentId: string | null; order: number }]
 }>()
 
-const collapsed = ref(new Set<string>())
+/**
+ * Nós cujo estado difere do padrão — expandidos quando o padrão é recolhido, e
+ * vice-versa. Guardar só a exceção faz nós novos nascerem no estado padrão.
+ */
+const toggled = ref(new Set<string>())
 
-function toggle(id: string): void {
-  const next = new Set(collapsed.value)
+function isCollapsed(id: string): boolean {
+  return props.collapsedByDefault !== toggled.value.has(id)
+}
+
+function setCollapsed(id: string, value: boolean): void {
+  if (isCollapsed(id) === value) return
+  const next = new Set(toggled.value)
   if (next.has(id)) next.delete(id)
   else next.add(id)
-  collapsed.value = next
+  toggled.value = next
 }
+
+function toggle(id: string): void {
+  setCollapsed(id, !isCollapsed(id))
+}
+
+/** Expande os ancestrais do nó, para que ele fique visível. */
+function reveal(id: string): void {
+  const byId = new Map(props.nodes.map((node) => [node.id, node]))
+  let parentId = byId.get(id)?.parentId ?? null
+  while (parentId !== null) {
+    setCollapsed(parentId, false)
+    parentId = byId.get(parentId)?.parentId ?? null
+  }
+}
+
+// O nó selecionado nunca fica escondido — nem o recém-criado sob um pai
+// recolhido.
+watch(
+  () => [props.selectedId, props.nodes] as const,
+  ([id]) => {
+    if (id !== null) reveal(id)
+  },
+  { immediate: true }
+)
 
 /** Linhas visíveis, respeitando os ramos recolhidos. */
 const visible = computed(() => {
@@ -47,7 +85,7 @@ const visible = computed(() => {
         depth: branch.depth,
         hasChildren: branch.children.length > 0
       })
-      if (!collapsed.value.has(branch.node.id)) walk(branch.children)
+      if (!isCollapsed(branch.node.id)) walk(branch.children)
     }
   }
 
@@ -90,6 +128,7 @@ function indent(id: string): void {
   const newParent = siblings[index - 1]
   if (!newParent) return
 
+  setCollapsed(newParent.id, false)
   emit('move', { id, parentId: newParent.id, order: 999 })
 }
 
@@ -120,10 +159,11 @@ function outdent(id: string): void {
           <button
             v-if="row.hasChildren"
             class="h-5 w-5 shrink-0 rounded text-ink-400 hover:bg-ink-200"
-            :aria-label="collapsed.has(row.node.id) ? 'Expandir' : 'Recolher'"
+            :aria-label="isCollapsed(row.node.id) ? `Expandir ${row.node.name}` : `Recolher ${row.node.name}`"
+            :aria-expanded="!isCollapsed(row.node.id)"
             @click="toggle(row.node.id)"
           >
-            {{ collapsed.has(row.node.id) ? '▸' : '▾' }}
+            {{ isCollapsed(row.node.id) ? '▸' : '▾' }}
           </button>
           <span v-else class="h-5 w-5 shrink-0" aria-hidden="true" />
 
