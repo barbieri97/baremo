@@ -33,6 +33,7 @@ import { recordAiAudit } from './audit'
 import { addTokenUsage, budgetExhausted, getAiConfig } from '../repositories/ai-config'
 import { markdownToTiptap } from './markdown'
 import { resolveBlobPath } from '../services/attachments/storage'
+import { describeRateLimit, parseRateLimit } from './rate-limit'
 import type { AiResultImportRow, AiStreamEvent } from '@shared/contracts/entities-ai'
 import { nowIso } from '../repositories/helpers'
 
@@ -209,6 +210,8 @@ export class AgentOrchestrator {
     let outputTokens = 0
     let scopeViolation = false
     let safetyBlocked = false
+    /** Texto cru da falha do provedor, para a auditoria dizer o que houve. */
+    let failureDetail: string | null = null
 
     try {
       const client = new GoogleGenAI({ apiKey })
@@ -349,6 +352,7 @@ export class AgentOrchestrator {
 
       this.emit({ kind: 'done', requestId, inputTokens, outputTokens })
     } catch (error) {
+      failureDetail = (error instanceof Error ? error.message : String(error)).slice(0, 4000)
       this.emit({ kind: 'error', requestId, ...classifyError(error) })
     } finally {
       this.active.delete(requestId)
@@ -364,7 +368,7 @@ export class AgentOrchestrator {
         pseudonymized: config.pseudonymize,
         blockedBySafetyFilter: safetyBlocked,
         idRevalidationFailed: scopeViolation,
-        detail: null
+        detail: failureDetail
       })
 
       this.handle.db
@@ -599,11 +603,9 @@ function classifyError(error: unknown): Pick<AiErrorEvent, 'code' | 'message'> {
   }
 
   if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(raw)) {
-    return {
-      code: 'rate_limited',
-      message:
-        'O provedor recusou por limite de uso (429). Aguarde alguns instantes e tente de novo; se persistir, verifique a cota do seu projeto.'
-    }
+    // O 429 do Gemini diz qual limite estourou (por minuto, por dia, por
+    // modelo) — repassar isso é o que separa "espere 30 s" de "troque o modelo".
+    return { code: 'rate_limited', message: describeRateLimit(parseRateLimit(raw)) }
   }
 
   if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|fetch failed|network/i.test(raw)) {
