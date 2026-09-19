@@ -24,7 +24,7 @@ import {
   requiresValue
 } from '@shared/labels'
 import type { ResultStatus } from '@shared/labels'
-import { SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
+import { SCORE_TYPES, SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
 import {
   availableScoreTypes,
@@ -176,6 +176,44 @@ function onScoreTypeChange(row: BatchRow): void {
   Object.assign(row, snapshotOf(match))
 }
 
+/** Tipos oferecidos no "para todos", com quantas linhas do teste os aceitam. */
+const bulkOptions = computed(() =>
+  SCORE_TYPES.flatMap((type) => {
+    const count = rows.value.filter((row) => availableFor(row).includes(type)).length
+    return count === 0 ? [] : [{ type, count }]
+  })
+)
+
+const bulkScoreType = ref('')
+
+/**
+ * Aplica o tipo a todas as linhas que o têm disponível; as demais ficam como
+ * estão, já que lançar num tipo sem faixas não classificaria.
+ */
+function applyScoreTypeToAll(): void {
+  const type = bulkScoreType.value as ScoreType | ''
+  bulkScoreType.value = ''
+  if (type === '') return
+
+  let skipped = 0
+  for (const row of rows.value) {
+    if (!availableFor(row).includes(type)) {
+      skipped++
+      continue
+    }
+    if (row.scoreType === type) continue
+    row.scoreType = type
+    onScoreTypeChange(row)
+  }
+
+  if (skipped > 0) {
+    appStore.notify(
+      'warning',
+      `${SCORE_TYPE_LABELS[type]} não está disponível em ${skipped} linha(s); elas mantiveram o tipo anterior.`
+    )
+  }
+}
+
 interface RowState {
   parsed: number | null
   error: string | null
@@ -308,6 +346,24 @@ async function save(): Promise<void> {
           <option v-for="entry in parentOptions" :key="entry.node.id" :value="entry.node.id">
             {{ '— '.repeat(entry.depth) }}{{ entry.node.name
             }}{{ entry.node.acronym ? ` (${entry.node.acronym})` : '' }}
+          </option>
+        </select>
+      </div>
+
+      <div v-if="rows.length > 0" class="w-60">
+        <label class="field-label" :for="`batch-bulk-type-${assessmentId}`">
+          Tipo de escore para todos
+        </label>
+        <select
+          :id="`batch-bulk-type-${assessmentId}`"
+          v-model="bulkScoreType"
+          class="field-input"
+          @change="applyScoreTypeToAll"
+        >
+          <option value="">Aplicar a todos…</option>
+          <option v-for="option in bulkOptions" :key="option.type" :value="option.type">
+            {{ SCORE_TYPE_LABELS[option.type]
+            }}{{ option.count < rows.length ? ` (${option.count} de ${rows.length})` : '' }}
           </option>
         </select>
       </div>
