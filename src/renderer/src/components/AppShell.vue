@@ -6,9 +6,10 @@
  * produto deixou de ser "100% local", e o usuário precisa conseguir responder
  * "meus dados estão saindo daqui?" a qualquer momento, sem abrir configurações.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
+import BaseButton from './BaseButton.vue'
 
 const appStore = useAppStore()
 const route = useRoute()
@@ -32,6 +33,21 @@ const aiEnabled = computed(() => appStore.state?.aiEnabled ?? false)
 const showDiskNotice = computed(
   () => appStore.state !== null && !appStore.state.diskEncryptionNoticeAcknowledged
 )
+
+const readyUpdate = computed(() =>
+  appStore.updateStatus.kind === 'downloaded' ? appStore.updateStatus : null
+)
+const restarting = ref(false)
+
+async function restartToUpdate(): Promise<void> {
+  restarting.value = true
+  try {
+    await appStore.installUpdate()
+  } catch (error) {
+    restarting.value = false
+    appStore.notifyError(error)
+  }
+}
 
 function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`)
@@ -62,6 +78,29 @@ function isActive(to: string): boolean {
           <span class="block text-xs font-normal text-ink-400">{{ item.hint }}</span>
         </RouterLink>
       </nav>
+
+      <!-- §15.3: a nova versão já foi baixada e só entra com o reinício. -->
+      <div
+        v-if="readyUpdate !== null"
+        class="mx-2 mb-2 rounded-md border border-brand-200 bg-brand-50 px-3 py-3"
+        role="status"
+      >
+        <p class="text-xs font-semibold text-brand-700">
+          Nova versão disponível ({{ readyUpdate.version }})
+        </p>
+        <p class="mt-1 text-xs leading-snug text-ink-600">
+          Reinicie o Baremo para instalar a atualização.
+        </p>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          class="mt-2 w-full"
+          :loading="restarting"
+          @click="restartToUpdate"
+        >
+          Reiniciar
+        </BaseButton>
+      </div>
 
       <!-- ADR-001: estado do módulo sempre visível. -->
       <div class="border-t border-ink-200 px-4 py-3">

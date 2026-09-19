@@ -37,6 +37,7 @@ import { registerDocumentHandlers } from './ipc/handlers/documents'
 import { registerMaintenanceHandlers } from './ipc/handlers/maintenance'
 import { registerCatalogHandlers } from './ipc/handlers/catalog'
 import { registerAiHandlers } from './ipc/handlers/ai'
+import { registerUpdateHandlers } from './ipc/handlers/updates'
 import { attachmentsDir } from './paths'
 import { seedTemplatesIfEmpty } from './db/seed-templates'
 import { getDatabase } from './db'
@@ -93,6 +94,7 @@ async function start(): Promise<void> {
   registerMaintenanceHandlers()
   registerCatalogHandlers()
   registerAiHandlers()
+  registerUpdateHandlers()
 
   // Falha alto no boot se um canal do contrato ficou sem handler — melhor do
   // que descobrir pela tela que não carrega.

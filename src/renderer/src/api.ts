@@ -9,6 +9,7 @@
 
 import type { ChannelInput, ChannelName, ChannelOutput, IpcError, IpcResult } from '@shared/contracts'
 import type { AiStreamEvent } from '@shared/contracts/entities-ai'
+import type { UpdateStatus } from '@shared/contracts/updates'
 import { toCloneablePayload } from '@shared/ipc-payload'
 
 declare global {
@@ -16,6 +17,7 @@ declare global {
     baremo: {
       invoke(channel: string, payload: unknown): Promise<IpcResult<unknown>>
       onAiStream(listener: (event: AiStreamEvent) => void): () => void
+      onUpdateStatus(listener: (status: UpdateStatus) => void): () => void
       getPathForFile(file: File): string
     }
   }
@@ -66,6 +68,10 @@ export async function apiOrNull<C extends ChannelName>(
 
 export function onAiStream(listener: (event: AiStreamEvent) => void): () => void {
   return window.baremo.onAiStream(listener)
+}
+
+export function onUpdateStatus(listener: (status: UpdateStatus) => void): () => void {
+  return window.baremo.onUpdateStatus(listener)
 }
 
 export function pathForFile(file: File): string {

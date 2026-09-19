@@ -2,14 +2,15 @@
  * Estado global do aplicativo.
  *
  * Carrega o estado do processo principal (versão, caminhos, se o módulo de IA
- * está ligado) e mantém a fila de avisos. O indicador permanente do estado da IA
- * (ADR-001) lê daqui.
+ * está ligado, a atualização automática) e mantém a fila de avisos. O indicador
+ * permanente do estado da IA (ADR-001) e o aviso de nova versão leem daqui.
  */
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api, errorMessage } from '../api'
+import { api, errorMessage, onUpdateStatus } from '../api'
 import type { ChannelOutput } from '@shared/contracts'
+import type { UpdateStatus } from '@shared/contracts/updates'
 
 type AppState = ChannelOutput<'config:getAppState'>
 
@@ -25,11 +26,21 @@ export const useAppStore = defineStore('app', () => {
   const state = ref<AppState | null>(null)
   const toasts = ref<Toast[]>([])
   const loading = ref(false)
+  const updateStatus = ref<UpdateStatus>({ kind: 'idle' })
+  let listeningToUpdates = false
 
   async function load(): Promise<void> {
     loading.value = true
     try {
+      // Assina antes de perguntar: uma mudança entre as duas coisas não se perde.
+      if (!listeningToUpdates) {
+        onUpdateStatus((status) => {
+          updateStatus.value = status
+        })
+        listeningToUpdates = true
+      }
       state.value = await api('config:getAppState')
+      updateStatus.value = await api('updates:getStatus')
     } finally {
       loading.value = false
     }
@@ -43,6 +54,15 @@ export const useAppStore = defineStore('app', () => {
   async function acknowledgeDiskNotice(): Promise<void> {
     await api('config:acknowledgeDiskNotice')
     await refresh()
+  }
+
+  async function checkForUpdates(): Promise<void> {
+    updateStatus.value = await api('updates:check')
+  }
+
+  /** O app fecha e reabre já na nova versão. */
+  async function installUpdate(): Promise<void> {
+    await api('updates:install')
   }
 
   function notify(kind: Toast['kind'], message: string): void {
@@ -64,5 +84,18 @@ export const useAppStore = defineStore('app', () => {
     toasts.value = toasts.value.filter((toast) => toast.id !== id)
   }
 
-  return { state, toasts, loading, load, refresh, acknowledgeDiskNotice, notify, notifyError, dismiss }
+  return {
+    state,
+    toasts,
+    loading,
+    updateStatus,
+    load,
+    refresh,
+    acknowledgeDiskNotice,
+    checkForUpdates,
+    installUpdate,
+    notify,
+    notifyError,
+    dismiss
+  }
 })

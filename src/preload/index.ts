@@ -3,14 +3,16 @@
  *
  * O renderer roda com `contextIsolation`, `sandbox` e sem integração com Node.
  * Tudo o que ele pode fazer está neste arquivo — e a superfície é deliberadamente
- * pequena: uma lista fechada de canais, o assinante do streaming da IA, e o
- * `getPathForFile` do drag-and-drop.
+ * pequena: uma lista fechada de canais, o assinante do streaming da IA, o do
+ * estado da atualização, e o `getPathForFile` do drag-and-drop.
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { AI_STREAM_CHANNEL, CHANNEL_NAMES } from '@shared/contracts'
 import type { ChannelName, IpcResult } from '@shared/contracts'
 import type { AiStreamEvent } from '@shared/contracts/entities-ai'
+import { UPDATE_STATUS_CHANNEL } from '@shared/contracts/updates'
+import type { UpdateStatus } from '@shared/contracts/updates'
 
 /**
  * Allowlist fechada. Um `invoke` genérico deixaria o renderer chamar qualquer
@@ -35,6 +37,15 @@ const api = {
     ipcRenderer.on(AI_STREAM_CHANNEL, handler)
     return () => {
       ipcRenderer.off(AI_STREAM_CHANNEL, handler)
+    }
+  },
+
+  /** Mudanças no estado da atualização automática (§15.3). */
+  onUpdateStatus(listener: (status: UpdateStatus) => void): () => void {
+    const handler = (_event: unknown, payload: UpdateStatus): void => listener(payload)
+    ipcRenderer.on(UPDATE_STATUS_CHANNEL, handler)
+    return () => {
+      ipcRenderer.off(UPDATE_STATUS_CHANNEL, handler)
     }
   },
 

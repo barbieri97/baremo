@@ -46,6 +46,7 @@ import {
   aiSessionSchema
 } from './entities-ai'
 import { catalogImportPlanSchema } from './catalog'
+import { updateStatusSchema } from './updates'
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES, REPORT_KINDS } from '../labels'
 
 export interface ChannelContract<
@@ -108,6 +109,12 @@ export const contracts = {
   // ─── config:* ──────────────────────────────────────────────────────────────
   'config:getAppState': channel(empty, appStateSchema),
   'config:acknowledgeDiskNotice': channel(empty, ok),
+
+  // ─── updates:* ─────────────────────────────────────────────────────────────
+  'updates:getStatus': channel(empty, updateStatusSchema),
+  'updates:check': channel(empty, updateStatusSchema),
+  'updates:install': channel(empty, ok),
+
   'config:getProfile': channel(empty, professionalProfileSchema),
   'config:saveProfile': channel(professionalProfileSchema, professionalProfileSchema),
   'config:listColors': channel(empty, z.array(colorSchema)),

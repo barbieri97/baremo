@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Configurações: perfil profissional, paleta de cores e módulo de IA
- * (spec §4.1, §5, §10.2, §10.3).
+ * Configurações: perfil profissional, paleta de cores, módulo de IA e sobre o
+ * sistema (spec §4.1, §5, §10.2, §10.3, §15.3).
  */
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
@@ -13,11 +13,13 @@ import { checkContrast, normalizeHex } from '@shared/domain/color'
 import { AI_MODELS, AI_MODEL_LABELS } from '@shared/contracts/entities-ai'
 import type { AiConfig, AiModel } from '@shared/contracts/entities-ai'
 import type { ProfessionalProfile } from '@shared/contracts/entities'
+// O mesmo ícone do instalador, para a aba "Sobre" não divergir dele.
+import appIconUrl from '../../../../build/icon.png'
 
 const appStore = useAppStore()
 const catalog = useCatalogStore()
 
-const tab = ref<'profile' | 'palette' | 'ai'>('profile')
+const tab = ref<'profile' | 'palette' | 'ai' | 'about'>('profile')
 
 // Literal em constante: chaves duplas dentro de uma interpolação quebram o
 // parser de template do Vue.
@@ -247,6 +249,50 @@ async function clearKey(): Promise<void> {
   }
 }
 
+// ─── Sobre o sistema ───────────────────────────────────────────────────────
+
+const updateMessage = computed(() => {
+  const status = appStore.updateStatus
+  switch (status.kind) {
+    case 'unsupported':
+      return 'Atualização automática indisponível nesta versão de desenvolvimento.'
+    case 'idle':
+      return 'A verificação de atualizações ainda não foi feita.'
+    case 'checking':
+      return 'Verificando atualizações…'
+    case 'downloading':
+      return `Baixando a versão ${status.version} (${status.percent}%)…`
+    case 'up-to-date':
+      return 'Você está usando a versão mais recente.'
+    case 'downloaded':
+      return `A versão ${status.version} foi baixada. Reinicie para instalar.`
+  }
+  return status.message
+})
+
+const checkingUpdates = computed(
+  () => appStore.updateStatus.kind === 'checking' || appStore.updateStatus.kind === 'downloading'
+)
+const restarting = ref(false)
+
+async function checkUpdates(): Promise<void> {
+  try {
+    await appStore.checkForUpdates()
+  } catch (error) {
+    appStore.notifyError(error)
+  }
+}
+
+async function restartToUpdate(): Promise<void> {
+  restarting.value = true
+  try {
+    await appStore.installUpdate()
+  } catch (error) {
+    restarting.value = false
+    appStore.notifyError(error)
+  }
+}
+
 const budgetPercent = computed(() => {
   if (aiConfig.value === null || aiConfig.value.monthlyTokenBudget === 0) return 0
   return Math.min(
@@ -267,7 +313,8 @@ const budgetPercent = computed(() => {
         v-for="entry in [
           { key: 'profile', label: 'Perfil profissional' },
           { key: 'palette', label: 'Paleta de cores' },
-          { key: 'ai', label: 'Assistente de IA' }
+          { key: 'ai', label: 'Assistente de IA' },
+          { key: 'about', label: 'Sobre o sistema' }
         ] as const"
         :key="entry.key"
         class="px-4 py-2 text-sm font-medium"
@@ -580,6 +627,45 @@ const budgetPercent = computed(() => {
             </span>
           </span>
         </label>
+      </div>
+    </section>
+
+    <!-- Sobre o sistema -->
+    <section v-else-if="tab === 'about'" class="card max-w-3xl p-5">
+      <div class="flex items-center gap-4">
+        <img :src="appIconUrl" alt="" class="h-16 w-16 shrink-0" />
+        <div>
+          <p class="text-lg font-bold tracking-tight text-ink-800">Baremo</p>
+          <p class="text-sm text-ink-500">Avaliação neuropsicológica</p>
+          <p class="mt-1 text-sm text-ink-700">
+            Versão
+            <span class="tabular font-semibold">{{ appStore.state?.appVersion ?? '—' }}</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5 flex items-center gap-3 border-t border-ink-200 pt-4">
+        <p
+          class="flex-1 text-sm"
+          :class="appStore.updateStatus.kind === 'error' ? 'text-danger-500' : 'text-ink-600'"
+        >
+          {{ updateMessage }}
+        </p>
+        <BaseButton
+          v-if="appStore.updateStatus.kind === 'downloaded'"
+          variant="primary"
+          :loading="restarting"
+          @click="restartToUpdate"
+        >
+          Reiniciar
+        </BaseButton>
+        <BaseButton
+          v-else-if="appStore.updateStatus.kind !== 'unsupported'"
+          :loading="checkingUpdates"
+          @click="checkUpdates"
+        >
+          Verificar atualizações
+        </BaseButton>
       </div>
     </section>
 
