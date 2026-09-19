@@ -1,0 +1,2002 @@
+{
+  "schema": "baremo/catalog@1",
+  "exportedAt": "2026-08-30T23:38:27.888Z",
+  "appVersion": "0.4.0",
+  "colors": [
+    {
+      "id": "8706f670-1129-4c10-9983-be2a042766ff",
+      "name": "Azul escuro",
+      "hex": "#1A365D"
+    },
+    {
+      "id": "423315a8-dc20-4319-9026-3e956eaba53e",
+      "name": "Azul claro",
+      "hex": "#2B6CB0"
+    },
+    {
+      "id": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+      "name": "Verde escuro",
+      "hex": "#2F855A"
+    },
+    {
+      "id": "af0a7fdd-6101-4465-beca-a164e17f6647",
+      "name": "Verde claro",
+      "hex": "#48BB78"
+    },
+    {
+      "id": "409251d7-351e-4d39-99d0-483ba4656edd",
+      "name": "Amarelo claro",
+      "hex": "#ECC94B"
+    },
+    {
+      "id": "9075ec88-2736-4e94-a320-608dfcfc488d",
+      "name": "Laranja",
+      "hex": "#DD6B20"
+    },
+    {
+      "id": "7043d05c-189d-411e-bb57-5d201705189c",
+      "name": "Vermelho",
+      "hex": "#C53030"
+    }
+  ],
+  "instruments": [
+    {
+      "id": "d0d7d976-79f6-4cfd-bd4f-b20ef50584e0",
+      "parentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "name": "EFA - Social",
+      "acronym": "EFA - SOC",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 6,
+      "maxAgeYears": 15,
+      "reference": "Selau, T., Silva, M. A., & Bandeira, D. R. (2025). EFA: Escala de Funcionamento Adaptativo. Vetor Editora.",
+      "order": 0
+    },
+    {
+      "id": "81ac2790-9a84-4ca0-a843-118467fc9a09",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Cognitivo",
+      "acronym": "IDADI - COG",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 0
+    },
+    {
+      "id": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "parentId": null,
+      "name": "Inventário Dimensional de Avalição do Desenvolvimento Infantil",
+      "acronym": "IDADI",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 0
+    },
+    {
+      "id": "a4c78a0e-dfd7-4925-b980-56d54c03fa09",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Percepção Social",
+      "acronym": "SRS-2 - PERC",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 0
+    },
+    {
+      "id": "d2470c4e-c2ff-4a12-bf9e-4f10f2c5eb12",
+      "parentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "name": "EFA - Prático",
+      "acronym": "EFA - PRA",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 6,
+      "maxAgeYears": 15,
+      "reference": "Selau, T., Silva, M. A., & Bandeira, D. R. (2025). EFA: Escala de Funcionamento Adaptativo. Vetor Editora.",
+      "order": 1
+    },
+    {
+      "id": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "parentId": null,
+      "name": "Escala de Funcionamento Adaptativo",
+      "acronym": "EFA",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 6,
+      "maxAgeYears": 15,
+      "reference": "Selau, T., Silva, M. A., & Bandeira, D. R. (2025). EFA: Escala de Funcionamento Adaptativo. Vetor Editora.",
+      "order": 1
+    },
+    {
+      "id": "85c5ca91-4ddf-4a0d-a428-ade37e582068",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Socioemocional",
+      "acronym": "IDADI - SOC",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 1
+    },
+    {
+      "id": "e32bc283-51ec-4979-9703-8f2c35d3c298",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Cognição Social",
+      "acronym": "SRS-2 - COG",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 1
+    },
+    {
+      "id": "c2c19a89-f44d-460c-8fe8-1631b0071712",
+      "parentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "name": "EFA - Conceitual",
+      "acronym": "EFA - CONC",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 6,
+      "maxAgeYears": 15,
+      "reference": "Selau, T., Silva, M. A., & Bandeira, D. R. (2025). EFA: Escala de Funcionamento Adaptativo. Vetor Editora.",
+      "order": 2
+    },
+    {
+      "id": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "parentId": null,
+      "name": "Escala de Responsividade Social - 2",
+      "acronym": "SRS-2",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 60,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 2
+    },
+    {
+      "id": "4b44b1ad-1de8-40fc-b9da-a6f45de7e76c",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Comunicação e Linguagem Receptiva",
+      "acronym": "IDADI - RECEP",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 2
+    },
+    {
+      "id": "07ddc57d-85b4-40e5-8e3f-8fb189069c9e",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Comunicação Social",
+      "acronym": "SRS-2 - COM",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 2
+    },
+    {
+      "id": "16920c3b-d188-4814-8f61-35a9f31012e8",
+      "parentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "name": "EFA - Global",
+      "acronym": "EFA - GLO",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 6,
+      "maxAgeYears": 15,
+      "reference": "Selau, T., Silva, M. A., & Bandeira, D. R. (2025). EFA: Escala de Funcionamento Adaptativo. Vetor Editora.",
+      "order": 3
+    },
+    {
+      "id": "9e9aa003-b896-449c-932d-27e9be1c15c3",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Comunicação e Linguagem Expressiva",
+      "acronym": "IDADI - EXPR",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 3
+    },
+    {
+      "id": "b396ad12-6cac-496f-a3bf-a6302ae3b426",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Motivação Social",
+      "acronym": "SRS-2 - MOT",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 3
+    },
+    {
+      "id": "1de4728f-2cc4-4f79-8dde-9d2b849ff892",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Motricidade Ampla",
+      "acronym": "IDADI - AMPL",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 4
+    },
+    {
+      "id": "b7d42976-94e1-46e8-ba12-7302444ef464",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Padrões Restritos e Repetitivos",
+      "acronym": "SRS-2 - PRR",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 4
+    },
+    {
+      "id": "49e18b5a-52ae-4712-b096-78c0dca41d16",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Motricidade Fina",
+      "acronym": "IDADI - FINA",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 5
+    },
+    {
+      "id": "d84b7310-95db-4ca8-b456-c9e05dc8e44c",
+      "parentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "name": "SRS-2 - Comunicação e Interação Social",
+      "acronym": "SRS-2 - CIS",
+      "cognitiveFunctionPath": [
+        "Cognição social"
+      ],
+      "minAgeYears": 2,
+      "maxAgeYears": 4,
+      "reference": "Constantino, J. N., & Gruber, C. P. SRS-2: Escala de Responsividade Social (2. ed.). Western Psychological Services; edição brasileira: Editora Hogrefe CETEPP.",
+      "order": 5
+    },
+    {
+      "id": "ceef6817-5a32-4444-9a4e-cb945a89fa20",
+      "parentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "name": "IDADI - Comportamento Adaptivo",
+      "acronym": "IDADI - ADPTA",
+      "cognitiveFunctionPath": [
+        "Desenvolvimento"
+      ],
+      "minAgeYears": 0,
+      "maxAgeYears": 6,
+      "reference": "Silva, M. A., Mendonça Filho, E. J., & Bandeira, D. R. (2020). IDADI: Inventário Dimensional de Avaliação do Desenvolvimento Infantil (Vol. 1). Vetor Editora.",
+      "order": 6
+    }
+  ],
+  "ranges": [
+    {
+      "instrumentId": "d0d7d976-79f6-4cfd-bd4f-b20ef50584e0",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": 71,
+          "maxValue": 85,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": 85,
+          "maxValue": 160,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "d0d7d976-79f6-4cfd-bd4f-b20ef50584e0",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": -2,
+          "maxValue": -1,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": -1,
+          "maxValue": 5,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "81ac2790-9a84-4ca0-a843-118467fc9a09",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "81ac2790-9a84-4ca0-a843-118467fc9a09",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "bd7c0e4a-7958-4baf-a6b3-a357068a1ba6",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "a4c78a0e-dfd7-4925-b980-56d54c03fa09",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "a4c78a0e-dfd7-4925-b980-56d54c03fa09",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "d2470c4e-c2ff-4a12-bf9e-4f10f2c5eb12",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": 71,
+          "maxValue": 85,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": 85,
+          "maxValue": 160,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "d2470c4e-c2ff-4a12-bf9e-4f10f2c5eb12",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": -2,
+          "maxValue": -1,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": -1,
+          "maxValue": 5,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": 71,
+          "maxValue": 85,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": 85,
+          "maxValue": 160,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "31b6eb57-930e-4399-a102-c0bcd7b6af36",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": -2,
+          "maxValue": -1,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": -1,
+          "maxValue": 5,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "85c5ca91-4ddf-4a0d-a428-ade37e582068",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "85c5ca91-4ddf-4a0d-a428-ade37e582068",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "e32bc283-51ec-4979-9703-8f2c35d3c298",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "e32bc283-51ec-4979-9703-8f2c35d3c298",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "c2c19a89-f44d-460c-8fe8-1631b0071712",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": 71,
+          "maxValue": 85,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": 85,
+          "maxValue": 160,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "c2c19a89-f44d-460c-8fe8-1631b0071712",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": -2,
+          "maxValue": -1,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": -1,
+          "maxValue": 5,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "69a828de-309b-4de7-ac83-ff6aac4c13a0",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "4b44b1ad-1de8-40fc-b9da-a6f45de7e76c",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "4b44b1ad-1de8-40fc-b9da-a6f45de7e76c",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "07ddc57d-85b4-40e5-8e3f-8fb189069c9e",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "07ddc57d-85b4-40e5-8e3f-8fb189069c9e",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "16920c3b-d188-4814-8f61-35a9f31012e8",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": 71,
+          "maxValue": 85,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": 85,
+          "maxValue": 160,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "16920c3b-d188-4814-8f61-35a9f31012e8",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Muito Abaixo do Esperado",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Abaixo do Esperado",
+          "minValue": -2,
+          "maxValue": -1,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Dentro do Esperado",
+          "minValue": -1,
+          "maxValue": 5,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "9e9aa003-b896-449c-932d-27e9be1c15c3",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "9e9aa003-b896-449c-932d-27e9be1c15c3",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "b396ad12-6cac-496f-a3bf-a6302ae3b426",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "b396ad12-6cac-496f-a3bf-a6302ae3b426",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "1de4728f-2cc4-4f79-8dde-9d2b849ff892",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "1de4728f-2cc4-4f79-8dde-9d2b849ff892",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "b7d42976-94e1-46e8-ba12-7302444ef464",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "b7d42976-94e1-46e8-ba12-7302444ef464",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "49e18b5a-52ae-4712-b096-78c0dca41d16",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "49e18b5a-52ae-4712-b096-78c0dca41d16",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "d84b7310-95db-4ca8-b456-c9e05dc8e44c",
+      "scoreType": "tScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": 0,
+          "maxValue": 60,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 60,
+          "maxValue": 66,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 66,
+          "maxValue": 76,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 76,
+          "maxValue": 100,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "d84b7310-95db-4ca8-b456-c9e05dc8e44c",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Dentro dos Limites Normais",
+          "minValue": -5,
+          "maxValue": 1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Leve",
+          "minValue": 1,
+          "maxValue": 1.6,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Moderado",
+          "minValue": 1.6,
+          "maxValue": 2.6,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": true
+        },
+        {
+          "classificationName": "Nível Severo",
+          "minValue": 2.6,
+          "maxValue": 5,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "instrumentId": "ceef6817-5a32-4444-9a4e-cb945a89fa20",
+      "scoreType": "standardScore",
+      "entries": [
+        {
+          "classificationName": "Muito Inferior",
+          "minValue": 40,
+          "maxValue": 71,
+          "colorId": "7043d05c-189d-411e-bb57-5d201705189c",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": 71,
+          "maxValue": 78,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": 78,
+          "maxValue": 85,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": 85,
+          "maxValue": 123,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 123,
+          "maxValue": 131,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 131,
+          "maxValue": 160,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "instrumentId": "ceef6817-5a32-4444-9a4e-cb945a89fa20",
+      "scoreType": "zScore",
+      "entries": [
+        {
+          "classificationName": "Atraso Significativo",
+          "minValue": -5,
+          "maxValue": -2,
+          "colorId": "9075ec88-2736-4e94-a320-608dfcfc488d",
+          "level": 1,
+          "inverted": false
+        },
+        {
+          "classificationName": "Atraso",
+          "minValue": -2,
+          "maxValue": -1.5,
+          "colorId": "409251d7-351e-4d39-99d0-483ba4656edd",
+          "level": 2,
+          "inverted": false
+        },
+        {
+          "classificationName": "Alerta para Atraso",
+          "minValue": -1.5,
+          "maxValue": -1,
+          "colorId": "af0a7fdd-6101-4465-beca-a164e17f6647",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Típico",
+          "minValue": -1,
+          "maxValue": 1.51,
+          "colorId": "d4566a27-b0c6-432e-8fe8-03fb6783f0d2",
+          "level": 3,
+          "inverted": false
+        },
+        {
+          "classificationName": "Acima do Esperado",
+          "minValue": 1.51,
+          "maxValue": 2,
+          "colorId": "423315a8-dc20-4319-9026-3e956eaba53e",
+          "level": 4,
+          "inverted": false
+        },
+        {
+          "classificationName": "Muito Acima do Esperado",
+          "minValue": 2,
+          "maxValue": 5,
+          "colorId": "8706f670-1129-4c10-9983-be2a042766ff",
+          "level": 5,
+          "inverted": false
+        }
+      ]
+    }
+  ]
+}

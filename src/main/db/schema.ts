@@ -84,7 +84,15 @@ export const instruments = sqliteTable(
     minAgeYears: integer('min_age_years'),
     maxAgeYears: integer('max_age_years'),
     reference: text('reference'),
-    order: integer('order').notNull().default(0)
+    order: integer('order').notNull().default(0),
+    /**
+     * As faixas vêm do ancestral mais próximo que NÃO herda (§4.6).
+     *
+     * Falso significa "este instrumento usa os conjuntos dele", inclusive quando
+     * não tem nenhum — é assim que um subteste diz "não classifico" mesmo com o
+     * pai classificando.
+     */
+    inheritsRanges: integer('inherits_ranges', { mode: 'boolean' }).notNull().default(true)
   },
   (table) => [
     index('idx_instruments_parent').on(table.parentId),

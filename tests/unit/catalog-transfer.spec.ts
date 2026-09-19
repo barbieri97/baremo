@@ -33,7 +33,12 @@ import {
   listCognitiveFunctions,
   listInstruments
 } from '../../src/main/repositories/trees'
-import { listRanges, saveRanges } from '../../src/main/repositories/classification-ranges'
+import {
+  describeRangeOrigin,
+  listRanges,
+  listResolvedRanges,
+  saveRanges
+} from '../../src/main/repositories/classification-ranges'
 import { createPatient } from '../../src/main/repositories/patients'
 import { createAssessment, listResults, saveResult } from '../../src/main/repositories/assessments'
 import { buildCatalogFile } from '../../src/main/services/catalog/export'
@@ -777,3 +782,96 @@ function instrumentEntry(options: {
     order: 0
   }
 }
+
+// ─── Herança (§4.6) ──────────────────────────────────────────────────────────
+
+/**
+ * O catálogo carrega a FORMA da herança, não as faixas resolvidas.
+ *
+ * Exportar o conjunto que cada subteste enxerga produziria um arquivo em que
+ * todo mundo é dono — a importação reconstruiria a redundância que a herança
+ * existe para remover.
+ */
+describe('herança de faixas', () => {
+  it('o subteste que herda viaja sem conjunto e continua herdando no destino', () => {
+    const rootId = seedInstrumentWithRanges(origin, { name: 'Teste' })
+    const childId = createInstrument(origin, {
+      parentId: rootId,
+      name: 'Subteste',
+      acronym: null,
+      cognitiveFunctionId: null,
+      minAgeYears: null,
+      maxAgeYears: null,
+      reference: null,
+      order: 0
+    }).id
+
+    const file = exportFile()
+    expect(file.ranges.map((set) => set.instrumentId)).toEqual([rootId])
+    expect(file.instruments.find((node) => node.id === childId)!.inheritsRanges).toBe(true)
+
+    applyCatalogImport(target, file)
+
+    expect(listRanges(target, childId, 'percentile')).toHaveLength(0)
+    expect(listResolvedRanges(target, childId, 'percentile').ranges).toHaveLength(3)
+    expect(describeRangeOrigin(target, childId).ownerId).toBe(rootId)
+  })
+
+  it('o subteste personalizado viaja com o conjunto dele e continua próprio', () => {
+    const rootId = seedInstrumentWithRanges(origin, { name: 'Teste' })
+    const childId = seedInstrumentWithRanges(origin, { name: 'Subteste', parentId: rootId })
+    saveRanges(origin, childId, 'percentile', [
+      {
+        classificationName: 'Tudo junto',
+        minValue: 0,
+        maxValue: 100,
+        colorId: colorIdByName(origin, 'Verde escuro'),
+        level: 3,
+        inverted: false
+      }
+    ])
+
+    applyCatalogImport(target, exportFile())
+
+    expect(describeRangeOrigin(target, childId).inherited).toBe(false)
+    expect(listRanges(target, childId, 'percentile')).toHaveLength(1)
+  })
+
+  /**
+   * Compatibilidade: arquivos gravados antes desta versão não têm o campo, e
+   * neles cada subteste repetia as faixas do pai. Assumir "herda" apagaria as
+   * personalizações; deduzir pela presença do conjunto preserva o arquivo como
+   * ele foi gravado.
+   */
+  it('um arquivo sem o campo deduz a herança pela presença do conjunto', () => {
+    const rootId = seedInstrumentWithRanges(origin, { name: 'Teste' })
+    const ownerId = seedInstrumentWithRanges(origin, { name: 'Com faixas', parentId: rootId })
+    const heirId = createInstrument(origin, {
+      parentId: rootId,
+      name: 'Sem faixas',
+      acronym: null,
+      cognitiveFunctionId: null,
+      minAgeYears: null,
+      maxAgeYears: null,
+      reference: null,
+      order: 1
+    }).id
+
+    const legacy = parseCatalogFile(
+      JSON.stringify({
+        ...buildCatalogFile(origin, '0.4.0'),
+        instruments: buildCatalogFile(origin, '0.4.0').instruments.map((node) => {
+          const { inheritsRanges: _dropped, ...rest } = node
+          return rest
+        })
+      })
+    )
+    expect(legacy.instruments.every((node) => node.inheritsRanges === undefined)).toBe(true)
+
+    applyCatalogImport(target, legacy)
+
+    expect(describeRangeOrigin(target, ownerId).inherited).toBe(false)
+    expect(describeRangeOrigin(target, heirId).inherited).toBe(true)
+    expect(describeRangeOrigin(target, heirId).ownerId).toBe(rootId)
+  })
+})

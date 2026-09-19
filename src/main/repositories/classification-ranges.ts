@@ -5,20 +5,37 @@
  * inteiro, de uma vez: é a única forma de garantir que ele nunca fique em um
  * estado intermediário com lacuna ou sobreposição. A validação roda no processo
  * principal mesmo já tendo rodado na UI — a fronteira IPC não confia no cliente.
+ *
+ * Há dois olhares sobre as mesmas linhas, e confundi-los é o erro fácil aqui:
+ *
+ * - as funções PRÓPRIAS (`listRanges`, `listConfiguredScoreTypes`) enxergam só o
+ *   que o instrumento cadastrou. São a base da gravação, da exportação do
+ *   catálogo e da detecção de "nada mudou" na importação;
+ * - as funções RESOLVIDAS (`listResolved*`) aplicam a herança de §4.6 e são o
+ *   que a UI e a classificação de resultados consomem.
  */
 
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
-import { classificationRanges, colors } from '../db/schema'
+import { classificationRanges, colors, instruments } from '../db/schema'
 import type {
   ClassificationRangeDraft,
-  ClassificationRangeWithColor
+  ClassificationRangeWithColor,
+  RangeOrigin,
+  RangeSource,
+  ResolvedClassificationRange
 } from '@shared/contracts/entities'
 import type { ScoreType } from '@shared/domain/score-types'
 import { validateRangeSet } from '@shared/domain/ranges'
 import type { RangeIssue } from '@shared/domain/ranges'
-import { conflict } from '../ipc/register'
+import {
+  indexRangeOwnerNodes,
+  resolveRangeOwner,
+  resolveRangeOwners
+} from '@shared/domain/inheritance'
+import type { RangeOwnerNode } from '@shared/domain/inheritance'
+import { conflict, notFound } from '../ipc/register'
 import { countWhere } from './helpers'
 
 export function listRanges(
@@ -88,6 +105,195 @@ export function listConfiguredScoreTypes(
     .all()
 
   return rows.map((row) => row.scoreType as ScoreType)
+}
+
+// ─── Herança (§4.6) ──────────────────────────────────────────────────────────
+
+/**
+ * A árvore de instrumentos reduzida ao que a resolução precisa.
+ *
+ * Carregar a tabela inteira é aceitável porque ela é pequena por natureza — um
+ * catálogo clínico tem dezenas de instrumentos, não milhares — e porque subir a
+ * hierarquia em SQL exigiria uma CTE recursiva por chamada.
+ */
+function ownerNodes(handle: BaremoDatabase): Map<string, RangeOwnerNode> {
+  const rows = handle.db
+    .select({
+      id: instruments.id,
+      parentId: instruments.parentId,
+      inheritsRanges: instruments.inheritsRanges
+    })
+    .from(instruments)
+    .all()
+
+  return indexRangeOwnerNodes(rows)
+}
+
+/** Quem cadastrou as faixas que valem para este instrumento. */
+export function rangeOwnerOf(handle: BaremoDatabase, instrumentId: string): string {
+  return resolveRangeOwner(ownerNodes(handle), instrumentId)
+}
+
+/** A origem das faixas de um instrumento, para a UI declarar de onde elas vêm. */
+export function describeRangeOrigin(handle: BaremoDatabase, instrumentId: string): RangeOrigin {
+  const nodes = ownerNodes(handle)
+  const node = nodes.get(instrumentId)
+  if (node === undefined) throw notFound('Instrumento não encontrado.')
+
+  const ownerId = resolveRangeOwner(nodes, instrumentId)
+  const owner = handle.db
+    .select({ name: instruments.name })
+    .from(instruments)
+    .where(eq(instruments.id, ownerId))
+    .get()
+
+  return {
+    ownerId,
+    ownerName: owner?.name ?? '',
+    inherited: ownerId !== instrumentId,
+    canInherit: node.parentId !== null
+  }
+}
+
+/** Faixas que valem para o instrumento, já resolvida a herança, mais a origem. */
+export function listResolvedRanges(
+  handle: BaremoDatabase,
+  instrumentId: string,
+  scoreType: ScoreType
+): RangeSource {
+  const origin = describeRangeOrigin(handle, instrumentId)
+
+  return {
+    ...origin,
+    ranges: listRanges(handle, origin.ownerId, scoreType).map((range) => ({
+      ...range,
+      instrumentId,
+      ownerInstrumentId: origin.ownerId
+    }))
+  }
+}
+
+/** Tipos de escore que classificam este instrumento — próprios ou herdados. */
+export function listResolvedScoreTypes(
+  handle: BaremoDatabase,
+  instrumentId: string
+): ScoreType[] {
+  return listConfiguredScoreTypes(handle, rangeOwnerOf(handle, instrumentId))
+}
+
+/**
+ * Faixas de vários instrumentos com a herança já resolvida.
+ *
+ * `instrumentId` sai reescrito para o instrumento PEDIDO — é por ele que a grade
+ * do teste completo agrupa —, e `ownerInstrumentId` guarda quem cadastrou. O
+ * `id` da faixa continua sendo o da linha real: é ele que vai para o snapshot do
+ * resultado.
+ */
+export function listResolvedRangesForInstruments(
+  handle: BaremoDatabase,
+  instrumentIds: readonly string[]
+): ResolvedClassificationRange[] {
+  if (instrumentIds.length === 0) return []
+
+  const owners = resolveRangeOwners(ownerNodes(handle), instrumentIds)
+  const byOwner = new Map<string, ClassificationRangeWithColor[]>()
+
+  for (const range of listRangesForInstruments(handle, [...new Set(owners.values())])) {
+    const bucket = byOwner.get(range.instrumentId)
+    if (bucket) bucket.push(range)
+    else byOwner.set(range.instrumentId, [range])
+  }
+
+  return instrumentIds.flatMap((instrumentId) => {
+    const ownerId = owners.get(instrumentId) ?? instrumentId
+    return (byOwner.get(ownerId) ?? []).map((range) => ({
+      ...range,
+      instrumentId,
+      ownerInstrumentId: ownerId
+    }))
+  })
+}
+
+/**
+ * Materializa no instrumento as faixas que ele vinha herdando.
+ *
+ * Copia TODOS os conjuntos do dono, e não só o tipo de escore que o usuário
+ * está olhando, porque a herança é tudo-ou-nada: personalizar o percentil sem
+ * trazer junto o escore-z faria o instrumento perder silenciosamente uma
+ * classificação que ele tinha um instante antes.
+ */
+export function detachRanges(handle: BaremoDatabase, instrumentId: string): RangeOrigin {
+  const origin = describeRangeOrigin(handle, instrumentId)
+  if (!origin.inherited) return origin
+
+  const inheritedSets = listConfiguredScoreTypes(handle, origin.ownerId).map((scoreType) => ({
+    scoreType,
+    entries: listRanges(handle, origin.ownerId, scoreType)
+  }))
+
+  const apply = handle.raw.transaction(() => {
+    for (const set of inheritedSets) {
+      handle.db
+        .insert(classificationRanges)
+        .values(
+          set.entries.map((entry) => ({
+            id: randomUUID(),
+            instrumentId,
+            scoreType: set.scoreType,
+            classificationName: entry.classificationName,
+            minValue: entry.minValue,
+            maxValue: entry.maxValue,
+            colorId: entry.colorId,
+            // A cópia nasce na versão 1: é um conjunto novo, cujo histórico
+            // começa agora. A versão do dono é dele, não deste instrumento.
+            version: 1,
+            level: entry.level,
+            inverted: entry.inverted
+          }))
+        )
+        .run()
+    }
+
+    claimOwnership(handle, instrumentId)
+  })
+
+  apply()
+  return describeRangeOrigin(handle, instrumentId)
+}
+
+/** Devolve o instrumento à herança, descartando as faixas próprias. */
+export function reattachRanges(handle: BaremoDatabase, instrumentId: string): RangeOrigin {
+  const origin = describeRangeOrigin(handle, instrumentId)
+  if (!origin.canInherit) {
+    throw conflict(
+      'Este instrumento é a raiz de um teste: não há instrumento pai de quem herdar faixas.'
+    )
+  }
+
+  const apply = handle.raw.transaction(() => {
+    handle.db
+      .delete(classificationRanges)
+      .where(eq(classificationRanges.instrumentId, instrumentId))
+      .run()
+
+    handle.db
+      .update(instruments)
+      .set({ inheritsRanges: true })
+      .where(eq(instruments.id, instrumentId))
+      .run()
+  })
+
+  apply()
+  return describeRangeOrigin(handle, instrumentId)
+}
+
+/** Gravar um conjunto é reivindicar a posse dele — o instrumento deixa de herdar. */
+function claimOwnership(handle: BaremoDatabase, instrumentId: string): void {
+  handle.db
+    .update(instruments)
+    .set({ inheritsRanges: false })
+    .where(eq(instruments.id, instrumentId))
+    .run()
 }
 
 /** Valida um rascunho sem gravar — a UI usa para dar retorno enquanto se digita. */
@@ -177,6 +383,12 @@ export function saveRanges(
         )
         .run()
     }
+
+    // Gravar um conjunto é reivindicar a posse: a partir daqui o instrumento
+    // para de acompanhar o ancestral, mesmo que o conjunto tenha ficado vazio.
+    // Um conjunto vazio de um instrumento PRÓPRIO é "não classifico"; devolver a
+    // herança é uma decisão separada, e tem botão próprio.
+    claimOwnership(handle, instrumentId)
   })
 
   apply()

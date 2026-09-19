@@ -134,12 +134,20 @@ export const instrumentSchema = z.object({
   minAgeYears: z.number().int().min(0).max(120).nullable(),
   maxAgeYears: z.number().int().min(0).max(120).nullable(),
   reference: longText,
-  order: z.number().int()
+  order: z.number().int(),
+  /**
+   * Verdadeiro = as faixas vêm do ancestral mais próximo que não herda (§4.6).
+   *
+   * Fica fora de `instrumentInputSchema` de propósito: a herança se controla na
+   * aba de faixas, não no formulário de dados do instrumento, e mantê-la fora
+   * garante que o `.set(input)` de `updateInstrument` nunca a sobrescreva.
+   */
+  inheritsRanges: z.boolean()
 })
 export type Instrument = z.infer<typeof instrumentSchema>
 
 export const instrumentInputSchema = instrumentSchema
-  .omit({ id: true })
+  .omit({ id: true, inheritsRanges: true })
   .refine(
     (v) => v.minAgeYears === null || v.maxAgeYears === null || v.minAgeYears <= v.maxAgeYears,
     { message: 'A idade mínima não pode ser maior que a máxima.', path: ['minAgeYears'] }
@@ -186,6 +194,35 @@ export const classificationRangeWithColorSchema = classificationRangeSchema.exte
   colorName: shortText
 })
 export type ClassificationRangeWithColor = z.infer<typeof classificationRangeWithColorSchema>
+
+/**
+ * Faixa já resolvida pela herança (§4.6).
+ *
+ * `instrumentId` é o instrumento PEDIDO — é por ele que a UI agrupa — e
+ * `ownerInstrumentId` é quem de fato cadastrou a faixa. Nos dois campos iguais,
+ * o conjunto é próprio; diferentes, é herdado.
+ */
+export const resolvedClassificationRangeSchema = classificationRangeWithColorSchema.extend({
+  ownerInstrumentId: idSchema
+})
+export type ResolvedClassificationRange = z.infer<typeof resolvedClassificationRangeSchema>
+
+/** De onde vêm as faixas de um instrumento — o que a aba de faixas declara na tela. */
+export const rangeOriginSchema = z.object({
+  ownerId: idSchema,
+  ownerName: shortText,
+  /** Verdadeiro quando `ownerId` é um ancestral, e não o próprio instrumento. */
+  inherited: z.boolean(),
+  /** Falso para instrumentos raiz: não há de quem herdar. */
+  canInherit: z.boolean()
+})
+export type RangeOrigin = z.infer<typeof rangeOriginSchema>
+
+/** Faixas de um instrumento mais a origem delas — resposta de `classifications:list`. */
+export const rangeSourceSchema = rangeOriginSchema.extend({
+  ranges: z.array(resolvedClassificationRangeSchema)
+})
+export type RangeSource = z.infer<typeof rangeSourceSchema>
 
 // ─── Avaliação (§4.7) ────────────────────────────────────────────────────────
 

@@ -376,3 +376,74 @@ describe('reprocessamento explícito', () => {
     saveInitialRanges()
   })
 })
+
+/**
+ * O snapshot de um subteste que HERDA as faixas (§4.6).
+ *
+ * A pergunta que estes testes respondem é de onde vem o `rangeId` gravado
+ * quando o instrumento não cadastrou faixa nenhuma. A resposta é: da faixa do
+ * teste pai, que foi quem de fato classificou — e é por isso que `range_id` não
+ * tem chave estrangeira nem aponta para o instrumento do resultado.
+ */
+describe('snapshot com faixas herdadas', () => {
+  let subtestId: string
+
+  beforeAll(() => {
+    subtestId = createInstrument(handle, {
+      parentId: instrumentId,
+      name: 'Subteste que herda',
+      acronym: null,
+      cognitiveFunctionId: null,
+      minAgeYears: null,
+      maxAgeYears: null,
+      reference: null,
+      order: 0
+    }).id
+  })
+
+  function saveSubtestScore(value: number): ReturnType<typeof saveResult> {
+    return saveResult(handle, null, {
+      assessmentId,
+      instrumentId: subtestId,
+      scoreType: 'percentile',
+      value,
+      status: 'applied',
+      notes: null,
+      override: null
+    })
+  }
+
+  it('classifica pela faixa do pai e guarda o id dessa faixa', () => {
+    clearResults()
+    saveInitialRanges()
+
+    const result = saveSubtestScore(30)
+    const parentRanges = listRanges(handle, instrumentId, 'percentile')
+
+    expect(result.classificationName).toBe('Inferior')
+    expect(result.rangeId).toBe(parentRanges.find((range) => range.minValue === 0)!.id)
+    expect(listRanges(handle, subtestId, 'percentile')).toHaveLength(0)
+  })
+
+  it('o snapshot do subteste também não muda quando as faixas do pai mudam', () => {
+    clearResults()
+    saveInitialRanges()
+    const result = saveSubtestScore(30)
+
+    saveRanges(handle, instrumentId, 'percentile', [
+      {
+        classificationName: 'Tudo junto',
+        minValue: 0,
+        maxValue: 100,
+        colorId: colorHighId,
+        level: 3,
+        inverted: false
+      }
+    ])
+
+    const stored = listResults(handle, assessmentId).find((row) => row.id === result.id)
+    expect(stored!.classificationName).toBe('Inferior')
+
+    saveInitialRanges()
+  })
+})

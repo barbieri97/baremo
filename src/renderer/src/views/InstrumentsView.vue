@@ -341,6 +341,10 @@ const parentOptions = computed(() => {
                     {{ '— '.repeat(entry.depth) }}{{ entry.node.name }}
                   </option>
                 </select>
+                <p class="mt-1 text-xs text-ink-500">
+                  Subtestes sem faixas próprias usam as do pai. Trocar o pai troca também as
+                  faixas herdadas — resultados já lançados não mudam.
+                </p>
               </div>
 
               <div class="col-span-2">

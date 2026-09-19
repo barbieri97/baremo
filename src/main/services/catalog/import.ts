@@ -94,6 +94,7 @@ interface InstrumentWrite {
   readonly maxAgeYears: number | null
   readonly reference: string | null
   readonly order: number
+  readonly inheritsRanges: boolean
   /** Profundidade dentro do arquivo — a ordem em que o pai precisa existir. */
   readonly depth: number
 }
@@ -196,6 +197,10 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
     existingSiblingNames.set(siblingKey(node.parentId, node.name), node.id)
   }
 
+  // Quem o ARQUIVO diz que tem faixas próprias — a base para deduzir a herança
+  // de um arquivo gravado antes de `inheritsRanges` existir.
+  const ownsRangesInFile = new Set(file.ranges.map((set) => set.instrumentId))
+
   for (const node of file.instruments) {
     const parentId = resolveParent(node, fileById, existingById, warnings)
     const cognitiveFunctionId = resolveFunction(node, functionByPath, warnings)
@@ -221,6 +226,11 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
       maxAgeYears: node.maxAgeYears,
       reference: node.reference,
       order: node.order,
+      // Ausente no arquivo, a herança é DEDUZIDA: dono se o arquivo traz
+      // conjunto para ele, herdeiro se não traz. Assumir `true` faria um
+      // catálogo antigo — em que todo subteste repetia as faixas do pai —
+      // perder as personalizações de quem tinha faixas de fato diferentes.
+      inheritsRanges: node.inheritsRanges ?? !ownsRangesInFile.has(node.id),
       depth: depths.get(node.id) ?? 0
     }
 
@@ -398,7 +408,8 @@ function sameAsStored(stored: Instrument, incoming: InstrumentWrite): boolean {
     stored.minAgeYears === incoming.minAgeYears &&
     stored.maxAgeYears === incoming.maxAgeYears &&
     stored.reference === incoming.reference &&
-    stored.order === incoming.order
+    stored.order === incoming.order &&
+    stored.inheritsRanges === incoming.inheritsRanges
   )
 }
 
@@ -412,7 +423,8 @@ function toRow(node: InstrumentWrite): typeof instruments.$inferInsert {
     minAgeYears: node.minAgeYears,
     maxAgeYears: node.maxAgeYears,
     reference: node.reference,
-    order: node.order
+    order: node.order,
+    inheritsRanges: node.inheritsRanges
   }
 }
 

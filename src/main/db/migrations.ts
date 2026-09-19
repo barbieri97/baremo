@@ -15,10 +15,20 @@
  * este DDL com o schema Drizzle e teria acusado a diferença de qualquer forma.
  */
 
+import type { RawDatabase } from './gateway'
+
 export interface Migration {
   readonly version: number
   readonly name: string
   readonly statements: readonly string[]
+  /**
+   * Passo de DADOS, rodado depois dos `statements` e dentro da MESMA transação.
+   *
+   * Existe para o que SQL declarativo faz mal: migrações que precisam comparar
+   * linhas entre si ou percorrer uma árvore. Migration que só mexe em schema não
+   * usa este campo.
+   */
+  readonly run?: (raw: RawDatabase) => void
 }
 
 const initial: Migration = {
@@ -295,7 +305,133 @@ const classificationLevels: Migration = {
   ]
 }
 
-export const MIGRATIONS: readonly Migration[] = [initial, classificationLevels]
+/**
+ * Herança das faixas de classificação (spec §4.6).
+ *
+ * Dentro de um teste, as faixas são as mesmas para todos os subtestes, e até
+ * aqui cada subteste precisava repetir o cadastro do pai. `inherits_ranges`
+ * inverte o padrão: quem herda não tem faixas próprias e usa as do ancestral
+ * mais próximo que não herda.
+ *
+ * A migration tem duas metades, e a ordem importa. A primeira (statements) marca
+ * como DONO todo instrumento que hoje tem faixas: sozinha, ela preserva o
+ * comportamento atual byte a byte, porque ninguém passa a herdar de ninguém. A
+ * segunda (`run`) é a limpeza: apaga o conjunto do filho quando ele é idêntico
+ * ao do ancestral, que é o caso da maior parte do catálogo existente, e só aí a
+ * herança começa a valer para os dados antigos.
+ *
+ * Conjuntos que DIFEREM do ancestral são preservados como personalizados — a
+ * migration nunca descarta cadastro que o usuário não poderia refazer a partir
+ * do pai.
+ */
+const rangeInheritance: Migration = {
+  version: 3,
+  name: 'heranca-de-faixas',
+  statements: [
+    `ALTER TABLE instruments ADD COLUMN inherits_ranges INTEGER NOT NULL DEFAULT 1`,
+    `UPDATE instruments SET inherits_ranges = 0
+       WHERE id IN (SELECT DISTINCT instrument_id FROM classification_ranges)`
+  ],
+  run: collapseIdenticalRangeSets
+}
+
+interface InstrumentNodeRow {
+  readonly id: string
+  readonly parentId: string | null
+}
+
+interface RangeSignatureRow {
+  readonly instrumentId: string
+  readonly scoreType: string
+  readonly classificationName: string
+  readonly minValue: number
+  readonly maxValue: number
+  readonly colorId: string
+  readonly level: number | null
+  readonly inverted: number
+}
+
+/**
+ * Apaga as faixas do instrumento quando elas são cópia das do ancestral.
+ *
+ * A comparação é sobre a COLEÇÃO INTEIRA de conjuntos do instrumento, não sobre
+ * um tipo de escore de cada vez: a herança é tudo-ou-nada, então um filho que
+ * copiou o percentil do pai mas tem um escore-z que o pai não tem continua
+ * sendo dono das próprias faixas. `id` e `version` ficam de fora da assinatura —
+ * são sempre diferentes e não são o que o usuário enxerga.
+ *
+ * A varredura é de cima para baixo, recalculando o dono conforme desce: quando
+ * um filho colapsa, o neto passa a ser comparado com o avô, e uma cadeia inteira
+ * de cópias colapsa numa passada só.
+ */
+function collapseIdenticalRangeSets(raw: RawDatabase): void {
+  const nodes = raw
+    .prepare(`SELECT id, parent_id AS parentId FROM instruments`)
+    .all() as InstrumentNodeRow[]
+
+  const rows = raw
+    .prepare(
+      `SELECT instrument_id AS instrumentId, score_type AS scoreType,
+              classification_name AS classificationName, min_value AS minValue,
+              max_value AS maxValue, color_id AS colorId, level, inverted
+         FROM classification_ranges
+        ORDER BY instrument_id, score_type, min_value`
+    )
+    .all() as RangeSignatureRow[]
+
+  //  e  são os separadores de unidade e de registro do ASCII: não
+  // aparecem em nome de classificação nem em UUID, então não há como duas
+  // coleções diferentes colidirem por concatenação.
+  const signatures = new Map<string, string>()
+  for (const row of rows) {
+    const entry = [
+      row.scoreType,
+      row.classificationName,
+      row.minValue,
+      row.maxValue,
+      row.colorId,
+      row.level ?? '',
+      row.inverted
+    ].join('')
+    signatures.set(row.instrumentId, `${signatures.get(row.instrumentId) ?? ''}${entry}`)
+  }
+
+  const childrenOf = new Map<string | null, string[]>()
+  for (const node of nodes) {
+    const bucket = childrenOf.get(node.parentId)
+    if (bucket) bucket.push(node.id)
+    else childrenOf.set(node.parentId, [node.id])
+  }
+
+  const dropRanges = raw.prepare(`DELETE FROM classification_ranges WHERE instrument_id = ?`)
+  const markInherits = raw.prepare(`UPDATE instruments SET inherits_ranges = 1 WHERE id = ?`)
+
+  // Fila a partir das raízes. Instrumentos presos num ciclo (impossível pela
+  // validação de reparentagem, mas não pelo banco) simplesmente não são
+  // visitados, e continuam donos das próprias faixas.
+  const queue = (childrenOf.get(null) ?? []).map((id) => ({ id, ownerId: null as string | null }))
+
+  while (queue.length > 0) {
+    const { id, ownerId } = queue.shift()!
+    let nextOwner = ownerId
+
+    const own = signatures.get(id)
+    if (own !== undefined) {
+      const inherited = ownerId === null ? undefined : signatures.get(ownerId)
+      if (inherited !== undefined && inherited === own) {
+        dropRanges.run(id)
+        markInherits.run(id)
+        signatures.delete(id)
+      } else {
+        nextOwner = id
+      }
+    }
+
+    for (const child of childrenOf.get(id) ?? []) queue.push({ id: child, ownerId: nextOwner })
+  }
+}
+
+export const MIGRATIONS: readonly Migration[] = [initial, classificationLevels, rangeInheritance]
 
 /** Versão de schema que este binário conhece. */
 export const TARGET_SCHEMA_VERSION = MIGRATIONS.reduce(

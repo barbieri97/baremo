@@ -52,6 +52,9 @@ export function runMigrations(handle: BaremoDatabase): MigrationOutcome {
       for (const statement of migration.statements) {
         handle.raw.exec(statement)
       }
+      // Dentro da mesma transação: um passo de dados que falhasse depois do DDL
+      // deixaria o schema novo com os dados no formato antigo.
+      migration.run?.(handle.raw)
     })
 
     try {
