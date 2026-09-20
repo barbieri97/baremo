@@ -143,6 +143,7 @@ const parentOptions = computed(() => {
           :nodes="catalog.cognitiveFunctions"
           :tree="catalog.functionTree"
           :selected-id="selectedId"
+          collapsed-by-default
           empty-message="Nenhuma função cadastrada."
           @select="select"
           @add-child="startNew"

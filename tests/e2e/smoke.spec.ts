@@ -59,11 +59,24 @@ test('o indicador do módulo de IA mostra desligado por padrão', async () => {
   await expect(page.getByText('Nenhum dado sai deste computador.')).toBeVisible()
 })
 
-test('a árvore de funções cognitivas vem semeada', async () => {
+test('a árvore de funções cognitivas vem semeada e começa recolhida', async () => {
   await page.getByRole('link', { name: /Funções cognitivas/ }).click()
 
   await expect(page.getByRole('button', { name: 'Atenção', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Memória', exact: true })).toBeVisible()
+
+  // Só as raízes à primeira vista — em catálogo grande é o que se quer ver.
+  const child = page.getByRole('button', { name: 'Atenção sustentada', exact: true })
+  const expand = page.getByRole('button', { name: 'Expandir Atenção' })
+
+  await expect(child).toHaveCount(0)
+  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+
+  await expand.click()
+  await expect(child).toBeVisible()
+
+  await page.getByRole('button', { name: 'Recolher Atenção' }).click()
+  await expect(child).toHaveCount(0)
 })
 
 test('cadastra instrumento e faixas de classificação', async () => {
@@ -122,6 +135,9 @@ test('lança resultado e recebe classificação automática', async () => {
   await expect(page.getByText('Média superior').first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Lançar' }).click()
+
+  // A grade nasce recolhida: o lançamento está lá, atrás do acordeão.
+  await page.getByText('Sem função cognitiva associada').click()
   await expect(page.locator('table').getByText('Média superior').first()).toBeVisible()
 })
 
@@ -427,10 +443,48 @@ test('lança o teste completo escolhendo só o pai', async () => {
   await page.getByLabel('Valor — Subteste Dois').press('Enter')
 
   await expect(page.getByText('3 resultado(s) lançado(s).')).toBeVisible()
+
+  await page.getByText('Sem função cognitiva associada').click()
   const table = page.locator('table')
   await expect(table.getByText('Bateria de Verificação', { exact: true })).toBeVisible()
   await expect(table.getByText('Bateria de Verificação › Subteste Um')).toBeVisible()
   await expect(table.getByText('Bateria de Verificação › Subteste Dois')).toBeVisible()
   await expect(table.getByText('Preservado')).toHaveCount(1)
   await expect(table.getByText('Rebaixado')).toHaveCount(2)
+})
+
+test('a grade da avaliação começa recolhida e alterna entre as duas leituras', async () => {
+  // Visita nova: sem os acordeões que os testes anteriores deixaram abertos.
+  await page.getByRole('link', { name: /Pacientes/ }).click()
+  await page.getByText('Paciente de Verificação').click()
+  await page.getByText('Verificação automatizada').click()
+  await expect(page.getByRole('heading', { name: /^Avaliação de/ })).toBeVisible()
+
+  // Por função é o padrão, e nada nasce aberto.
+  await expect(page.getByRole('radio', { name: 'Por função' })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  )
+  const semFuncao = page.getByText('Sem função cognitiva associada')
+  await expect(semFuncao).toBeVisible()
+
+  // `<details>` recolhido mantém o conteúdo no DOM: o que se afirma é a
+  // visibilidade, não a ausência.
+  const subteste = page.getByText('Bateria de Verificação › Subteste Um')
+  await expect(subteste).toBeHidden()
+
+  await semFuncao.click()
+  await expect(subteste).toBeVisible()
+
+  // Por instrumento a divisão é a hierarquia do catálogo: a bateria vira um
+  // acordeão só, com os subtestes dentro dele.
+  await page.getByRole('radio', { name: 'Por instrumento' }).click()
+  const bateria = page.getByText('Bateria de Verificação (BV)')
+  await expect(bateria).toBeVisible()
+
+  const subtesteUm = page.getByText('Subteste Um', { exact: true }).first()
+  await expect(subtesteUm).toBeHidden()
+
+  await bateria.click()
+  await expect(subtesteUm).toBeVisible()
 })

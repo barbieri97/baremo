@@ -14,14 +14,13 @@ import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
-import ClassificationBadge from '../components/ClassificationBadge.vue'
 import ResultRowEditor from '../components/ResultRowEditor.vue'
 import ResultBatchEditor from '../components/ResultBatchEditor.vue'
+import ResultGroupAccordion from '../components/ResultGroupAccordion.vue'
 import AttachmentsPanel from '../components/AttachmentsPanel.vue'
 import DocumentsPanel from '../components/DocumentsPanel.vue'
 import { formatIsoDate } from '@shared/domain/dates'
-import { RESULT_STATUS_LABELS, SCORE_TYPE_SHORT_LABELS } from '@shared/labels'
-import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
+import { groupResultsByTree } from '@shared/domain/result-grouping'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Assessment, Patient } from '@shared/contracts/entities'
 
@@ -80,29 +79,49 @@ async function reloadResults(): Promise<void> {
 onMounted(load)
 
 /**
- * Resultados agrupados por função cognitiva.
+ * As duas leituras da grade.
  *
- * É a leitura que o profissional faz ao revisar — "como está a atenção?" — e a
- * mesma organização do relatório do §7.1.1.
+ * Por função é a pergunta clínica — "como está a atenção?" —, a mesma
+ * organização do relatório do §7.1.1, e por isso continua sendo o padrão. Por
+ * instrumento é a pergunta de conferência — "o que já lancei do IDADI?" —, que
+ * antes obrigava a varrer os grupos um a um atrás dos subtestes do mesmo teste.
  */
-const grouped = computed(() => {
-  const groups = new Map<string, { name: string; rows: ResultRow[] }>()
+const VIEW_MODES = [
+  { value: 'function', label: 'Por função' },
+  { value: 'instrument', label: 'Por instrumento' }
+] as const
+const viewMode = ref<(typeof VIEW_MODES)[number]['value']>('function')
 
-  for (const result of results.value) {
-    const key = result.cognitiveFunctionId ?? '__none__'
-    const name = result.cognitiveFunctionName ?? 'Sem função cognitiva associada'
-    const group = groups.get(key) ?? { name, rows: [] }
-    group.rows.push(result)
-    groups.set(key, group)
-  }
+/**
+ * Na árvore de funções, com os pais preservados.
+ *
+ * O vínculo instrumento → função não é herdado do pai: um subteste sem função
+ * cai no balde final mesmo que o teste tenha uma. O balde fica visível de
+ * propósito — é uma pendência de cadastro, e distribuí-la seria escondê-la.
+ */
+const byFunction = computed(() =>
+  groupResultsByTree(
+    catalog.cognitiveFunctions,
+    results.value,
+    (result) => result.cognitiveFunctionId,
+    { orphanName: 'Sem função cognitiva associada' }
+  )
+)
 
-  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
-})
+/** Os mesmos resultados na árvore de instrumentos: teste › índice › subteste. */
+const byInstrument = computed(() =>
+  groupResultsByTree(catalog.instruments, results.value, (result) => result.instrumentId, {
+    orphanName: 'Instrumento removido do catálogo',
+    labelOf: (node) =>
+      node.acronym !== null && node.acronym.length > 0
+        ? `${node.name} (${node.acronym})`
+        : node.name
+  })
+)
 
-function formatValue(result: ResultRow): string {
-  if (result.value === null) return '—'
-  return result.value.toFixed(SCORE_TYPE_DOMAINS[result.scoreType].decimals).replace('.', ',')
-}
+const activeGroups = computed(() =>
+  viewMode.value === 'function' ? byFunction.value : byInstrument.value
+)
 
 async function onSaved(): Promise<void> {
   editingId.value = null
@@ -214,14 +233,41 @@ async function saveMeta(): Promise<void> {
     </header>
 
     <section class="mb-6">
-      <div class="mb-2 flex items-center justify-between">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-base font-semibold text-ink-800">
           Resultados
           <span class="ml-1 text-sm font-normal text-ink-500">({{ results.length }})</span>
         </h2>
-        <BaseButton v-if="!addingRow" size="sm" variant="primary" @click="addingRow = true">
-          Lançar resultado
-        </BaseButton>
+
+        <div class="flex items-center gap-2">
+          <div
+            v-if="results.length > 0"
+            class="inline-flex rounded-md border border-ink-300 bg-white p-0.5 text-xs"
+            role="radiogroup"
+            aria-label="Agrupamento dos resultados"
+          >
+            <button
+              v-for="option in VIEW_MODES"
+              :key="option.value"
+              type="button"
+              role="radio"
+              :aria-checked="viewMode === option.value"
+              class="rounded px-3 py-1 font-medium"
+              :class="
+                viewMode === option.value
+                  ? 'bg-brand-500 text-white'
+                  : 'text-ink-600 hover:bg-ink-100'
+              "
+              @click="viewMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
+          <BaseButton v-if="!addingRow" size="sm" variant="primary" @click="addingRow = true">
+            Lançar resultado
+          </BaseButton>
+        </div>
       </div>
 
       <p class="mb-3 text-xs text-ink-500">
@@ -236,76 +282,18 @@ async function saveMeta(): Promise<void> {
         Nenhum resultado lançado ainda.
       </div>
 
-      <div v-for="group in grouped" :key="group.name" class="mb-4">
-        <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
-          {{ group.name }}
-        </h3>
-        <div class="card overflow-hidden">
-          <table class="w-full text-sm">
-            <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-                <th class="w-28 px-3 py-2 text-left font-semibold">Escore</th>
-                <th class="w-20 px-3 py-2 text-right font-semibold">Valor</th>
-                <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
-                <th class="w-28 px-3 py-2 text-left font-semibold">Situação</th>
-                <th class="px-3 py-2 text-left font-semibold">Observação</th>
-                <th class="w-24 px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              <template v-for="result in group.rows" :key="result.id">
-                <tr v-if="editingId !== result.id" class="border-t border-ink-200">
-                  <td class="px-3 py-2 text-ink-800">
-                    {{ catalog.instrumentPath(result.instrumentId) }}
-                  </td>
-                  <td class="px-3 py-2 text-ink-600">
-                    {{ SCORE_TYPE_SHORT_LABELS[result.scoreType] }}
-                  </td>
-                  <td class="px-3 py-2 text-right tabular font-medium text-ink-800">
-                    {{ formatValue(result) }}
-                  </td>
-                  <td class="px-3 py-2">
-                    <ClassificationBadge
-                      :name="result.classificationName"
-                      :color-hex="result.colorHex"
-                      :overridden="result.manuallyOverridden"
-                    />
-                  </td>
-                  <td class="px-3 py-2 text-ink-600">
-                    {{ RESULT_STATUS_LABELS[result.status] }}
-                  </td>
-                  <td class="px-3 py-2 text-ink-500">{{ result.notes ?? '' }}</td>
-                  <td class="px-3 py-2 text-right">
-                    <button
-                      class="mr-2 text-xs text-brand-500 hover:underline"
-                      @click="editingId = result.id"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      class="text-xs text-danger-500 hover:underline"
-                      @click="removeResult(result)"
-                    >
-                      Remover
-                    </button>
-                  </td>
-                </tr>
-                <tr v-else class="border-t border-ink-200 bg-brand-50/40">
-                  <td colspan="7" class="px-3 py-3">
-                    <ResultRowEditor
-                      :assessment-id="id"
-                      :result="result"
-                      @saved="onSaved"
-                      @cancel="editingId = null"
-                    />
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ResultGroupAccordion
+        v-for="group in activeGroups"
+        :key="group.id ?? '__none__'"
+        :group="group"
+        :assessment-id="id"
+        :editing-id="editingId"
+        :instrument-label="viewMode === 'function' ? 'path' : 'name'"
+        @edit="editingId = $event"
+        @remove="removeResult"
+        @saved="onSaved"
+        @cancel="editingId = null"
+      />
 
       <div v-if="addingRow" class="card border-brand-200 bg-brand-50/40 p-3">
         <div
