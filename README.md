@@ -81,7 +81,7 @@ npm run dev
 | `npm test` | Vitest: unidade + os quatro gates de segurança |
 | `npm run test:e2e` | Playwright for Electron (use `xvfb-run` sem display) |
 | `npm run pack:dir` | Empacota sem gerar instalador, para inspeção |
-| `npx vite-node --config vitest.config.ts scripts/preview-report.mjs` | Escreve o HTML do relatório de resultados com um caso de exemplo, para olhar o layout sem abrir o app |
+| `npm run preview:pdf` | Gera o relatório de resultados (PDF e HTML) com um caso de exemplo, para olhar o layout sem abrir o app. `-- saida.html` muda o destino, `--comparar` inclui a segunda avaliação e `--sem-pdf` pula a impressão |
 | `npm run release` | Build multiplataforma e publicação no GitHub Releases |
 
 ### Sobre o módulo nativo

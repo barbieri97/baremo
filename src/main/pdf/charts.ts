@@ -22,9 +22,20 @@
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
 
-/** Proporções usadas pelos gráficos do relatório, em pixels de layout. */
+/**
+ * Proporções usadas pelos gráficos do relatório, em pixels de layout.
+ *
+ * A largura útil da página é de ~179mm (A4 menos as margens do `printToPDF`),
+ * o que dá cerca de 677px; descontada a moldura do cartão, sobram ~654px. Os
+ * números abaixo cabem nessa medida com folga e são reduzidos pelo CSS quando
+ * preciso — o SVG do ECharts sai com `viewBox`, então encolher não deforma.
+ *
+ * O radar geral é maior que os demais de propósito: é a figura que responde
+ * "como está este paciente?" e a única que o leitor vai examinar de perto.
+ */
 export const CHART_SIZE = {
-  radar: { width: 460, height: 320 },
+  radar: { width: 560, height: 340 },
+  radarOverall: { width: 520, height: 360 },
   comparison: { width: 640, height: 300 },
   evolution: { width: 640, height: 280 }
 } as const

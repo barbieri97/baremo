@@ -10,3 +10,7 @@ playwright-report/
 .env.local
 *.tsbuildinfo
 drizzle/
+
+# Saída do npm run preview:pdf
+preview-relatorio.html
+preview-relatorio.pdf

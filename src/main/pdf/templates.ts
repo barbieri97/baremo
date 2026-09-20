@@ -257,12 +257,22 @@ export interface ResultsReportCharts {
 }
 
 /**
- * §7.3 — o relatório que substituiu os dois anteriores.
+ * §7.3 — o laudo desenhado como a tela de resultados.
  *
- * Os antigos eram a mesma tabela reorganizada, e nenhum dos dois respondia à
- * pergunta que se faz ao abrir um laudo: como está este paciente? Aqui as duas
- * organizações convivem — panorama e detalhe por função, depois por teste — e o
- * documento abre pela leitura de relance, não pela listagem.
+ * A versão anterior deste relatório era um empilhamento de tabelas: os mesmos
+ * dados da tela, na forma que a tela justamente abandonara. Quem abria o PDF
+ * depois de olhar o app via dois documentos diferentes sobre o mesmo paciente,
+ * e o segundo era o pior — nenhuma leitura por cor, nenhum cartão, nenhum
+ * relance.
+ *
+ * Agora a tela é a especificação, e a ordem é a dela: capa, panorama por função
+ * em cartões, detalhe por função, por teste. Os títulos e as notas são os
+ * MESMOS textos, palavra por palavra — quando um deles mudar na tela, a
+ * divergência precisa ficar visível aqui.
+ *
+ * O que não é reproduzido é o que não existe no papel: os botões de PNG e SVG,
+ * o seletor de tipo de gráfico e as caixas de comparação. Controle impresso é
+ * ruído.
  */
 export function renderResultsReport(
   overview: ResultsOverview,
@@ -274,24 +284,16 @@ export function renderResultsReport(
   )
 
   const body = html`
-    ${documentHeader(overview, 'Relatório de Resultados')}
+    ${coverPage(overview)}
     ${
       overview.totalResults === 0
         ? html`<p class="empty">Esta avaliação ainda não possui resultados registrados.</p>`
         : html`
-            ${comparing ? comparisonNote(overview) : null}
-            ${panoramaSection(overview, charts.radar)} ${functionDetailSections(overview, charts)}
-            ${testSections(overview, charts)} ${anyOverride ? OVERRIDE_NOTE : null}
-            ${overview.missingLevels > 0 ? missingLevelsNote(overview) : null}
+            ${overview.missingLevels > 0 ? missingLevelsNotice(overview) : null}
+            ${comparing ? comparisonNote(overview) : null} ${panoramaSection(overview, charts)}
+            ${functionDetailSections(overview, charts)} ${testSections(overview, charts)}
+            ${anyOverride ? OVERRIDE_NOTE : null}
           `
-    }
-    ${
-      overview.notes
-        ? html`<section class="section">
-            <h2 class="section__title">Observações</h2>
-            <p>${overview.notes}</p>
-          </section>`
-        : null
     }
     ${signature(overview)}
   `
@@ -299,95 +301,215 @@ export function renderResultsReport(
   return toString(body)
 }
 
-function comparisonNote(overview: ResultsOverview): SafeHtml {
-  const others = overview.assessments
+// ─── Capa ────────────────────────────────────────────────────────────────────
+
+/**
+ * A primeira página: quem assina, sobre quem, e o que motivou a avaliação.
+ *
+ * Existe porque o relatório começava direto no panorama, e um laudo que abre
+ * num gráfico obriga o leitor a procurar de quem ele fala. Aqui os campos do
+ * prontuário e os da avaliação ficam juntos, numa página que se lê sozinha — e
+ * as seguintes ficam livres para serem só os dados.
+ *
+ * Bloco de texto vazio não é impresso: uma capa com cinco títulos e nada
+ * embaixo parece um formulário que ninguém preencheu.
+ */
+function coverPage(overview: ResultsOverview): SafeHtml {
+  const { profile, patient } = overview
+
+  const credentials = [profile.crp && `CRP ${profile.crp}`, profile.specialty]
+    .filter(Boolean)
+    .join(' · ')
+  const contact = [profile.phone, profile.email, profile.address].filter(Boolean).join(' · ')
+  const others = otherAssessments(overview)
+
+  return html`
+    <section class="cover">
+      <header class="cover__letterhead">
+        ${
+          profile.logoDataUrl
+            ? html`<img class="cover__logo" src="${profile.logoDataUrl}" alt="" />`
+            : null
+        }
+        <div class="cover__identity">
+          <p class="cover__professional">${profile.name || 'Profissional não identificado'}</p>
+          ${credentials ? html`<p class="cover__contact">${credentials}</p>` : null}
+          ${contact ? html`<p class="cover__contact">${contact}</p>` : null}
+        </div>
+      </header>
+
+      <p class="cover__eyebrow">Relatório de resultados</p>
+      <h1 class="cover__title">Resultados de ${patient.fullName}</h1>
+      <p class="cover__meta">${coverMeta(overview)}</p>
+
+      <section class="cover__block">
+        <h2 class="cover__block-title">Paciente</h2>
+        <dl class="data-grid">
+          ${dataItem('Nome', patient.fullName)} ${dataItem('Data de nascimento', patient.birthDate)}
+          ${dataItem('Idade na avaliação', patient.ageAtAssessment)}
+          ${dataItem('Sexo', patient.sex)} ${dataItem('Lateralidade', patient.handedness)}
+          ${dataItem('Escolaridade', patient.education)}
+          ${dataItem('Responsável', patient.guardian)} ${dataItem('Contato', patient.contact)}
+        </dl>
+      </section>
+
+      <section class="cover__block">
+        <h2 class="cover__block-title">Avaliação</h2>
+        <dl class="data-grid">
+          ${dataItem('Data da avaliação', overview.assessmentDate)}
+          ${dataItem('Resultados registrados', String(overview.totalResults))}
+          ${others === '' ? null : dataItem('Comparada com', others)}
+        </dl>
+      </section>
+
+      ${textBlock('Motivo do encaminhamento', overview.referralReason)}
+      ${textBlock('Queixa', overview.complaint)}
+      ${textBlock('Observações da avaliação', overview.notes)}
+      ${textBlock('Observações do paciente', patient.notes)}
+    </section>
+  `
+}
+
+/** A mesma linha de resumo que a tela exibe sob o título (§7.3). */
+function coverMeta(overview: ResultsOverview): string {
+  const parts = [`Avaliação de ${overview.assessmentDate}`]
+  if (overview.patient.ageAtAssessment !== null) parts.push(overview.patient.ageAtAssessment)
+  parts.push(`${overview.totalResults} ${overview.totalResults === 1 ? 'resultado' : 'resultados'}`)
+  return parts.join(' · ')
+}
+
+function otherAssessments(overview: ResultsOverview): string {
+  return overview.assessments
     .filter((assessment) => !assessment.isPrimary)
     .map((assessment) => assessment.dateLabel)
     .join(', ')
+}
+
+function dataItem(term: string, value: string | null): SafeHtml {
+  const filled = value !== null && value.trim() !== ''
 
   return html`
-    <p class="section__note">
-      As tabelas e os gráficos comparam a avaliação de ${overview.assessmentDate} com ${others}. O
-      panorama e o detalhe por função referem-se apenas à avaliação de ${overview.assessmentDate}.
+    <div class="data-grid__item">
+      <dt>${term}</dt>
+      <dd>${filled ? value : html`<span class="empty">Não informado</span>`}</dd>
+    </div>
+  `
+}
+
+/**
+ * Um campo livre da avaliação ou do prontuário.
+ *
+ * O CSS deste bloco preserva as quebras de linha: o texto foi digitado num
+ * `textarea`, e os parágrafos que o profissional separou ali são dele —
+ * colapsá-los juntaria numa massa só o que ele escreveu apartado.
+ */
+function textBlock(title: string, value: string | null): SafeHtml | null {
+  if (value === null || value.trim() === '') return null
+
+  return html`
+    <section class="cover__block">
+      <h2 class="cover__block-title">${title}</h2>
+      <p class="cover__text">${value}</p>
+    </section>
+  `
+}
+
+// ─── Panorama por função ─────────────────────────────────────────────────────
+
+function missingLevelsNotice(overview: ResultsOverview): SafeHtml {
+  const plural = overview.missingLevels === 1 ? 'resultado está' : 'resultados estão'
+
+  return html`
+    <aside class="notice notice--warn">
+      <strong>
+        ${String(overview.missingLevels)} de ${String(overview.totalResults)} ${plural} sem nível.
+      </strong>
+      Eles aparecem em cinza, e não entram na média das funções. Defina o nível das faixas em
+      Instrumentos e use "Reprocessar classificações" na avaliação para aplicá-lo.
+    </aside>
+  `
+}
+
+function comparisonNote(overview: ResultsOverview): SafeHtml {
+  return html`
+    <p class="screen-section__note">
+      As tabelas e os gráficos comparam a avaliação de ${overview.assessmentDate} com
+      ${otherAssessments(overview)}. O panorama e o detalhe por função referem-se apenas à avaliação
+      de ${overview.assessmentDate}.
     </p>
   `
 }
 
-function missingLevelsNote(overview: ResultsOverview): SafeHtml {
+/** O panorama: a grade de cartões, o radar geral e a legenda da escala. */
+function panoramaSection(overview: ResultsOverview, charts: ResultsReportCharts): SafeHtml {
   return html`
-    <p class="section__note">
-      ${String(overview.missingLevels)} de ${String(overview.totalResults)} resultados não têm nível
-      definido na faixa de classificação. Eles aparecem em cinza e não entram na média das funções.
-    </p>
-  `
-}
-
-/** O panorama: a tabela-resumo e, ao lado, o radar. */
-function panoramaSection(overview: ResultsOverview, radar: string | null): SafeHtml {
-  return html`
-    <section class="section avoid-break">
-      <h2 class="section__title">Panorama por função</h2>
-      <p class="section__note">
-        Da função mais rebaixada para a mais preservada. O nível vai de 1 (muito rebaixado) a 5
-        (muito acima do esperado).
+    <section class="screen-section">
+      <h2 class="screen-section__title">Panorama por função</h2>
+      <p class="screen-section__note">
+        Ordenado da função mais rebaixada para a mais preservada. O número é o nível médio, de 1
+        (muito rebaixado) a 5 (muito acima do esperado).
       </p>
 
-      <div class="panorama">
-        <table class="panorama__table">
-          <thead>
-            <tr>
-              <th>Função cognitiva</th>
-              <th style="width:16mm">Resultados</th>
-              <th style="width:28mm">Nível médio</th>
-              <th style="width:30mm">Distribuição</th>
-              <th style="width:18mm">Abaixo</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${overview.functions.map(
-              (summary) => html`
-                <tr>
-                  <td>${summary.name}</td>
-                  <td class="numeric">${String(summary.points.length)}</td>
-                  <td>${levelCell(summary)}</td>
-                  <td>${heatBar(summary.distribution)}</td>
-                  <td class="numeric">
-                    ${
-                      summary.belowExpected > 0
-                        ? html`<strong>${String(summary.belowExpected)}</strong>`
-                        : '—'
-                    }
-                  </td>
-                </tr>
-              `
-            )}
-          </tbody>
-        </table>
+      <div class="card-grid">${overview.functions.map(functionCard)}</div>
 
-        ${radar !== null ? html`<figure class="chart-figure">${raw(radar)}</figure>` : null}
-      </div>
-
+      ${
+        charts.radar === null
+          ? null
+          : chartCard('Perfil por função', 'Nível médio, de 1 a 5', charts.radar, true)
+      }
       ${levelLegend()}
     </section>
   `
 }
 
-function levelCell(summary: FunctionSummary): SafeHtml {
-  if (summary.averageLevel === null) {
-    return html`<span class="level-badge" style="background-color:${raw(LEVEL_UNKNOWN_HEX)}"
-      >Sem nível</span
-    >`
+/**
+ * O cartão de uma função — o mesmo desenho de `FunctionHeatCard.vue`.
+ *
+ * Três informações, na ordem em que são lidas: a cor do nível médio, que
+ * responde antes de qualquer texto; a barra de calor, que diz se o rebaixamento
+ * é geral ou de um resultado só; e a contagem do que ficou abaixo do esperado.
+ */
+function functionCard(summary: FunctionSummary): SafeHtml {
+  const background = safeColor(levelColorContinuous(summary.averageLevel), LEVEL_UNKNOWN_HEX)
+  const average =
+    summary.averageLevel === null
+      ? null
+      : (Math.round(summary.averageLevel * 10) / 10).toFixed(1).replace('.', ',')
+
+  return html`
+    <article class="fn-card">
+      <div class="fn-card__head">
+        <div class="fn-card__identity">
+          <p class="fn-card__name">${summary.name}</p>
+          <p class="fn-card__count">
+            ${String(summary.points.length)}
+            ${summary.points.length === 1 ? 'resultado' : 'resultados'}
+          </p>
+        </div>
+        <span
+          class="fn-card__level"
+          style="background-color:${raw(background)};color:${raw(readableTextColor(background))}"
+          >${average ?? '—'}</span
+        >
+      </div>
+
+      ${heatBar(summary.distribution)}
+
+      <p class="fn-card__foot${raw(summary.belowExpected > 0 ? ' fn-card__foot--danger' : '')}">
+        ${cardFootnote(summary, average)}
+      </p>
+    </article>
+  `
+}
+
+function cardFootnote(summary: FunctionSummary, average: string | null): string {
+  if (summary.belowExpected > 0) {
+    return `${summary.belowExpected} de ${summary.points.length} abaixo do esperado`
   }
-
-  const background = safeColor(levelColorContinuous(summary.averageLevel), '#e2e8f0')
-  const nearest = Math.round(summary.averageLevel) as 1 | 2 | 3 | 4 | 5
-  const value = (Math.round(summary.averageLevel * 10) / 10).toFixed(1).replace('.', ',')
-
-  return html`<span
-    class="level-badge"
-    style="background-color:${raw(background)};color:${raw(readableTextColor(background))}"
-    >${value} · ${levelLabel(nearest)}</span
-  >`
+  if (average === null) {
+    return 'Sem nível cadastrado nas faixas — defina para ver a leitura por cor'
+  }
+  return 'Nenhum resultado abaixo do esperado'
 }
 
 /**
@@ -401,7 +523,7 @@ function heatBar(distribution: LevelDistribution): SafeHtml {
   const total =
     CLASSIFICATION_LEVELS.reduce((sum, entry) => sum + distribution[entry.level], 0) +
     distribution.unknown
-  if (total === 0) return html`<span class="empty">—</span>`
+  if (total === 0) return html`<span class="heat-bar"></span>`
 
   const segments = [
     ...CLASSIFICATION_LEVELS.map((entry) => ({
@@ -417,7 +539,7 @@ function heatBar(distribution: LevelDistribution): SafeHtml {
         html`<span
           class="heat-bar__part"
           style="width:${raw(((segment.count / total) * 100).toFixed(2))}%;background-color:${raw(
-            safeColor(segment.hex, '#a0aec0')
+            safeColor(segment.hex, LEVEL_UNKNOWN_HEX)
           )}"
           >&nbsp;</span
         >`
@@ -438,6 +560,27 @@ function levelLegend(): SafeHtml {
 }
 
 /**
+ * A moldura de um gráfico — o `ChartCard.vue` sem os controles.
+ *
+ * O SVG vai num bloco próprio para que o `break-inside: avoid` do cartão valha
+ * para o conjunto: um título numa página e o polígono na seguinte é pior do que
+ * uma página com um vão no fim.
+ */
+function chartCard(title: string, subtitle: string, svg: string, wide = false): SafeHtml {
+  return html`
+    <figure class="chart-card${raw(wide ? ' chart-card--wide' : '')}">
+      <figcaption class="chart-card__head">
+        <p class="chart-card__title">${title}</p>
+        <p class="chart-card__subtitle">${subtitle}</p>
+      </figcaption>
+      <div class="chart-card__canvas">${raw(svg)}</div>
+    </figure>
+  `
+}
+
+// ─── Detalhe por função ──────────────────────────────────────────────────────
+
+/**
  * O detalhe, agrupado por função raiz.
  *
  * A hierarquia é o ponto: o radar de uma função pai compara as filhas dela, e
@@ -448,112 +591,139 @@ function levelLegend(): SafeHtml {
  */
 function functionDetailSections(overview: ResultsOverview, charts: ResultsReportCharts): SafeHtml {
   return html`
-    <h2 class="section__title">Detalhe por função</h2>
-    ${overview.functionGroups.map(
-      (group) => html`
-        <div class="section">
-          <h3 class="section__subtitle">${group.name}</h3>
-          ${group.radars.map((radar) => {
-            const svg = radar.parentId === null ? undefined : charts.functionRadars[radar.parentId]
-            return svg === undefined
-              ? null
-              : html`<figure class="chart-figure avoid-break">
-                  ${raw(svg)}
-                  <figcaption class="chart-figure__caption">
-                    ${radar.title} — nível médio por subfunção
-                  </figcaption>
-                </figure>`
-          })}
-          ${group.functions.map(
-            (summary) => html`
-              <div class="function-block avoid-break">
-                <h4 class="function-block__title">${summary.name}</h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Instrumento</th>
-                      <th style="width:16mm">Escore</th>
-                      <th style="width:14mm">Valor</th>
-                      <th style="width:30mm">Classificação</th>
-                      <th style="width:30mm">Nível</th>
-                      <th style="width:20mm">Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${summary.points.map(
-                      (point) => html`
-                        <tr>
-                          <td>${point.instrumentPath}</td>
-                          <td>${point.scoreTypeLabel}</td>
-                          <td class="numeric">${formatValue(point)}</td>
-                          <td>${classificationBadge(point)}</td>
-                          <td>${levelInline(point)}</td>
-                          <td>${point.statusLabel}</td>
-                        </tr>
-                      `
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            `
-          )}
-        </div>
-      `
-    )}
+    <section class="screen-section">
+      <h2 class="screen-section__title">Detalhe por função</h2>
+
+      ${overview.functionGroups.map(
+        (group) => html`
+          <div class="fn-group">
+            <div class="fn-group__head">
+              <h3 class="fn-group__name">${group.name}</h3>
+              <span class="fn-group__bar">${heatBar(group.distribution)}</span>
+              <span class="fn-group__count">
+                ${String(group.resultCount)} ${group.resultCount === 1 ? 'resultado' : 'resultados'}
+              </span>
+            </div>
+
+            ${group.radars.map((radar) => {
+              const svg =
+                radar.parentId === null ? undefined : charts.functionRadars[radar.parentId]
+              return svg === undefined
+                ? null
+                : chartCard(radar.title, 'Nível médio por subfunção, de 1 a 5', svg)
+            })}
+            ${group.functions.map(functionDetail)}
+          </div>
+        `
+      )}
+    </section>
   `
 }
 
-function levelInline(point: ResultPoint): SafeHtml {
-  return html`<span class="level-inline"
+function functionDetail(summary: FunctionSummary): SafeHtml {
+  return html`
+    <div class="fn-detail">
+      <div class="fn-detail__head">
+        <h4 class="fn-detail__name">${summary.name}</h4>
+        <span class="fn-detail__bar">${heatBar(summary.distribution)}</span>
+      </div>
+
+      <div class="table-card">
+        <table class="grid-table">
+          <thead>
+            <tr>
+              <th>Instrumento</th>
+              <th style="width:18mm">Escore</th>
+              <th class="numeric" style="width:16mm">Valor</th>
+              <th style="width:34mm">Classificação</th>
+              <th style="width:32mm">Nível</th>
+              <th style="width:20mm">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${summary.points.map(
+              (point) => html`
+                <tr>
+                  <td>${point.instrumentPath}</td>
+                  <td class="muted">${point.scoreTypeLabel}</td>
+                  <td class="numeric strong">${formatValue(point)}</td>
+                  <td>${classificationBadge(point)}</td>
+                  <td>${levelChip(point)}</td>
+                  <td class="muted">${point.statusLabel}</td>
+                </tr>
+              `
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `
+}
+
+function levelChip(point: ResultPoint): SafeHtml {
+  return html`<span class="level-chip"
     ><span
-      class="legend__swatch"
-      style="background-color:${raw(safeColor(levelColor(point.classificationLevel), '#a0aec0'))}"
+      class="level-chip__swatch"
+      style="background-color:${raw(
+        safeColor(levelColor(point.classificationLevel), LEVEL_UNKNOWN_HEX)
+      )}"
     ></span
     >${levelLabel(point.classificationLevel)}</span
   >`
 }
 
+// ─── Por teste ───────────────────────────────────────────────────────────────
+
 /** Uma seção por teste: a tabela dos subtestes e os gráficos daquele teste. */
 function testSections(overview: ResultsOverview, charts: ResultsReportCharts): SafeHtml {
   return html`
-    <h2 class="section__title page-break-before">Por teste</h2>
-    <p class="section__note">
-      Os gráficos usam a régua normalizada de 0 a 100, em que 100 é sempre o melhor desempenho — é o
-      que torna comparáveis escores de escalas diferentes.
-    </p>
-    ${overview.tests.map((group) => {
-      const comparison = charts.comparison[group.instrumentId]
-      const evolution = charts.evolution[group.instrumentId]
+    <section class="screen-section page-break-before">
+      <h2 class="screen-section__title">Por teste</h2>
+      <p class="screen-section__note">
+        Os subtestes na régua normalizada de 0 a 100, em que 100 é sempre o melhor desempenho — é o
+        que torna comparáveis escores de escalas diferentes.
+      </p>
 
-      return html`
-        <div class="section">
-          <h3 class="section__subtitle">
-            ${group.label}${group.inverted ? ' — escore alto indica pior desempenho' : ''}
-          </h3>
-          ${testTable(group, overview)}
-          ${
-            comparison !== undefined
-              ? html`<figure class="chart-figure avoid-break">
-                  ${raw(comparison)}
-                  <figcaption class="chart-figure__caption">
-                    Comparação entre os subtestes, na posição da escala.
-                  </figcaption>
-                </figure>`
-              : null
-          }
-          ${
-            evolution !== undefined
-              ? html`<figure class="chart-figure avoid-break">
-                  ${raw(evolution)}
-                  <figcaption class="chart-figure__caption">
-                    Evolução de cada subteste ao longo das avaliações.
-                  </figcaption>
-                </figure>`
-              : null
-          }
-        </div>
-      `
-    })}
+      ${overview.tests.map((group) => {
+        const comparison = charts.comparison[group.instrumentId]
+        const evolution = charts.evolution[group.instrumentId]
+
+        return html`
+          <div class="test-group">
+            <div class="table-card">
+              <p class="table-card__caption">
+                ${group.label}
+                ${
+                  group.inverted
+                    ? html`<span class="table-card__flag">escore alto indica pior desempenho</span>`
+                    : null
+                }
+              </p>
+              ${testTable(group, overview)}
+            </div>
+
+            ${
+              comparison === undefined
+                ? null
+                : chartCard(
+                    `Comparação — ${group.label}`,
+                    'Posição na escala, de 0 a 100',
+                    comparison
+                  )
+            }
+            ${
+              evolution === undefined
+                ? null
+                : chartCard(
+                    `Evolução — ${group.label}`,
+                    'Uma linha por subteste, ao longo das avaliações',
+                    evolution
+                  )
+            }
+          </div>
+        `
+      })}
+    </section>
   `
 }
 
@@ -561,15 +731,16 @@ function testTable(group: TestGroup, overview: ResultsOverview): SafeHtml {
   const comparing = overview.assessments.length > 1
 
   return html`
-    <table>
+    <table class="grid-table">
       <thead>
         <tr>
           <th>Subteste</th>
-          <th style="width:16mm">Escore</th>
+          <th style="width:18mm">Escore</th>
           ${overview.assessments.map(
-            (assessment) => html`<th style="width:20mm">${assessment.dateLabel}</th>`
+            (assessment) =>
+              html`<th class="numeric" style="width:24mm">${assessment.dateLabel}</th>`
           )}
-          ${comparing ? null : html`<th style="width:34mm">Classificação</th>`}
+          ${comparing ? null : html`<th style="width:36mm">Classificação</th>`}
         </tr>
       </thead>
       <tbody>
@@ -577,10 +748,10 @@ function testTable(group: TestGroup, overview: ResultsOverview): SafeHtml {
           (entry) => html`
             <tr>
               <td>${entry.label}</td>
-              <td>${entry.scoreTypeLabel}</td>
+              <td class="muted">${entry.scoreTypeLabel}</td>
               ${entry.values.map(
                 (point) =>
-                  html`<td class="numeric">${point === null ? '—' : formatValue(point)}</td>`
+                  html`<td class="numeric strong">${point === null ? '—' : formatValue(point)}</td>`
               )}
               ${
                 comparing

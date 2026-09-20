@@ -92,6 +92,49 @@ export function sanitizeBody(bodyHtml: string): string {
   })
 }
 
+/** Texto curto do cabeçalho de cada página. */
+export interface PdfHeader {
+  readonly left: string
+  readonly right: string
+}
+
+/**
+ * Configuração da página do `printToPDF`.
+ *
+ * Mora aqui, e não em `render.ts`, porque aquele módulo importa `electron` e
+ * não pode ser carregado fora do app — nem pelo Vitest, nem pelo script de
+ * prévia. E a prévia só vale alguma coisa se imprimir na MESMA página que o
+ * app imprime: margem diferente é layout diferente, e uma amostra que mente
+ * sobre a paginação é pior do que amostra nenhuma.
+ */
+export const PRINT_PAGE_OPTIONS = {
+  pageSize: 'A4',
+  printBackground: true,
+  margins: { top: 0.7, bottom: 0.8, left: 0.6, right: 0.6 },
+  displayHeaderFooter: true,
+  preferCSSPageSize: false
+} as const
+
+/**
+ * Cabeçalho e rodapé nativos do Chromium.
+ *
+ * Rodam num contexto separado do documento, com CSS próprio e inline
+ * obrigatório; `printToPDF` ignora estilo herdado da página.
+ */
+export function printHeaderTemplate(header: PdfHeader): string {
+  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
+    <span>${escapeAttribute(header.left)}</span>
+    <span>${escapeAttribute(header.right)}</span>
+  </div>`
+}
+
+export function printFooterTemplate(issuedAt: string): string {
+  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
+    <span>Emitido em ${escapeAttribute(issuedAt)}</span>
+    <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
+  </div>`
+}
+
 export function escapeAttribute(value: string): string {
   return value.replace(/[&<>"']/g, (char) => {
     switch (char) {

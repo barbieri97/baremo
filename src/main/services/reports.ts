@@ -71,6 +71,9 @@ function buildContext(handle: BaremoDatabase, assessmentId: string): ReportConte
       ageAtAssessment: age !== null ? formatAge(age) : null,
       sex: SEX_LABELS[patient.sex as Sex] ?? SEX_LABELS.unspecified,
       education: patient.education,
+      guardian: patient.guardian,
+      contact: patient.contact,
+      notes: patient.notes,
       handedness:
         HANDEDNESS_LABELS[patient.handedness as Handedness] ?? HANDEDNESS_LABELS.unspecified
     },

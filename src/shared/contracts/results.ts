@@ -28,7 +28,11 @@ export const patientHeaderSchema = z.object({
   ageAtAssessment: nullableText,
   sex: z.string(),
   education: nullableText,
-  handedness: z.string()
+  handedness: z.string(),
+  /** Responsável, contato e observações do PRONTUÁRIO — não da avaliação. */
+  guardian: nullableText,
+  contact: nullableText,
+  notes: nullableText
 })
 export type PatientHeader = z.infer<typeof patientHeaderSchema>
 

@@ -11,12 +11,9 @@ import { registerHandler, invalid, notFound } from '../register'
 import { renderPdfToFile } from '../../pdf/render'
 import { REPORT_CSS } from '../../pdf/styles'
 import { renderComparativeReport, renderResultsReport } from '../../pdf/templates'
-import type { ResultsReportCharts } from '../../pdf/templates'
 import { buildComparativeReport } from '../../services/reports'
 import { buildResultsOverview } from '../../services/results-overview'
-import { CHART_SIZE, renderChartSvg } from '../../pdf/charts'
-import { comparisonOption, evolutionOption, functionRadarOption } from '@shared/charts/options'
-import type { ResultsOverview } from '@shared/contracts/results'
+import { renderResultsCharts } from '../../pdf/results-charts'
 import { DOCUMENT_CSS, renderDocumentReport } from '../../pdf/document-template'
 import { buildDocumentReport } from '../../services/document-report'
 import { recordAudit } from '../../services/audit'
@@ -92,7 +89,7 @@ function prepare(input: {
         input.comparisonAssessmentIds
       )
       return {
-        bodyHtml: renderResultsReport(overview, renderCharts(overview)),
+        bodyHtml: renderResultsReport(overview, renderResultsCharts(overview)),
         title: 'Relatório de Resultados',
         patientName: overview.patient.fullName,
         suggestedFileName: fileName(overview.patient.fullName, 'resultados')
@@ -129,64 +126,6 @@ function prepare(input: {
         suggestedFileName: fileName(report.patient.fullName, slug(report.title))
       }
     }
-  }
-}
-
-/**
- * Desenha os gráficos do relatório, em SVG.
- *
- * Só entra gráfico que tem o que dizer: o radar exige ao menos três funções com
- * nível (com duas, o "polígono" é um segmento de reta), e a comparação exige
- * duas entradas. A evolução só existe com mais de uma avaliação selecionada.
- * Um gráfico degenerado num laudo é pior do que a sua ausência — ocupa a página
- * e sugere uma leitura que os dados não sustentam.
- */
-function renderCharts(overview: ResultsOverview): ResultsReportCharts {
-  const style = { forPrint: true } as const
-  const comparison: Record<string, string> = {}
-  const evolution: Record<string, string> = {}
-
-  for (const group of overview.tests) {
-    if (!group.comparable) continue
-
-    comparison[group.instrumentId] = renderChartSvg(
-      comparisonOption(group, overview.assessments, 'column', {
-        ...style,
-        showNormBand: true
-      }),
-      CHART_SIZE.comparison
-    )
-
-    if (overview.assessments.length > 1) {
-      evolution[group.instrumentId] = renderChartSvg(
-        evolutionOption(group, overview.assessments, style),
-        CHART_SIZE.evolution
-      )
-    }
-  }
-
-  // O corte de eixo mínimo já veio aplicado do view-model: se o radar existe,
-  // ele é desenhável. Repetir a regra aqui era como a tela e o laudo passariam
-  // a mostrar conjuntos diferentes de gráficos.
-  const functionRadars: Record<string, string> = {}
-  for (const group of overview.functionGroups) {
-    for (const radar of group.radars) {
-      if (radar.parentId === null) continue
-      functionRadars[radar.parentId] = renderChartSvg(
-        functionRadarOption(radar.axes, style),
-        CHART_SIZE.radar
-      )
-    }
-  }
-
-  return {
-    radar:
-      overview.overallRadar === null
-        ? null
-        : renderChartSvg(functionRadarOption(overview.overallRadar.axes, style), CHART_SIZE.radar),
-    functionRadars,
-    comparison,
-    evolution
   }
 }
 

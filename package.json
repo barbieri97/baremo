@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "preview:pdf": "npx --yes vite-node --config vitest.config.ts scripts/preview-report.mjs",
     "db:generate": "drizzle-kit generate",
     "pack:dir": "npm run build && electron-builder --dir",
     "release": "npm run build && electron-builder --publish always"

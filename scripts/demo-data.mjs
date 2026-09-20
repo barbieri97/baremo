@@ -51,17 +51,25 @@ export function seedDemo(dbPath) {
     sex: 'female',
     education: 'Ensino superior completo',
     handedness: 'right',
-    guardian: null,
-    contact: null,
-    notes: null
+    guardian: 'Marcos Ribeiro de Almeida (cônjuge)',
+    contact: '(11) 98888-7777 · joana@exemplo.test',
+    notes:
+      'Acompanhamento endocrinológico por hipotireoidismo, em uso de levotiroxina.' +
+      '\nSem histórico de trauma cranioencefálico ou internação psiquiátrica.'
   }).id
 
   const first = createAssessment(handle, {
     patientId,
     date: '2026-02-18',
-    referralReason: 'Queixa de esquecimentos e dificuldade de concentração no trabalho.',
-    complaint: 'Refere perder o fio da meada em reuniões e esquecer compromissos recentes.',
-    notes: null
+    referralReason:
+      'Encaminhada pela neurologista para investigação de queixa de memória com seis meses' +
+      ' de evolução, após exames de imagem sem alterações.',
+    complaint:
+      'Refere perder o fio da meada em reuniões e esquecer compromissos recentes.' +
+      '\nRelata piora no período da tarde e sono fragmentado há cerca de um ano.',
+    notes:
+      'Avaliação em duas sessões, ambas no período da manhã. Colaborativa e motivada;' +
+      ' sem sinais de fadiga que comprometessem o desempenho.'
   }).id
 
   const second = createAssessment(handle, {
@@ -127,6 +135,33 @@ export function seedDemo(dbPath) {
   const bdi = instrument('Inventário de Depressão', 'BDI-II', null, null, 2)
   standardRanges(bdi, true)
 
+  // Memória com TRÊS filhas pontuadas. O corte do radar é de três eixos, e sem
+  // isto a prévia nunca desenharia um radar por função — justamente o cartão
+  // mais fácil de quebrar no detalhe, porque é o único gráfico que aparece
+  // indentado sob um bloco.
+  const ravlt = instrument('Teste de Aprendizagem Auditivo-Verbal', 'RAVLT', null, null, 3)
+  const ravltSubtests = [
+    ['Evocação imediata (A5)', 'Memória episódica verbal', 22, 41],
+    ['Evocação tardia (A7)', 'Memória episódica verbal', 14, 33],
+    ['Reconhecimento', 'Memória episódica verbal', 35, 52]
+  ]
+  const ravltIds = ravltSubtests.map(([name, fn], index) => {
+    const id = instrument(name, null, ravlt, fn, index)
+    standardRanges(id)
+    return id
+  })
+
+  const rey = instrument('Figuras Complexas de Rey', 'FCR', null, null, 4)
+  const reySubtests = [
+    ['Cópia', 'Construção visuoespacial', 62, 68],
+    ['Evocação', 'Memória episódica visual', 28, 44]
+  ]
+  const reyIds = reySubtests.map(([name, fn], index) => {
+    const id = instrument(name, null, rey, fn, index)
+    standardRanges(id)
+    return id
+  })
+
   const result = (assessmentId, instrumentId, value) =>
     saveResult(handle, null, {
       assessmentId,
@@ -141,6 +176,8 @@ export function seedDemo(dbPath) {
   subtestIds.forEach((id, index) => result(first, id, subtests[index][2]))
   result(first, wcst, 18)
   result(first, bdi, 72)
+  ravltIds.forEach((id, index) => result(first, id, ravltSubtests[index][2]))
+  reyIds.forEach((id, index) => result(first, id, reySubtests[index][2]))
 
   subtestIds.forEach((id, index) => {
     const value = subtests[index][3]
@@ -148,6 +185,8 @@ export function seedDemo(dbPath) {
   })
   result(second, wcst, 38)
   result(second, bdi, 55)
+  ravltIds.forEach((id, index) => result(second, id, ravltSubtests[index][3]))
+  reyIds.forEach((id, index) => result(second, id, reySubtests[index][3]))
 
   handle.close()
   return { patientId, first, second }

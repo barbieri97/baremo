@@ -17,7 +17,19 @@
 import { BrowserWindow, protocol } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
-import { buildPrintDocument, escapeAttribute, PRINT_CSP } from './document-html'
+import {
+  buildPrintDocument,
+  PRINT_CSP,
+  PRINT_PAGE_OPTIONS,
+  printFooterTemplate,
+  printHeaderTemplate
+} from './document-html'
+import type { PdfHeader } from './document-html'
+
+/** A configuração de página vive em `document-html.ts`, que não importa
+ *  `electron` — ver o comentário lá. Reexportada porque este continua sendo o
+ *  módulo que os chamadores conhecem. */
+export type { PdfHeader }
 
 export const PRINT_SCHEME = 'baremo-print'
 
@@ -46,12 +58,6 @@ export const PRINT_SCHEME_PRIVILEGES = {
   scheme: PRINT_SCHEME,
   privileges: { standard: true, secure: true, supportFetchAPI: true }
 } as const
-
-export interface PdfHeader {
-  /** Texto curto do cabeçalho de cada página. */
-  readonly left: string
-  readonly right: string
-}
 
 export interface RenderOptions {
   readonly title: string
@@ -94,13 +100,9 @@ export async function renderPdf(options: RenderOptions): Promise<Buffer> {
     await window.loadURL(`${PRINT_SCHEME}://${jobId}/`)
 
     return await window.webContents.printToPDF({
-      pageSize: 'A4',
-      printBackground: true,
-      margins: { top: 0.7, bottom: 0.8, left: 0.6, right: 0.6 },
-      displayHeaderFooter: true,
-      headerTemplate: headerTemplate(options.header),
-      footerTemplate: footerTemplate(options.issuedAt),
-      preferCSSPageSize: false
+      ...PRINT_PAGE_OPTIONS,
+      headerTemplate: printHeaderTemplate(options.header),
+      footerTemplate: printFooterTemplate(options.issuedAt)
     })
   } finally {
     jobs.delete(jobId)
@@ -111,24 +113,4 @@ export async function renderPdf(options: RenderOptions): Promise<Buffer> {
 export async function renderPdfToFile(options: RenderOptions, filePath: string): Promise<void> {
   const buffer = await renderPdf(options)
   await writeFile(filePath, buffer)
-}
-
-/**
- * Cabeçalho e rodapé nativos do Chromium.
- *
- * Rodam num contexto separado do documento, com CSS próprio e inline
- * obrigatório; `printToPDF` ignora estilo herdado da página.
- */
-function headerTemplate(header: PdfHeader): string {
-  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
-    <span>${escapeAttribute(header.left)}</span>
-    <span>${escapeAttribute(header.right)}</span>
-  </div>`
-}
-
-function footerTemplate(issuedAt: string): string {
-  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
-    <span>Emitido em ${escapeAttribute(issuedAt)}</span>
-    <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
-  </div>`
 }
