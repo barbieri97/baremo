@@ -16,6 +16,7 @@ export const SCORE_TYPE_LABELS: Readonly<Record<ScoreType, string>> = {
   scaledScore: 'Escore ponderado (M=10, DP=3)',
   stanine: 'Stanine',
   decile: 'Decil',
+  points: 'Pontuação bruta (com faixas)',
   raw: 'Escore bruto'
 }
 
@@ -28,6 +29,7 @@ export const SCORE_TYPE_SHORT_LABELS: Readonly<Record<ScoreType, string>> = {
   scaledScore: 'Ponderado',
   stanine: 'Stanine',
   decile: 'Decil',
+  points: 'Pontos',
   raw: 'Bruto'
 }
 

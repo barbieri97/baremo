@@ -34,8 +34,8 @@ export const EXPECTED_BAND = { min: 25, max: 75 } as const
 /**
  * Converte um valor para 0–100, onde 100 é sempre o melhor desempenho.
  *
- * Devolve `null` quando o tipo de escore não tem domínio limitado (escore
- * bruto), porque aí não existe posição relativa a calcular.
+ * Devolve `null` quando o tipo de escore não tem domínio posicional (escore
+ * bruto, pontos), porque aí não existe posição relativa a calcular.
  */
 export function normalizeScore(
   value: number | null,
@@ -45,7 +45,7 @@ export function normalizeScore(
   if (value === null || !Number.isFinite(value)) return null
 
   const domain = SCORE_TYPE_DOMAINS[scoreType]
-  if (domain.min === null || domain.max === null) return null
+  if (!domain.positional || domain.min === null || domain.max === null) return null
 
   const span = domain.max - domain.min
   if (span <= 0) return null
