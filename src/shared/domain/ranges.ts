@@ -184,7 +184,10 @@ export function validateRangeSet(ranges: readonly RangeLike[], scoreType: ScoreT
       })
     }
 
-    if (toScaled(last.maxValue, scoreType) < toScaled(domain.max, scoreType)) {
+    // Em `points` o teto do domínio é só guarda de digitação, não o fim da
+    // escala do instrumento: o BDI acaba em 63, e exigir faixas até 999 obrigaria
+    // a cadastrar uma classificação para valores que o teste não produz.
+    if (domain.positional && toScaled(last.maxValue, scoreType) < toScaled(domain.max, scoreType)) {
       issues.push({
         code: 'uncovered_end',
         message: `Valores até ${formatValue(domain.max)} ficam sem classificação: a última faixa termina em ${formatValue(last.maxValue)}.`,

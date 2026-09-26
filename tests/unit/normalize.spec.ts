@@ -30,10 +30,10 @@ describe('normalizeScore — escala direta', () => {
     expect(normalizeScore(10, 'scaledScore', false)).toBe(50)
   })
 
-  it('produz 0–100 para qualquer tipo com domínio limitado', () => {
+  it('produz 0–100 para qualquer tipo com domínio posicional', () => {
     for (const scoreType of SCORE_TYPES) {
       const domain = SCORE_TYPE_DOMAINS[scoreType]
-      if (domain.min === null || domain.max === null) continue
+      if (!domain.positional || domain.min === null || domain.max === null) continue
 
       const middle = (domain.min + domain.max) / 2
       const value = normalizeScore(middle, scoreType, false)
@@ -72,6 +72,13 @@ describe('normalizeScore — casos sem resposta', () => {
     // Escore bruto não tem mínimo nem máximo declarados: não existe posição
     // relativa a calcular, e inventar uma seria pior do que omitir o ponto.
     expect(normalizeScore(42, 'raw', false)).toBeNull()
+  })
+
+  it('devolve null em pontos, cujo teto não é o fim da escala', () => {
+    // Um BDI 30 sobre 0–999 viraria 3% e apareceria como muito rebaixado no
+    // perfil. A leitura de pontos vem das faixas, não da posição no domínio.
+    expect(normalizeScore(30, 'points', false)).toBeNull()
+    expect(normalizeScore(30, 'points', true)).toBeNull()
   })
 
   it('devolve null sem valor', () => {

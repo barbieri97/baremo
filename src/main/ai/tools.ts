@@ -151,7 +151,7 @@ const READ_DECLARATIONS: FunctionDeclaration[] = [
         tipoEscore: {
           type: Type.STRING,
           description:
-            'Um de: percentile, zScore, tScore, standardScore, scaledScore, stanine, decile.'
+            'Um de: percentile, zScore, tScore, standardScore, scaledScore, stanine, decile, points.'
         }
       },
       required: ['instrumentoId', 'tipoEscore']
@@ -262,7 +262,7 @@ const WRITE_DECLARATIONS: FunctionDeclaration[] = [
               tipoEscore: {
                 type: Type.STRING,
                 description:
-                  'Um de: percentile, zScore, tScore, standardScore, scaledScore, stanine, decile, raw (escore bruto).'
+                  'Um de: percentile, zScore, tScore, standardScore, scaledScore, stanine, decile, points (pontuação bruta de instrumento que tem faixas em pontos, como BDI e BAI — confira em buscar_instrumentos), raw (escore bruto).'
               },
               valor: { type: Type.NUMBER, description: 'Valor exatamente como aparece na fonte.' },
               observacao: { type: Type.STRING, description: 'Opcional. Nota curta sobre o item.' }
