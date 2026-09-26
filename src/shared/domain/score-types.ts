@@ -15,6 +15,7 @@ export const SCORE_TYPES = [
   'scaledScore',
   'stanine',
   'decile',
+  'points',
   'raw'
 ] as const
 
@@ -32,17 +33,31 @@ export interface ScoreTypeDomain {
    * cadastrar faixas normativas para ele.
    */
   readonly autoClassify: boolean
+  /**
+   * O domínio é uma régua em que a posição do valor diz algo — o que permite
+   * normalizar para os gráficos de perfil (§7.3).
+   *
+   * `points` é o caso em que não: o teto 999 existe só para validar a
+   * digitação, e um BDI 30 normalizado sobre 0–999 cairia em 3%, lido como
+   * "muito rebaixado" ao lado de percentis. A classificação dele vem das faixas.
+   */
+  readonly positional: boolean
 }
 
 export const SCORE_TYPE_DOMAINS: Readonly<Record<ScoreType, ScoreTypeDomain>> = {
-  percentile: { min: 0, max: 100, decimals: 1, autoClassify: true },
-  zScore: { min: -5, max: 5, decimals: 2, autoClassify: true },
-  tScore: { min: 0, max: 100, decimals: 1, autoClassify: true },
-  standardScore: { min: 40, max: 160, decimals: 0, autoClassify: true },
-  scaledScore: { min: 1, max: 19, decimals: 0, autoClassify: true },
-  stanine: { min: 1, max: 9, decimals: 0, autoClassify: true },
-  decile: { min: 1, max: 10, decimals: 0, autoClassify: true },
-  raw: { min: null, max: null, decimals: 2, autoClassify: false }
+  percentile: { min: 0, max: 100, decimals: 1, autoClassify: true, positional: true },
+  zScore: { min: -5, max: 5, decimals: 2, autoClassify: true, positional: true },
+  tScore: { min: 0, max: 100, decimals: 1, autoClassify: true, positional: true },
+  standardScore: { min: 40, max: 160, decimals: 0, autoClassify: true, positional: true },
+  scaledScore: { min: 1, max: 19, decimals: 0, autoClassify: true, positional: true },
+  stanine: { min: 1, max: 9, decimals: 0, autoClassify: true, positional: true },
+  decile: { min: 1, max: 10, decimals: 0, autoClassify: true, positional: true },
+  /**
+   * Pontuação bruta de inventários cujo manual classifica pelos próprios pontos
+   * (BDI, BAI: 0–63). Diferente de `raw`, recebe faixas e classificação.
+   */
+  points: { min: 0, max: 999, decimals: 0, autoClassify: true, positional: false },
+  raw: { min: null, max: null, decimals: 2, autoClassify: false, positional: false }
 }
 
 /** Domínio limitado — permite estreitar o tipo antes de validar faixas. */

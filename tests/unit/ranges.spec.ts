@@ -206,6 +206,26 @@ describe('validateRangeSet', () => {
     expect(codes).toEqual(['not_classifiable'])
   })
 
+  it('aceita pontos que terminam antes do teto do domínio, como o BDI', () => {
+    // O teto 999 de `points` é guarda de digitação; a escala do BDI acaba em 63.
+    const bdi = [
+      range('a', 'Mínimo', 0, 14),
+      range('b', 'Leve', 14, 20),
+      range('c', 'Moderado', 20, 29),
+      range('d', 'Grave', 29, 63)
+    ]
+    expect(validateRangeSet(bdi, 'points')).toEqual([])
+    expect(resolveRange(13, bdi, 'points')?.classificationName).toBe('Mínimo')
+    expect(resolveRange(14, bdi, 'points')?.classificationName).toBe('Leve')
+    expect(resolveRange(63, bdi, 'points')?.classificationName).toBe('Grave')
+    expect(resolveRange(64, bdi, 'points')).toBeNull()
+  })
+
+  it('continua exigindo o início do domínio em pontos', () => {
+    const codes = validateRangeSet([range('a', 'A', 5, 63)], 'points').map((issue) => issue.code)
+    expect(codes).toContain('uncovered_start')
+  })
+
   it('valida o domínio inteiro de escore ponderado', () => {
     const scaled = [
       range('a', 'Inferior', 1, 7),

@@ -36,6 +36,21 @@ describe('domínios dos tipos de escore', () => {
     expect(SCORE_TYPE_DOMAINS.raw.min).toBeNull()
     expect(SCORE_TYPE_DOMAINS.raw.max).toBeNull()
   })
+
+  it('marca pontos como inteiro limitado, classificável e fora da régua posicional', () => {
+    expect(SCORE_TYPE_DOMAINS.points).toMatchObject({
+      min: 0,
+      max: 999,
+      decimals: 0,
+      autoClassify: true,
+      positional: false
+    })
+  })
+
+  it('só pontos e escore bruto ficam fora da régua posicional', () => {
+    const nonPositional = SCORE_TYPES.filter((type) => !SCORE_TYPE_DOMAINS[type].positional)
+    expect(nonPositional).toEqual(['points', 'raw'])
+  })
 })
 
 describe('validateScoreValue', () => {
@@ -67,6 +82,14 @@ describe('validateScoreValue', () => {
     expect(validateScoreValue(50.2, 'percentile')).toBeNull()
     expect(validateScoreValue(1.23, 'zScore')).toBeNull()
     expect(validateScoreValue(10, 'scaledScore')).toBeNull()
+  })
+
+  it('aceita pontos inteiros de 0 a 999', () => {
+    expect(validateScoreValue(0, 'points')).toBeNull()
+    expect(validateScoreValue(63, 'points')).toBeNull()
+    expect(validateScoreValue(-1, 'points')?.code).toBe('out_of_range')
+    expect(validateScoreValue(1000, 'points')?.code).toBe('out_of_range')
+    expect(validateScoreValue(12.5, 'points')?.code).toBe('too_precise')
   })
 
   it('aceita qualquer valor finito em escore bruto', () => {
