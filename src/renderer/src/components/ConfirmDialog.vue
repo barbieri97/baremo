@@ -12,6 +12,9 @@
 import { computed, ref, watch } from 'vue'
 import BaseDialog from './BaseDialog.vue'
 import BaseButton from './BaseButton.vue'
+import BaseAlert from './BaseAlert.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -63,34 +66,34 @@ function cancel(): void {
 
 <template>
   <BaseDialog v-model:open="open" :title="title">
-    <p class="text-sm text-ink-700">{{ message }}</p>
+    <p class="text-sm text-fg-secondary">{{ message }}</p>
 
-    <div v-if="relevantCounts.length > 0" class="mt-4 rounded-md bg-warn-50 border border-warn-200 p-3">
-      <p class="text-xs font-semibold uppercase tracking-wide text-warn-700">Impacto</p>
-      <ul class="mt-2 space-y-1 text-sm text-warn-700">
+    <BaseAlert v-if="relevantCounts.length > 0" tone="warn" title="Impacto" class="mt-4">
+      <ul class="space-y-1">
         <li v-for="entry in relevantCounts" :key="entry.entity" class="flex justify-between gap-4">
           <span>{{ entry.entity }}</span>
           <span class="tabular font-semibold">{{ entry.count }}</span>
         </li>
       </ul>
-    </div>
+    </BaseAlert>
 
-    <div v-if="requireTyping !== null" class="mt-4">
-      <label class="field-label" for="confirm-typing">
-        Para confirmar, digite: <span class="font-normal normal-case text-ink-700">{{ requireTyping }}</span>
-      </label>
-      <input
-        id="confirm-typing"
+    <BaseField
+      v-if="requireTyping !== null"
+      id="confirm-typing"
+      class="mt-4"
+      hint="Esta ação é irreversível e remove os arquivos associados do disco."
+    >
+      <template #label>
+        Para confirmar, digite:
+        <span class="font-normal normal-case text-fg-secondary">{{ requireTyping }}</span>
+      </template>
+      <BaseInput
         v-model="typed"
-        class="field-input"
         autocomplete="off"
         spellcheck="false"
         @keydown.enter.prevent="confirm"
       />
-      <p class="mt-1 text-xs text-ink-500">
-        Esta ação é irreversível e remove os arquivos associados do disco.
-      </p>
-    </div>
+    </BaseField>
 
     <template #footer>
       <BaseButton variant="ghost" @click="cancel">Cancelar</BaseButton>

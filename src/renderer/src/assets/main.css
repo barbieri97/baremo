@@ -6,8 +6,17 @@
  * Tailwind v4 configura por CSS. As cores são neutras e de baixa saturação de
  * propósito: a cor com significado nesta interface é a das faixas de
  * classificação, e um tema colorido competiria com a leitura dos resultados.
+ *
+ * Duas camadas:
+ *
+ *  - primitivas (`ink`, `brand`, `danger`, `warn`, `ok`): a paleta crua. Não
+ *    use direto nas telas;
+ *  - semânticas (`surface`, `fg`, `line`, `accent`, …): o papel da cor. É o que
+ *    telas e componentes usam, para que trocar a paleta — ou criar um tema
+ *    escuro — seja mudar só os aliases abaixo.
  */
 @theme {
+  /* ── Primitivas ─────────────────────────────────────────────────────── */
   --color-ink-50: #f8fafc;
   --color-ink-100: #f1f5f9;
   --color-ink-200: #e2e8f0;
@@ -39,7 +48,57 @@
   --color-ok-50: #f0fff4;
   --color-ok-500: #2f855a;
 
+  /* ── Semânticas: superfícies ────────────────────────────────────────── */
+  --color-canvas: var(--color-ink-50); /* fundo do app, áreas rebaixadas, hover de linha */
+  --color-surface: #ffffff; /* cartões, diálogos, barras */
+  --color-surface-muted: var(--color-ink-100); /* cabeçalho de tabela, hover de controle */
+  --color-surface-strong: var(--color-ink-200); /* estado pressionado, trilhos */
+  --color-scrim: var(--color-ink-900); /* véu de modal, usado com opacidade */
+
+  /* ── Semânticas: texto ──────────────────────────────────────────────── */
+  --color-fg-strong: var(--color-ink-900);
+  --color-fg: var(--color-ink-800); /* texto padrão, títulos */
+  --color-fg-secondary: var(--color-ink-700);
+  --color-fg-muted: var(--color-ink-600);
+  --color-fg-subtle: var(--color-ink-500); /* legendas, ajuda */
+  --color-fg-faint: var(--color-ink-400); /* vazio, placeholder */
+  --color-fg-inverse: #ffffff; /* texto sobre accent/danger */
+
+  /* ── Semânticas: bordas ─────────────────────────────────────────────── */
+  --color-line-subtle: var(--color-ink-100);
+  --color-line: var(--color-ink-200);
+  --color-line-strong: var(--color-ink-300); /* bordas de controle */
+  --color-line-hover: var(--color-ink-400);
+
+  /* ── Semânticas: ação e estado ──────────────────────────────────────── */
+  --color-accent: var(--color-brand-500);
+  --color-accent-hover: var(--color-brand-600);
+  --color-accent-strong: var(--color-brand-700); /* texto sobre accent-soft */
+  --color-accent-soft: var(--color-brand-50);
+  --color-accent-muted: var(--color-brand-100);
+  --color-accent-line: var(--color-brand-200);
+
+  --color-danger: var(--color-danger-500);
+  --color-danger-strong: var(--color-danger-600);
+  --color-danger-soft: var(--color-danger-50);
+
+  --color-warn: var(--color-warn-500);
+  --color-warn-strong: var(--color-warn-700);
+  --color-warn-soft: var(--color-warn-50);
+  --color-warn-line: var(--color-warn-200);
+
+  --color-ok: var(--color-ok-500);
+  --color-ok-soft: var(--color-ok-50);
+
+  /* ── Raios ──────────────────────────────────────────────────────────── */
+  --radius-chip: 0.25rem; /* selos, botões de ícone, itens pequenos */
+  --radius-control: 0.375rem; /* botões, campos, menus */
+  --radius-surface: 0.5rem; /* cartões, diálogos */
+
+  /* ── Tipografia ─────────────────────────────────────────────────────── */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
 }
 
 html,
@@ -50,8 +109,8 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink-50);
-  color: var(--color-ink-800);
+  background: var(--color-canvas);
+  color: var(--color-fg);
   font-family: var(--font-sans);
   font-size: 14px;
 }
@@ -64,39 +123,8 @@ body {
  * estilo é global e não pode ser removido componente a componente.
  */
 :focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-}
-
-/* Utilitários usados o bastante para virarem classe. */
-@utility card {
-  background: white;
-  border: 1px solid var(--color-ink-200);
-  border-radius: 0.5rem;
-}
-
-@utility field-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-ink-500);
-  margin-bottom: 0.25rem;
-}
-
-@utility field-input {
-  width: 100%;
-  border: 1px solid var(--color-ink-300);
-  border-radius: 0.375rem;
-  padding: 0.5rem 0.625rem;
-  background: white;
-  color: var(--color-ink-800);
-}
-
-@utility field-input-invalid {
-  border-color: var(--color-danger-500);
-  background: var(--color-danger-50);
 }
 
 /* A grade de resultados é densa: a tabela precisa de tipografia tabular para
@@ -147,9 +175,9 @@ body {
 }
 
 .tiptap blockquote {
-  border-left: 3px solid var(--color-ink-300);
+  border-left: 3px solid var(--color-line-strong);
   padding-left: 1rem;
-  color: var(--color-ink-600);
+  color: var(--color-fg-muted);
   margin: 0 0 0.75rem;
 }
 
@@ -161,26 +189,26 @@ body {
 
 .tiptap th,
 .tiptap td {
-  border: 1px solid var(--color-ink-300);
+  border: 1px solid var(--color-line-strong);
   padding: 0.375rem 0.5rem;
   vertical-align: top;
 }
 
 .tiptap th {
-  background: var(--color-ink-100);
+  background: var(--color-surface-muted);
   font-weight: 600;
 }
 
 .tiptap pre {
-  background: var(--color-ink-100);
+  background: var(--color-surface-muted);
   padding: 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-control);
   overflow-x: auto;
 }
 
 .tiptap .is-empty::before {
   content: attr(data-placeholder);
-  color: var(--color-ink-400);
+  color: var(--color-fg-faint);
   float: left;
   height: 0;
   pointer-events: none;
@@ -189,16 +217,16 @@ body {
 /* Nó `variavel` (§9.2): o token precisa ser visivelmente um espaço reservado,
    e não texto comum, para o profissional não confundir com o dado real. */
 .tiptap-token {
-  background: var(--color-brand-100);
-  color: var(--color-brand-700);
-  border-radius: 0.25rem;
+  background: var(--color-accent-muted);
+  color: var(--color-accent-strong);
+  border-radius: var(--radius-chip);
   padding: 0.05rem 0.3rem;
   font-size: 0.9em;
   white-space: nowrap;
 }
 
 .tiptap-page-break {
-  border-top: 2px dashed var(--color-ink-300);
+  border-top: 2px dashed var(--color-line-strong);
   margin: 1.5rem 0;
   position: relative;
   text-align: center;
@@ -208,10 +236,10 @@ body {
   content: 'quebra de página';
   position: relative;
   top: -0.7rem;
-  background: var(--color-ink-50);
+  background: var(--color-canvas);
   padding: 0 0.5rem;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-ink-400);
+  color: var(--color-fg-faint);
 }

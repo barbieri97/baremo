@@ -19,10 +19,25 @@ import ResultBatchEditor from '../components/ResultBatchEditor.vue'
 import ResultGroupAccordion from '../components/ResultGroupAccordion.vue'
 import AttachmentsPanel from '../components/AttachmentsPanel.vue'
 import DocumentsPanel from '../components/DocumentsPanel.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseSegmented from '../components/BaseSegmented.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
+import BaseField from '../components/BaseField.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
 import { formatIsoDate } from '@shared/domain/dates'
 import { groupResultsByTree } from '@shared/domain/result-grouping'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Assessment, Patient } from '@shared/contracts/entities'
+
+const REPROCESS_COLUMNS: TableColumn[] = [
+  { key: 'instrument', label: 'Instrumento' },
+  { key: 'from', label: 'De' },
+  { key: 'to', label: 'Para' }
+]
 
 const props = defineProps<{ id: string }>()
 
@@ -196,30 +211,20 @@ async function saveMeta(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="loading" class="p-6 text-sm text-ink-500">Carregando avaliação…</div>
+  <div v-if="loading" class="p-6 text-sm text-fg-subtle">Carregando avaliação…</div>
 
-  <div v-else-if="assessment === null" class="p-6 text-sm text-ink-500">
+  <div v-else-if="assessment === null" class="p-6 text-sm text-fg-subtle">
     Avaliação não encontrada.
   </div>
 
   <div v-else class="p-6">
-    <header class="mb-6 flex items-start justify-between gap-6">
-      <div>
-        <button
-          class="text-xs text-ink-500 hover:underline"
-          @click="router.push(`/pacientes/${assessment.patientId}`)"
-        >
-          ← {{ patient?.fullName ?? 'Paciente' }}
-        </button>
-        <h1 class="mt-1 text-xl font-bold text-ink-800">
-          Avaliação de {{ formatIsoDate(assessment.date) }}
-        </h1>
-        <p v-if="assessment.referralReason" class="mt-1 max-w-3xl text-sm text-ink-500">
-          {{ assessment.referralReason }}
-        </p>
-      </div>
-
-      <div class="flex flex-wrap items-center justify-end gap-2">
+    <PageHeader
+      :title="`Avaliação de ${formatIsoDate(assessment.date)}`"
+      :subtitle="assessment.referralReason"
+      :back="{ label: patient?.fullName ?? 'Paciente', to: `/pacientes/${assessment.patientId}` }"
+      class="mb-6"
+    >
+      <template #actions>
         <BaseButton size="sm" @click="openMeta">Editar dados</BaseButton>
         <BaseButton size="sm" @click="openReprocess">Reprocessar classificações</BaseButton>
         <BaseButton
@@ -229,58 +234,34 @@ async function saveMeta(): Promise<void> {
         >
           Visualizar resultados
         </BaseButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <section class="mb-6">
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-base font-semibold text-ink-800">
-          Resultados
-          <span class="ml-1 text-sm font-normal text-ink-500">({{ results.length }})</span>
-        </h2>
-
-        <div class="flex items-center gap-2">
-          <div
+      <SectionHeader title="Resultados" :count="results.length" class="mb-3">
+        <template #description>
+          A classificação e a cor são gravadas no momento do lançamento. Alterar as faixas depois
+          não altera resultados já registrados — use "Reprocessar classificações" para isso.
+        </template>
+        <template #actions>
+          <BaseSegmented
             v-if="results.length > 0"
-            class="inline-flex rounded-md border border-ink-300 bg-white p-0.5 text-xs"
-            role="radiogroup"
-            aria-label="Agrupamento dos resultados"
-          >
-            <button
-              v-for="option in VIEW_MODES"
-              :key="option.value"
-              type="button"
-              role="radio"
-              :aria-checked="viewMode === option.value"
-              class="rounded px-3 py-1 font-medium"
-              :class="
-                viewMode === option.value
-                  ? 'bg-brand-500 text-white'
-                  : 'text-ink-600 hover:bg-ink-100'
-              "
-              @click="viewMode = option.value"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+            v-model="viewMode"
+            :options="VIEW_MODES"
+            label="Agrupamento dos resultados"
+          />
 
           <BaseButton v-if="!addingRow" size="sm" variant="primary" @click="addingRow = true">
             Lançar resultado
           </BaseButton>
-        </div>
-      </div>
+        </template>
+      </SectionHeader>
 
-      <p class="mb-3 text-xs text-ink-500">
-        A classificação e a cor são gravadas no momento do lançamento. Alterar as faixas depois não
-        altera resultados já registrados — use "Reprocessar classificações" para isso.
-      </p>
-
-      <div
+      <BaseEmptyState
         v-if="results.length === 0 && !addingRow"
-        class="card p-8 text-center text-sm text-ink-400"
-      >
-        Nenhum resultado lançado ainda.
-      </div>
+        framed
+        message="Nenhum resultado lançado ainda."
+      />
 
       <ResultGroupAccordion
         v-for="group in activeGroups"
@@ -295,29 +276,13 @@ async function saveMeta(): Promise<void> {
         @cancel="editingId = null"
       />
 
-      <div v-if="addingRow" class="card border-brand-200 bg-brand-50/40 p-3">
-        <div
-          class="mb-3 inline-flex rounded-md border border-ink-300 bg-white p-0.5 text-xs"
-          role="radiogroup"
-          aria-label="Modo de lançamento"
-        >
-          <button
-            v-for="option in ENTRY_MODES"
-            :key="option.value"
-            type="button"
-            role="radio"
-            :aria-checked="entryMode === option.value"
-            class="rounded px-3 py-1 font-medium"
-            :class="
-              entryMode === option.value
-                ? 'bg-brand-500 text-white'
-                : 'text-ink-600 hover:bg-ink-100'
-            "
-            @click="entryMode = option.value"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+      <BaseCard v-if="addingRow" variant="accent" padding="sm">
+        <BaseSegmented
+          v-model="entryMode"
+          :options="ENTRY_MODES"
+          label="Modo de lançamento"
+          class="mb-3"
+        />
 
         <ResultBatchEditor
           v-if="entryMode === 'battery'"
@@ -333,7 +298,7 @@ async function saveMeta(): Promise<void> {
           @saved="onSaved"
           @cancel="addingRow = false"
         />
-      </div>
+      </BaseCard>
     </section>
 
     <DocumentsPanel :patient-id="assessment.patientId" :assessment-id="id" class="mb-6" />
@@ -345,38 +310,25 @@ async function saveMeta(): Promise<void> {
       description="Recalcula a classificação dos resultados desta avaliação com as faixas cadastradas hoje. Resultados sobrescritos manualmente são preservados."
       wide
     >
-      <p v-if="reprocessPreview.length === 0" class="text-sm text-ink-600">
+      <p v-if="reprocessPreview.length === 0" class="text-sm text-fg-muted">
         Nenhuma classificação mudaria. As faixas atuais produzem exatamente o que já está gravado.
       </p>
 
       <div v-else>
-        <p class="mb-3 text-sm text-ink-600">
+        <p class="mb-3 text-sm text-fg-muted">
           {{ reprocessPreview.length }} resultado(s) mudariam de classificação:
         </p>
-        <div class="max-h-80 overflow-y-auto rounded border border-ink-200">
-          <table class="w-full text-sm">
-            <thead class="sticky top-0 bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-              <tr>
-                <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-                <th class="px-3 py-2 text-left font-semibold">De</th>
-                <th class="px-3 py-2 text-left font-semibold">Para</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="change in reprocessPreview"
-                :key="change.resultId"
-                class="border-t border-ink-200"
-              >
-                <td class="px-3 py-2">{{ change.instrumentName }}</td>
-                <td class="px-3 py-2 text-ink-500">{{ change.from ?? 'sem classificação' }}</td>
-                <td class="px-3 py-2 font-medium text-ink-800">
-                  {{ change.to ?? 'sem classificação' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <BaseCard class="max-h-80 overflow-y-auto">
+          <BaseTable :columns="REPROCESS_COLUMNS" sticky>
+            <tr v-for="change in reprocessPreview" :key="change.resultId">
+              <td>{{ change.instrumentName }}</td>
+              <td class="text-fg-subtle">{{ change.from ?? 'sem classificação' }}</td>
+              <td class="font-medium text-fg">
+                {{ change.to ?? 'sem classificação' }}
+              </td>
+            </tr>
+          </BaseTable>
+        </BaseCard>
       </div>
 
       <template #footer>
@@ -394,26 +346,18 @@ async function saveMeta(): Promise<void> {
 
     <BaseDialog v-model:open="metaOpen" title="Dados da avaliação">
       <form class="space-y-4" @submit.prevent="saveMeta">
-        <div>
-          <label class="field-label" for="meta-date">Data</label>
-          <input id="meta-date" v-model="metaForm.date" type="date" class="field-input" required />
-        </div>
-        <div>
-          <label class="field-label" for="meta-reason">Motivo do encaminhamento</label>
-          <textarea
-            id="meta-reason"
-            v-model="metaForm.referralReason"
-            class="field-input min-h-20"
-          />
-        </div>
-        <div>
-          <label class="field-label" for="meta-complaint">Queixa</label>
-          <textarea id="meta-complaint" v-model="metaForm.complaint" class="field-input min-h-20" />
-        </div>
-        <div>
-          <label class="field-label" for="meta-notes">Observações</label>
-          <textarea id="meta-notes" v-model="metaForm.notes" class="field-input min-h-20" />
-        </div>
+        <BaseField id="meta-date" label="Data">
+          <BaseInput v-model="metaForm.date" type="date" required />
+        </BaseField>
+        <BaseField id="meta-reason" label="Motivo do encaminhamento">
+          <BaseTextarea v-model="metaForm.referralReason" />
+        </BaseField>
+        <BaseField id="meta-complaint" label="Queixa">
+          <BaseTextarea v-model="metaForm.complaint" />
+        </BaseField>
+        <BaseField id="meta-notes" label="Observações">
+          <BaseTextarea v-model="metaForm.notes" />
+        </BaseField>
       </form>
 
       <template #footer>

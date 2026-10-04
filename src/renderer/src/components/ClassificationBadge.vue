@@ -17,9 +17,7 @@ const props = defineProps<{
 }>()
 
 const background = computed(() =>
-  props.colorHex !== null && /^#[0-9A-Fa-f]{6}$/.test(props.colorHex)
-    ? props.colorHex
-    : '#e2e8f0'
+  props.colorHex !== null && /^#[0-9A-Fa-f]{6}$/.test(props.colorHex) ? props.colorHex : '#e2e8f0'
 )
 
 const color = computed(() => readableTextColor(background.value))
@@ -28,12 +26,12 @@ const color = computed(() => readableTextColor(background.value))
 <template>
   <span
     v-if="name !== null"
-    class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold"
+    class="inline-flex items-center gap-1 rounded-chip px-2 py-0.5 text-xs font-semibold"
     :style="{ backgroundColor: background, color }"
     :title="overridden ? 'Classificação definida manualmente pelo profissional' : undefined"
   >
     {{ name }}
     <span v-if="overridden" aria-hidden="true">*</span>
   </span>
-  <span v-else class="text-xs text-ink-400">—</span>
+  <span v-else class="text-xs text-fg-faint">—</span>
 </template>

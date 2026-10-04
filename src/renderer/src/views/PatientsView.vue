@@ -8,8 +8,22 @@ import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
 import PatientFormDialog from '../components/PatientFormDialog.vue'
+import PageHeader from '../components/PageHeader.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseCheckbox from '../components/BaseCheckbox.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
+import BaseBadge from '../components/BaseBadge.vue'
 import { formatIsoDate, ageAt, formatAge, today } from '@shared/domain/dates'
 import type { Patient } from '@shared/contracts/entities'
+
+const COLUMNS: TableColumn[] = [
+  { key: 'name', label: 'Nome' },
+  { key: 'age', label: 'Idade' },
+  { key: 'birth', label: 'Nascimento' },
+  { key: 'contact', label: 'Contato' },
+  { key: 'status', label: 'Situação' }
+]
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -60,79 +74,58 @@ async function onCreated(patient: Patient): Promise<void> {
 
 <template>
   <div class="p-6">
-    <header class="mb-5 flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-ink-800">Pacientes</h1>
-        <p class="text-sm text-ink-500">Prontuários, avaliações e documentos.</p>
-      </div>
-      <BaseButton variant="primary" @click="formOpen = true">Novo paciente</BaseButton>
-    </header>
+    <PageHeader title="Pacientes" subtitle="Prontuários, avaliações e documentos." class="mb-6">
+      <template #actions>
+        <BaseButton variant="primary" @click="formOpen = true">Novo paciente</BaseButton>
+      </template>
+    </PageHeader>
 
     <div class="mb-4 flex items-center gap-3">
-      <input
+      <BaseInput
         v-model="query"
-        class="field-input max-w-sm"
+        class="max-w-sm"
         type="search"
         placeholder="Buscar por nome, contato ou responsável"
         aria-label="Buscar pacientes"
       />
-      <label class="flex items-center gap-2 text-sm text-ink-600">
-        <input v-model="includeArchived" type="checkbox" class="rounded border-ink-300" />
-        Mostrar arquivados
-      </label>
+      <BaseCheckbox v-model="includeArchived" label="Mostrar arquivados" />
     </div>
 
-    <div class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-          <tr>
-            <th class="px-4 py-2 text-left font-semibold">Nome</th>
-            <th class="px-4 py-2 text-left font-semibold">Idade</th>
-            <th class="px-4 py-2 text-left font-semibold">Nascimento</th>
-            <th class="px-4 py-2 text-left font-semibold">Contato</th>
-            <th class="px-4 py-2 text-left font-semibold">Situação</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td colspan="5" class="px-4 py-8 text-center text-ink-400">Carregando…</td>
-          </tr>
-          <tr v-else-if="patients.length === 0">
-            <td colspan="5" class="px-4 py-8 text-center text-ink-400">
-              {{
-                query.length > 0
-                  ? 'Nenhum paciente encontrado para esta busca.'
-                  : 'Nenhum paciente cadastrado ainda.'
-              }}
-            </td>
-          </tr>
-          <tr
-            v-for="patient in patients"
-            :key="patient.id"
-            class="cursor-pointer border-t border-ink-200 hover:bg-ink-50"
-            tabindex="0"
-            @click="router.push(`/pacientes/${patient.id}`)"
-            @keydown.enter="router.push(`/pacientes/${patient.id}`)"
-          >
-            <td class="px-4 py-2.5 font-medium text-ink-800">{{ patient.fullName }}</td>
-            <td class="px-4 py-2.5 text-ink-600">{{ currentAge(patient) }}</td>
-            <td class="px-4 py-2.5 tabular text-ink-600">
-              {{ patient.birthDate !== null ? formatIsoDate(patient.birthDate) : '—' }}
-            </td>
-            <td class="px-4 py-2.5 text-ink-600">{{ patient.contact ?? '—' }}</td>
-            <td class="px-4 py-2.5">
-              <span
-                v-if="patient.archivedAt !== null"
-                class="rounded bg-ink-200 px-2 py-0.5 text-xs font-medium text-ink-600"
-              >
-                Arquivado
-              </span>
-              <span v-else class="text-xs text-ink-400">Ativo</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <BaseCard class="overflow-hidden">
+      <BaseTable
+        :columns="COLUMNS"
+        density="comfortable"
+        :empty-text="
+          loading
+            ? 'Carregando…'
+            : patients.length === 0
+              ? query.length > 0
+                ? 'Nenhum paciente encontrado para esta busca.'
+                : 'Nenhum paciente cadastrado ainda.'
+              : null
+        "
+      >
+        <tr
+          v-for="patient in patients"
+          :key="patient.id"
+          class="cursor-pointer hover:bg-canvas"
+          tabindex="0"
+          @click="router.push(`/pacientes/${patient.id}`)"
+          @keydown.enter="router.push(`/pacientes/${patient.id}`)"
+        >
+          <td class="font-medium text-fg">{{ patient.fullName }}</td>
+          <td class="text-fg-muted">{{ currentAge(patient) }}</td>
+          <td class="tabular text-fg-muted">
+            {{ patient.birthDate !== null ? formatIsoDate(patient.birthDate) : '—' }}
+          </td>
+          <td class="text-fg-muted">{{ patient.contact ?? '—' }}</td>
+          <td>
+            <BaseBadge v-if="patient.archivedAt !== null">Arquivado</BaseBadge>
+            <span v-else class="text-xs text-fg-faint">Ativo</span>
+          </td>
+        </tr>
+      </BaseTable>
+    </BaseCard>
 
     <PatientFormDialog v-model:open="formOpen" :patient="null" @saved="onCreated" />
   </div>

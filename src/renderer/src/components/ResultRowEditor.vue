@@ -17,6 +17,10 @@ import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from './BaseButton.vue'
 import ClassificationBadge from './ClassificationBadge.vue'
+import BaseCheckbox from './BaseCheckbox.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
 import {
   RESULT_STATUSES,
   RESULT_STATUS_LABELS,
@@ -66,8 +70,8 @@ const overrideColor = ref(props.result?.colorHex ?? '#2B6CB0')
 const ranges = ref<ClassificationRangeWithColor[]>([])
 const configuredTypes = ref<ScoreType[]>([])
 const saving = ref(false)
-const valueInput = ref<HTMLInputElement | null>(null)
-const instrumentSelect = ref<HTMLSelectElement | null>(null)
+const valueInput = ref<{ focus(): void } | null>(null)
+const instrumentSelect = ref<{ focus(): void } | null>(null)
 
 onMounted(() => {
   // Novo lançamento começa no instrumento; edição começa no valor, que é o que
@@ -226,14 +230,8 @@ async function save(): Promise<void> {
 
 <template>
   <div class="grid grid-cols-12 items-start gap-3">
-    <div class="col-span-4">
-      <label class="field-label" :for="`instrument-${assessmentId}`">Instrumento</label>
-      <select
-        :id="`instrument-${assessmentId}`"
-        ref="instrumentSelect"
-        v-model="instrumentId"
-        class="field-input"
-      >
+    <BaseField :id="`instrument-${assessmentId}`" label="Instrumento" class="col-span-4">
+      <BaseSelect ref="instrumentSelect" v-model="instrumentId">
         <option value="">Selecione…</option>
         <option
           v-for="entry in catalog.flatInstruments"
@@ -243,79 +241,69 @@ async function save(): Promise<void> {
           {{ '— '.repeat(entry.depth) }}{{ entry.node.name
           }}{{ entry.node.acronym ? ` (${entry.node.acronym})` : '' }}
         </option>
-      </select>
-    </div>
+      </BaseSelect>
+    </BaseField>
 
-    <div class="col-span-2">
-      <label class="field-label" :for="`score-type-${assessmentId}`">Tipo de escore</label>
-      <select :id="`score-type-${assessmentId}`" v-model="scoreType" class="field-input">
+    <BaseField :id="`score-type-${assessmentId}`" label="Tipo de escore" class="col-span-2">
+      <BaseSelect v-model="scoreType">
         <option v-for="type in availableTypes" :key="type" :value="type">
           {{ SCORE_TYPE_LABELS[type] }}
         </option>
-      </select>
-    </div>
+      </BaseSelect>
+    </BaseField>
 
-    <div class="col-span-1">
-      <label class="field-label" :for="`value-${assessmentId}`">Valor</label>
-      <input
-        :id="`value-${assessmentId}`"
+    <BaseField :id="`value-${assessmentId}`" label="Valor" class="col-span-1">
+      <BaseInput
         ref="valueInput"
         v-model="rawValue"
-        class="field-input tabular text-right"
-        :class="{ 'field-input-invalid': valueError !== null }"
+        class="tabular text-right"
+        :invalid="valueError !== null"
         :disabled="!requiresValue(status)"
         inputmode="decimal"
         autocomplete="off"
         :title="domainHint"
         @keydown.enter.prevent="save"
       />
-    </div>
+    </BaseField>
 
-    <div class="col-span-2">
-      <label class="field-label" :for="`status-${assessmentId}`">Situação</label>
-      <select :id="`status-${assessmentId}`" v-model="status" class="field-input">
+    <BaseField :id="`status-${assessmentId}`" label="Situação" class="col-span-2">
+      <BaseSelect v-model="status">
         <option v-for="value in RESULT_STATUSES" :key="value" :value="value">
           {{ RESULT_STATUS_LABELS[value] }}
         </option>
-      </select>
-    </div>
+      </BaseSelect>
+    </BaseField>
 
-    <div class="col-span-3">
-      <label class="field-label" :for="`notes-${assessmentId}`">Observação</label>
-      <input
-        :id="`notes-${assessmentId}`"
-        v-model="notes"
-        class="field-input"
-        @keydown.enter.prevent="save"
-      />
-    </div>
+    <BaseField :id="`notes-${assessmentId}`" label="Observação" class="col-span-3">
+      <BaseInput v-model="notes" @keydown.enter.prevent="save" />
+    </BaseField>
 
     <div class="col-span-12 flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-2">
-        <span class="text-xs text-ink-500">Classificação:</span>
+        <span class="text-xs text-fg-subtle">Classificação:</span>
         <ClassificationBadge
           :name="preview.name"
           :color-hex="preview.colorHex"
           :overridden="overriding"
         />
-        <span class="text-xs text-ink-400">({{ domainHint }})</span>
+        <span class="text-xs text-fg-faint">({{ domainHint }})</span>
       </div>
 
-      <label class="flex items-center gap-2 text-xs text-ink-600">
-        <input v-model="overriding" type="checkbox" class="rounded border-ink-300" />
-        Definir classificação manualmente
-      </label>
+      <BaseCheckbox v-model="overriding" size="sm" label="Definir classificação manualmente" />
 
       <template v-if="overriding">
-        <input
+        <BaseInput
           v-model="overrideName"
-          class="field-input max-w-48 py-1 text-sm"
+          size="sm"
+          class="max-w-48"
           placeholder="Nome da classificação"
+          aria-label="Nome da classificação"
         />
         <input
           v-model="overrideColor"
           type="color"
-          class="h-8 w-12 rounded border border-ink-300"
+          class="h-8 w-12 rounded-chip border border-line-strong"
+          aria-label="Cor da classificação"
         />
       </template>
 
@@ -333,11 +321,11 @@ async function save(): Promise<void> {
       </div>
     </div>
 
-    <p v-if="valueError !== null" class="col-span-12 text-xs text-danger-500">
+    <p v-if="valueError !== null" class="col-span-12 text-xs text-danger">
       {{ valueError }}
     </p>
 
-    <p v-else-if="noRangesWarning" class="col-span-12 text-xs text-warn-700">
+    <p v-else-if="noRangesWarning" class="col-span-12 text-xs text-warn-strong">
       Este instrumento não tem faixas cadastradas para
       {{ SCORE_TYPE_LABELS[scoreType] }}. O resultado será gravado sem classificação — cadastre as
       faixas em Instrumentos para que ela seja atribuída automaticamente.
@@ -345,7 +333,7 @@ async function save(): Promise<void> {
 
     <p
       v-else-if="preview.name === null && parsedValue !== null && !overriding && ranges.length > 0"
-      class="col-span-12 text-xs text-warn-700"
+      class="col-span-12 text-xs text-warn-strong"
     >
       Nenhuma faixa cadastrada cobre este valor. Verifique a cobertura das faixas deste instrumento.
     </p>

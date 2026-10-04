@@ -9,6 +9,14 @@ import { useAppStore } from '../stores/app'
 import BaseButton from './BaseButton.vue'
 import BaseDialog from './BaseDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import SectionHeader from './SectionHeader.vue'
+import BaseCard from './BaseCard.vue'
+import BaseBadge from './BaseBadge.vue'
+import BaseEmptyState from './BaseEmptyState.vue'
+import BaseTable, { type TableColumn } from './BaseTable.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
 import { formatIsoDate } from '@shared/domain/dates'
 import {
   DOCUMENT_ORIGIN_LABELS,
@@ -18,6 +26,21 @@ import {
 } from '@shared/labels'
 import type { DocumentType } from '@shared/labels'
 import type { ChannelOutput } from '@shared/contracts'
+
+const COLUMNS: TableColumn[] = [
+  { key: 'title', label: 'Título' },
+  { key: 'type', label: 'Tipo' },
+  { key: 'status', label: 'Situação' },
+  { key: 'origin', label: 'Origem' },
+  { key: 'updated', label: 'Atualizado' },
+  { key: 'actions', class: 'w-20' }
+]
+
+const STATUS_TONES = {
+  draft: 'neutral',
+  in_review: 'warn',
+  finalized: 'ok'
+} as const
 
 const props = defineProps<{
   patientId: string
@@ -100,119 +123,92 @@ async function confirmDelete(): Promise<void> {
 
 <template>
   <section>
-    <div class="mb-2 flex items-center justify-between">
-      <h2 class="text-base font-semibold text-ink-800">
-        Documentos
-        <span class="ml-1 text-sm font-normal text-ink-500">({{ documents.length }})</span>
-      </h2>
-      <BaseButton
-        size="sm"
-        @click="
-          () => {
-            onTypeChange()
-            createOpen = true
-          }
-        "
-      >
-        Novo documento
-      </BaseButton>
-    </div>
+    <SectionHeader title="Documentos" :count="documents.length" class="mb-2">
+      <template #actions>
+        <BaseButton
+          size="sm"
+          @click="
+            () => {
+              onTypeChange()
+              createOpen = true
+            }
+          "
+        >
+          Novo documento
+        </BaseButton>
+      </template>
+    </SectionHeader>
 
-    <div class="card overflow-hidden">
-      <p v-if="loading" class="py-6 text-center text-sm text-ink-400">Carregando documentos…</p>
+    <BaseCard class="overflow-hidden">
+      <BaseEmptyState v-if="loading" message="Carregando documentos…" />
 
-      <p v-else-if="documents.length === 0" class="py-6 text-center text-sm text-ink-400">
-        Nenhum documento. Os modelos da Resolução CFP nº 06/2019 já vêm cadastrados.
-      </p>
+      <BaseEmptyState
+        v-else-if="documents.length === 0"
+        message="Nenhum documento. Os modelos da Resolução CFP nº 06/2019 já vêm cadastrados."
+      />
 
-      <table v-else class="w-full text-sm">
-        <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-          <tr>
-            <th class="px-4 py-2 text-left font-semibold">Título</th>
-            <th class="px-4 py-2 text-left font-semibold">Tipo</th>
-            <th class="px-4 py-2 text-left font-semibold">Situação</th>
-            <th class="px-4 py-2 text-left font-semibold">Origem</th>
-            <th class="px-4 py-2 text-left font-semibold">Atualizado</th>
-            <th class="w-20 px-4 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="document in documents"
-            :key="document.id"
-            class="cursor-pointer border-t border-ink-200 hover:bg-ink-50"
-            tabindex="0"
-            @click="router.push(`/documentos/${document.id}`)"
-            @keydown.enter="router.push(`/documentos/${document.id}`)"
-          >
-            <td class="px-4 py-2.5 font-medium text-ink-800">{{ document.title }}</td>
-            <td class="px-4 py-2.5 text-ink-600">{{ DOCUMENT_TYPE_LABELS[document.type] }}</td>
-            <td class="px-4 py-2.5">
-              <span
-                class="rounded px-2 py-0.5 text-xs font-medium"
-                :class="{
-                  'bg-ink-100 text-ink-600': document.status === 'draft',
-                  'bg-warn-50 text-warn-700': document.status === 'in_review',
-                  'bg-ok-50 text-ok-500': document.status === 'finalized'
-                }"
-              >
-                {{ DOCUMENT_STATUS_LABELS[document.status] }}
-              </span>
-            </td>
-            <td class="px-4 py-2.5 text-xs text-ink-500">
-              {{ DOCUMENT_ORIGIN_LABELS[document.origin] }}
-            </td>
-            <td class="px-4 py-2.5 tabular text-ink-600">
-              {{ formatIsoDate(document.updatedAt.slice(0, 10)) }}
-            </td>
-            <td class="px-4 py-2.5 text-right">
-              <button
-                class="text-xs text-danger-500 hover:underline"
-                @click.stop="
-                  () => {
-                    deleting = document
-                    deleteOpen = true
-                  }
-                "
-              >
-                Excluir
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <BaseTable v-else :columns="COLUMNS" density="comfortable">
+        <tr
+          v-for="document in documents"
+          :key="document.id"
+          class="cursor-pointer hover:bg-canvas"
+          tabindex="0"
+          @click="router.push(`/documentos/${document.id}`)"
+          @keydown.enter="router.push(`/documentos/${document.id}`)"
+        >
+          <td class="font-medium text-fg">{{ document.title }}</td>
+          <td class="text-fg-muted">{{ DOCUMENT_TYPE_LABELS[document.type] }}</td>
+          <td>
+            <BaseBadge :tone="STATUS_TONES[document.status]">
+              {{ DOCUMENT_STATUS_LABELS[document.status] }}
+            </BaseBadge>
+          </td>
+          <td class="text-xs text-fg-subtle">
+            {{ DOCUMENT_ORIGIN_LABELS[document.origin] }}
+          </td>
+          <td class="tabular text-fg-muted">
+            {{ formatIsoDate(document.updatedAt.slice(0, 10)) }}
+          </td>
+          <td class="text-right">
+            <BaseButton
+              variant="link-danger"
+              size="sm"
+              @click.stop="
+                () => {
+                  deleting = document
+                  deleteOpen = true
+                }
+              "
+            >
+              Excluir
+            </BaseButton>
+          </td>
+        </tr>
+      </BaseTable>
+    </BaseCard>
 
     <BaseDialog v-model:open="createOpen" title="Novo documento">
       <form class="space-y-4" @submit.prevent="create">
-        <div>
-          <label class="field-label" for="document-type">Tipo</label>
-          <select id="document-type" v-model="form.type" class="field-input" @change="onTypeChange">
+        <BaseField id="document-type" label="Tipo">
+          <BaseSelect v-model="form.type" @change="onTypeChange">
             <option v-for="type in DOCUMENT_TYPES" :key="type" :value="type">
               {{ DOCUMENT_TYPE_LABELS[type] }}
             </option>
-          </select>
-        </div>
+          </BaseSelect>
+        </BaseField>
 
-        <div>
-          <label class="field-label" for="document-title">Título</label>
-          <input
-            id="document-title"
-            v-model="form.title"
-            class="field-input"
-            :placeholder="DOCUMENT_TYPE_LABELS[form.type]"
-          />
-        </div>
+        <BaseField id="document-title" label="Título">
+          <BaseInput v-model="form.title" :placeholder="DOCUMENT_TYPE_LABELS[form.type]" />
+        </BaseField>
 
-        <div>
-          <label class="field-label" for="document-template">Modelo</label>
-          <select id="document-template" v-model="form.templateId" class="field-input">
+        <BaseField id="document-template" label="Modelo">
+          <BaseSelect v-model="form.templateId">
             <option value="">Documento em branco</option>
             <option v-for="template in templates" :key="template.id" :value="template.id">
               {{ template.name }}
             </option>
-          </select>
-        </div>
+          </BaseSelect>
+        </BaseField>
       </form>
 
       <template #footer>

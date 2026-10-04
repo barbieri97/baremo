@@ -14,6 +14,13 @@ import BaseButton from './BaseButton.vue'
 import BaseDialog from './BaseDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import AttachmentPreview from './AttachmentPreview.vue'
+import SectionHeader from './SectionHeader.vue'
+import BaseCard from './BaseCard.vue'
+import BaseBadge from './BaseBadge.vue'
+import BaseEmptyState from './BaseEmptyState.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseTextarea from './BaseTextarea.vue'
 import { formatIsoDate } from '@shared/domain/dates'
 import type { Attachment } from '@shared/contracts/entities'
 
@@ -53,7 +60,10 @@ async function load(): Promise<void> {
 
 onMounted(load)
 
-function reportIngest(result: { added: unknown[]; rejected: { name: string; reason: string }[] }): void {
+function reportIngest(result: {
+  added: unknown[]
+  rejected: { name: string; reason: string }[]
+}): void {
   if (result.added.length > 0) {
     appStore.notify('success', `${result.added.length} arquivo(s) anexado(s).`)
   }
@@ -167,78 +177,73 @@ const overQuota = computed(
 
 <template>
   <section>
-    <div class="mb-2 flex items-center justify-between">
-      <h2 class="text-base font-semibold text-ink-800">
-        Arquivos
-        <span class="ml-1 text-sm font-normal text-ink-500">({{ attachments.length }})</span>
-      </h2>
-      <BaseButton size="sm" @click="pickFiles">Anexar arquivo</BaseButton>
-    </div>
+    <SectionHeader title="Arquivos" :count="attachments.length" class="mb-2">
+      <template #actions>
+        <BaseButton size="sm" @click="pickFiles">Anexar arquivo</BaseButton>
+      </template>
+    </SectionHeader>
 
-    <p v-if="overQuota" class="mb-2 text-xs text-warn-700">
+    <p v-if="overQuota" class="mb-2 text-xs text-warn-strong">
       O armazenamento de anexos já ocupa {{ formatSize(quota!.totalBytes) }}. Considere revisar os
       arquivos antigos na tela de manutenção.
     </p>
 
-    <div
-      class="card p-3"
-      :class="dragging ? 'border-brand-500 bg-brand-50' : ''"
+    <BaseCard
+      padding="sm"
+      :variant="dragging ? 'accent' : 'default'"
       @dragover.prevent="dragging = true"
       @dragleave="dragging = false"
       @drop.prevent="onDrop"
     >
-      <p v-if="loading" class="py-6 text-center text-sm text-ink-400">Carregando arquivos…</p>
+      <BaseEmptyState v-if="loading" message="Carregando arquivos…" />
 
-      <p v-else-if="attachments.length === 0" class="py-6 text-center text-sm text-ink-400">
+      <BaseEmptyState v-else-if="attachments.length === 0">
         Arraste arquivos aqui ou use "Anexar arquivo". Aceitos: PDF, PNG, JPEG, WebP, DOCX, XLSX,
         CSV, TXT, MP3, M4A, WAV e MP4, até 100 MB cada.
-      </p>
+      </BaseEmptyState>
 
-      <ul v-else class="divide-y divide-ink-200">
+      <ul v-else class="divide-y divide-line">
         <li
           v-for="attachment in attachments"
           :key="attachment.id"
           class="flex items-center gap-3 py-2"
         >
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-ink-800">{{ attachment.originalName }}</p>
-            <p class="text-xs text-ink-500">
+            <p class="truncate text-sm font-medium text-fg">{{ attachment.originalName }}</p>
+            <p class="text-xs text-fg-subtle">
               {{ attachment.detectedMime }} · {{ formatSize(attachment.sizeBytes) }} ·
               {{ formatIsoDate(attachment.createdAt.slice(0, 10)) }}
               <span v-if="attachment.description"> · {{ attachment.description }}</span>
             </p>
             <div v-if="attachment.tags.length > 0" class="mt-1 flex flex-wrap gap-1">
-              <span
-                v-for="tag in attachment.tags"
-                :key="tag"
-                class="rounded bg-ink-100 px-1.5 py-0.5 text-xs text-ink-600"
-              >
-                {{ tag }}
-              </span>
+              <BaseBadge v-for="tag in attachment.tags" :key="tag">{{ tag }}</BaseBadge>
             </div>
           </div>
 
           <div class="flex shrink-0 items-center gap-2">
-            <button
+            <BaseButton
               v-if="hasInternalPreview(attachment.detectedMime)"
-              class="text-xs text-brand-500 hover:underline"
+              variant="link"
+              size="sm"
               @click="previewing = attachment"
             >
               Visualizar
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
               v-else
-              class="text-xs text-brand-500 hover:underline"
+              variant="link"
+              size="sm"
               title="Abre no aplicativo padrão do sistema"
               @click="openExternal(attachment)"
             >
               Abrir externamente
-            </button>
-            <button class="text-xs text-ink-500 hover:underline" @click="openEdit(attachment)">
+            </BaseButton>
+            <BaseButton variant="link-muted" size="sm" @click="openEdit(attachment)">
               Editar
-            </button>
-            <button
-              class="text-xs text-danger-500 hover:underline"
+            </BaseButton>
+            <BaseButton
+              variant="link-danger"
+              size="sm"
               @click="
                 () => {
                   deleting = attachment
@@ -247,11 +252,11 @@ const overQuota = computed(
               "
             >
               Excluir
-            </button>
+            </BaseButton>
           </div>
         </li>
       </ul>
-    </div>
+    </BaseCard>
 
     <AttachmentPreview
       v-if="previewing !== null"
@@ -265,23 +270,12 @@ const overQuota = computed(
       @update:open="(value) => !value && (editing = null)"
     >
       <div class="space-y-4">
-        <div>
-          <label class="field-label" for="attachment-description">Descrição</label>
-          <textarea
-            id="attachment-description"
-            v-model="editForm.description"
-            class="field-input min-h-20"
-          />
-        </div>
-        <div>
-          <label class="field-label" for="attachment-tags">Tags</label>
-          <input
-            id="attachment-tags"
-            v-model="editForm.tags"
-            class="field-input"
-            placeholder="Separadas por vírgula"
-          />
-        </div>
+        <BaseField id="attachment-description" label="Descrição">
+          <BaseTextarea v-model="editForm.description" />
+        </BaseField>
+        <BaseField id="attachment-tags" label="Tags">
+          <BaseInput v-model="editForm.tags" placeholder="Separadas por vírgula" />
+        </BaseField>
       </div>
 
       <template #footer>

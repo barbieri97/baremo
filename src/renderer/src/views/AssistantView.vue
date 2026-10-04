@@ -16,11 +16,27 @@ import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
 import ToolActivityAccordion from '../components/ToolActivityAccordion.vue'
+import PageHeader from '../components/PageHeader.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseCheckbox from '../components/BaseCheckbox.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseIconButton from '../components/BaseIconButton.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
+import { Plus, X } from 'lucide-vue-next'
 import type { ToolActivityItem } from '../components/ToolActivityAccordion.vue'
 import { groupToolCallsByMessage } from '@shared/ai/tool-activity'
 import type { AiResultImportRow, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Patient } from '@shared/contracts/entities'
+
+const RESULT_COLUMNS: TableColumn[] = [
+  { key: 'accept', class: 'w-8' },
+  { key: 'instrument', label: 'Instrumento' },
+  { key: 'scoreType', label: 'Tipo' },
+  { key: 'value', label: 'Valor', align: 'right' },
+  { key: 'classification', label: 'Classificação' }
+]
 
 const props = defineProps<{ patientId: string }>()
 
@@ -36,9 +52,11 @@ const activeSessionId = ref<string | null>(null)
 const messages = ref<Message[]>([])
 const draft = ref('')
 
-const consent = ref<{ moduleGranted: boolean; patientGranted: boolean; textVersion: string } | null>(
-  null
-)
+const consent = ref<{
+  moduleGranted: boolean
+  patientGranted: boolean
+  textVersion: string
+} | null>(null)
 const consentOpen = ref(false)
 
 const streaming = ref(false)
@@ -86,9 +104,7 @@ const resultRows = computed(() => confirmation.value?.resultPreview ?? [])
 const selectableRows = computed(() => resultRows.value.filter((row) => row.status !== 'invalid'))
 
 /** Com diff ou tabela de resultados, autorizar exige ter marcado alguma coisa. */
-const needsSelection = computed(
-  () => changedBlocks.value.length > 0 || resultRows.value.length > 0
-)
+const needsSelection = computed(() => changedBlocks.value.length > 0 || resultRows.value.length > 0)
 
 function acceptAllRows(): void {
   acceptedBlocks.value = new Set(selectableRows.value.map((row) => row.index))
@@ -349,82 +365,84 @@ async function deleteSession(sessionId: string): Promise<void> {
 
 <template>
   <div class="flex h-full flex-col">
-    <header class="border-b border-ink-200 bg-white px-6 py-3">
-      <button
-        class="text-xs text-ink-500 hover:underline"
-        @click="router.push(`/pacientes/${patientId}`)"
-      >
-        ← {{ patient?.fullName ?? 'Prontuário' }}
-      </button>
-      <h1 class="mt-1 text-lg font-bold text-ink-800">Assistente</h1>
-      <p class="text-xs text-ink-500">
-        Esta conversa pertence exclusivamente a este paciente. O assistente não acessa nenhum outro
-        prontuário.
-      </p>
-    </header>
+    <PageHeader
+      title="Assistente"
+      subtitle="Esta conversa pertence exclusivamente a este paciente. O assistente não acessa nenhum outro prontuário."
+      :back="{ label: patient?.fullName ?? 'Prontuário', to: `/pacientes/${patientId}` }"
+      size="md"
+      class="border-b border-line bg-surface px-6 py-3"
+    />
 
     <div v-if="!aiEnabled" class="flex flex-1 items-center justify-center p-8">
-      <div class="card max-w-md p-6 text-center">
-        <h2 class="text-base font-semibold text-ink-800">Módulo de IA desligado</h2>
-        <p class="mt-2 text-sm text-ink-600">
-          O assistente está desativado. Todo o restante do aplicativo funciona normalmente sem ele.
-        </p>
-        <BaseButton class="mt-4" variant="primary" @click="router.push('/configuracoes')">
-          Abrir configurações
-        </BaseButton>
-      </div>
+      <BaseEmptyState
+        framed
+        title="Módulo de IA desligado"
+        message="O assistente está desativado. Todo o restante do aplicativo funciona normalmente sem ele."
+        class="max-w-md"
+      >
+        <template #actions>
+          <BaseButton variant="primary" @click="router.push('/configuracoes')">
+            Abrir configurações
+          </BaseButton>
+        </template>
+      </BaseEmptyState>
     </div>
 
     <div v-else class="flex flex-1 overflow-hidden">
-      <aside class="w-64 shrink-0 border-r border-ink-200 bg-white p-3">
-        <BaseButton class="mb-3 w-full" size="sm" variant="primary" @click="createSession">
+      <aside class="w-64 shrink-0 border-r border-line bg-surface p-3">
+        <BaseButton
+          class="mb-3 w-full"
+          size="sm"
+          variant="primary"
+          :icon="Plus"
+          @click="createSession"
+        >
           Nova conversa
         </BaseButton>
 
-        <p v-if="sessions.length === 0" class="text-xs text-ink-400">Nenhuma conversa ainda.</p>
+        <p v-if="sessions.length === 0" class="text-xs text-fg-faint">Nenhuma conversa ainda.</p>
 
         <ul class="space-y-1">
           <li v-for="session in sessions" :key="session.id" class="group flex items-center gap-1">
             <button
-              class="flex-1 truncate rounded px-2 py-1.5 text-left text-xs"
+              type="button"
+              class="flex-1 truncate rounded-chip px-2 py-1.5 text-left text-xs"
               :class="
                 activeSessionId === session.id
-                  ? 'bg-brand-50 font-semibold text-brand-700'
-                  : 'text-ink-600 hover:bg-ink-100'
+                  ? 'bg-accent-soft font-semibold text-accent-strong'
+                  : 'text-fg-muted hover:bg-surface-muted'
               "
               @click="selectSession(session.id)"
             >
               {{ session.title }}
             </button>
-            <button
-              class="opacity-0 transition-opacity group-hover:opacity-100 text-xs text-danger-500"
-              aria-label="Excluir conversa"
+            <BaseIconButton
+              :icon="X"
+              label="Excluir conversa"
+              variant="danger"
+              size="sm"
+              class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               @click="deleteSession(session.id)"
-            >
-              ×
-            </button>
+            />
           </li>
         </ul>
       </aside>
 
       <div class="flex flex-1 flex-col">
         <div v-if="activeSessionId === null" class="flex flex-1 items-center justify-center">
-          <p class="text-sm text-ink-400">Crie uma conversa para começar.</p>
+          <BaseEmptyState message="Crie uma conversa para começar." />
         </div>
 
         <template v-else>
           <div ref="transcript" class="flex-1 space-y-4 overflow-y-auto px-6 py-4">
             <template v-for="message in messages" :key="message.id">
-              <div
-                class="flex"
-                :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-              >
+              <div class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
                 <div
-                  class="max-w-2xl whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm"
+                  class="max-w-2xl whitespace-pre-wrap rounded-surface px-4 py-2.5 text-sm"
                   :class="
                     message.role === 'user'
-                      ? 'bg-brand-500 text-white'
-                      : 'border border-ink-200 bg-white text-ink-800'
+                      ? 'bg-accent text-fg-inverse'
+                      : 'border border-line bg-surface text-fg'
                   "
                 >
                   {{ message.text }}
@@ -442,35 +460,31 @@ async function deleteSession(sessionId: string): Promise<void> {
 
             <div v-if="streamText !== ''" class="flex justify-start">
               <div
-                class="max-w-2xl whitespace-pre-wrap rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm text-ink-800"
+                class="max-w-2xl whitespace-pre-wrap rounded-surface border border-line bg-surface px-4 py-2.5 text-sm text-fg"
               >
                 {{ streamText }}
               </div>
             </div>
 
-            <p v-else-if="streaming" class="text-xs text-ink-400">Consultando o assistente…</p>
+            <p v-else-if="streaming" class="text-xs text-fg-faint">Consultando o assistente…</p>
           </div>
 
-          <div class="border-t border-ink-200 bg-white px-6 py-3">
+          <div class="border-t border-line bg-surface px-6 py-3">
             <div class="flex items-end gap-2">
-              <textarea
+              <BaseTextarea
                 v-model="draft"
-                class="field-input min-h-20 flex-1 resize-none"
+                class="flex-1 resize-none"
+                aria-label="Mensagem ao assistente"
                 placeholder="Pergunte sobre os resultados, peça um resumo ou um rascunho de documento."
                 :disabled="streaming"
                 @keydown.enter.exact.prevent="send"
               />
               <BaseButton v-if="streaming" variant="secondary" @click="cancel">Cancelar</BaseButton>
-              <BaseButton
-                v-else
-                variant="primary"
-                :disabled="draft.trim() === ''"
-                @click="send"
-              >
+              <BaseButton v-else variant="primary" :disabled="draft.trim() === ''" @click="send">
                 Enviar
               </BaseButton>
             </div>
-            <p class="mt-1 text-xs text-ink-400">
+            <p class="mt-1 text-xs text-fg-faint">
               Enter envia · Shift+Enter quebra linha. O assistente não emite diagnóstico e não
               substitui julgamento clínico.
             </p>
@@ -480,15 +494,11 @@ async function deleteSession(sessionId: string): Promise<void> {
     </div>
 
     <!-- §10.3 — consentimento antes do primeiro uso -->
-    <BaseDialog
-      v-model:open="consentOpen"
-      title="Consentimento para uso do assistente"
-      wide
-    >
-      <div class="space-y-3 text-sm text-ink-700">
+    <BaseDialog v-model:open="consentOpen" title="Consentimento para uso do assistente" wide>
+      <div class="space-y-3 text-sm text-fg-secondary">
         <p>
-          Ao usar o assistente, dados deste prontuário serão enviados à API do Google Gemini,
-          um serviço de terceiros fora deste computador.
+          Ao usar o assistente, dados deste prontuário serão enviados à API do Google Gemini, um
+          serviço de terceiros fora deste computador.
         </p>
         <p>
           <strong>Com a pseudonimização ativa</strong> (padrão), o nome completo é substituído por
@@ -523,60 +533,50 @@ async function deleteSession(sessionId: string): Promise<void> {
       wide
       @update:open="(value) => !value && respondToConfirmation(false)"
     >
-      <p class="text-sm text-ink-700">{{ confirmation?.preview }}</p>
+      <p class="text-sm text-fg-secondary">{{ confirmation?.preview }}</p>
 
       <!-- §10.6 — edição de documento existente vai para revisão bloco a bloco. -->
       <div v-if="changedBlocks.length > 0" class="mt-4">
         <div class="mb-2 flex items-center justify-between">
-          <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <p class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
             Alterações propostas ({{ acceptedBlocks.size }} de {{ changedBlocks.length }} aceitas)
           </p>
-          <button class="text-xs text-brand-500 hover:underline" @click="acceptAllBlocks">
-            Aceitar todas
-          </button>
+          <BaseButton variant="link" size="sm" @click="acceptAllBlocks">Aceitar todas</BaseButton>
         </div>
 
         <ul class="max-h-80 space-y-2 overflow-y-auto">
           <li
             v-for="entry in changedBlocks"
             :key="entry.index"
-            class="rounded border p-2"
+            class="rounded-chip border p-2"
             :class="
-              acceptedBlocks.has(entry.index)
-                ? 'border-ok-500 bg-ok-50'
-                : 'border-ink-200 bg-white'
+              acceptedBlocks.has(entry.index) ? 'border-ok bg-ok-soft' : 'border-line bg-surface'
             "
           >
-            <label class="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                class="mt-1 rounded border-ink-300"
-                :checked="acceptedBlocks.has(entry.index)"
-                @change="toggleBlock(entry.index)"
-              />
-              <span class="min-w-0 flex-1">
-                <span class="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                  {{ DIFF_LABELS[entry.kind] }}
-                </span>
-
+            <BaseCheckbox
+              :model-value="acceptedBlocks.has(entry.index)"
+              class="w-full cursor-pointer"
+              @update:model-value="toggleBlock(entry.index)"
+            >
+              <span class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                {{ DIFF_LABELS[entry.kind] }}
+              </span>
+              <template #description>
                 <span
                   v-if="entry.before !== null"
-                  class="mt-1 block whitespace-pre-wrap text-xs text-danger-600 line-through"
+                  class="mt-1 block whitespace-pre-wrap text-danger-strong line-through"
                 >
                   {{ entry.before }}
                 </span>
-                <span
-                  v-if="entry.after !== null"
-                  class="mt-1 block whitespace-pre-wrap text-xs text-ink-800"
-                >
+                <span v-if="entry.after !== null" class="mt-1 block whitespace-pre-wrap text-fg">
                   {{ entry.after }}
                 </span>
-              </span>
-            </label>
+              </template>
+            </BaseCheckbox>
           </li>
         </ul>
 
-        <p class="mt-2 text-xs text-ink-500">
+        <p class="mt-2 text-xs text-fg-subtle">
           O que não for aceito permanece como está hoje — rejeitar significa "nada muda aqui".
         </p>
       </div>
@@ -584,84 +584,69 @@ async function deleteSession(sessionId: string): Promise<void> {
       <!-- Resultados propostos: aceitos linha a linha, como no lançamento manual. -->
       <div v-if="resultRows.length > 0" class="mt-4" data-testid="result-import-preview">
         <div class="mb-2 flex items-center justify-between">
-          <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <p class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
             Resultados propostos ({{ acceptedBlocks.size }} de {{ selectableRows.length }}
             aceitos)
           </p>
-          <button class="text-xs text-brand-500 hover:underline" @click="acceptAllRows">
-            Aceitar todos
-          </button>
+          <BaseButton variant="link" size="sm" @click="acceptAllRows">Aceitar todos</BaseButton>
         </div>
 
-        <div class="max-h-80 overflow-y-auto rounded border border-ink-200">
-          <table class="w-full text-left text-xs">
-            <thead class="sticky top-0 bg-ink-50 text-ink-500">
-              <tr>
-                <th class="w-8 px-2 py-1.5"></th>
-                <th class="px-2 py-1.5 font-semibold">Instrumento</th>
-                <th class="px-2 py-1.5 font-semibold">Tipo</th>
-                <th class="px-2 py-1.5 text-right font-semibold">Valor</th>
-                <th class="px-2 py-1.5 font-semibold">Classificação</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in resultRows"
-                :key="row.index"
-                class="border-t border-ink-100 align-top"
-                :class="{
-                  'bg-warn-50': row.status === 'overwrite',
-                  'bg-danger-50 text-ink-500': row.status === 'invalid'
-                }"
-              >
-                <td class="px-2 py-1.5">
-                  <input
-                    type="checkbox"
-                    class="rounded border-ink-300"
-                    :aria-label="`Aceitar ${row.instrumentName}`"
-                    :disabled="row.status === 'invalid'"
-                    :checked="acceptedBlocks.has(row.index)"
-                    @change="toggleBlock(row.index)"
-                  />
-                </td>
-                <td class="px-2 py-1.5 text-ink-800">
-                  {{ row.instrumentName }}
-                  <span v-if="row.error" class="block text-danger-600">{{ row.error }}</span>
-                  <span v-else-if="row.status === 'overwrite'" class="block text-warn-700">
-                    Substitui o valor gravado: {{ formatScore(row.existingValue) }}
-                    <template v-if="row.existingClassification">
-                      ({{ row.existingClassification }})
-                    </template>
-                  </span>
-                  <span v-if="row.warning" class="block text-warn-700">{{ row.warning }}</span>
-                </td>
-                <td class="px-2 py-1.5">{{ row.scoreType }}</td>
-                <td class="px-2 py-1.5 text-right font-mono">{{ formatScore(row.value) }}</td>
-                <td class="px-2 py-1.5">
-                  <span v-if="row.classificationName" class="inline-flex items-center gap-1">
-                    <span
-                      class="inline-block h-2.5 w-2.5 rounded-full"
-                      :style="{ backgroundColor: row.colorHex ?? undefined }"
-                    ></span>
-                    {{ row.classificationName }}
-                  </span>
-                  <span v-else class="text-ink-400">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <BaseCard class="max-h-80 overflow-y-auto">
+          <BaseTable :columns="RESULT_COLUMNS" density="compact" size="sm" sticky>
+            <tr
+              v-for="row in resultRows"
+              :key="row.index"
+              class="align-top"
+              :class="{
+                'bg-warn-soft': row.status === 'overwrite',
+                'bg-danger-soft text-fg-subtle': row.status === 'invalid'
+              }"
+            >
+              <td>
+                <BaseCheckbox
+                  :model-value="acceptedBlocks.has(row.index)"
+                  :aria-label="`Aceitar ${row.instrumentName}`"
+                  :disabled="row.status === 'invalid'"
+                  @update:model-value="toggleBlock(row.index)"
+                />
+              </td>
+              <td class="text-fg">
+                {{ row.instrumentName }}
+                <span v-if="row.error" class="block text-danger-strong">{{ row.error }}</span>
+                <span v-else-if="row.status === 'overwrite'" class="block text-warn-strong">
+                  Substitui o valor gravado: {{ formatScore(row.existingValue) }}
+                  <template v-if="row.existingClassification">
+                    ({{ row.existingClassification }})
+                  </template>
+                </span>
+                <span v-if="row.warning" class="block text-warn-strong">{{ row.warning }}</span>
+              </td>
+              <td>{{ row.scoreType }}</td>
+              <td class="text-right font-mono">{{ formatScore(row.value) }}</td>
+              <td>
+                <span v-if="row.classificationName" class="inline-flex items-center gap-1">
+                  <span
+                    class="inline-block size-2.5 rounded-full"
+                    :style="{ backgroundColor: row.colorHex ?? undefined }"
+                  ></span>
+                  {{ row.classificationName }}
+                </span>
+                <span v-else class="text-fg-faint">—</span>
+              </td>
+            </tr>
+          </BaseTable>
+        </BaseCard>
 
-        <p class="mt-2 text-xs text-ink-500">
+        <p class="mt-2 text-xs text-fg-subtle">
           Linhas em amarelo substituem um resultado já gravado e vêm desmarcadas. A classificação é
           calculada pelas faixas cadastradas, como no lançamento manual.
         </p>
       </div>
 
-      <p class="mt-3 text-xs text-ink-500">
+      <p class="mt-3 text-xs text-fg-subtle">
         Ferramenta: <span class="font-mono">{{ confirmation?.toolName }}</span>
       </p>
-      <p class="mt-1 text-xs text-ink-500">
+      <p class="mt-1 text-xs text-fg-subtle">
         Nada é gravado sem esta autorização. Revise antes de aprovar — inclusive se a solicitação
         parecer ter vindo do conteúdo de um arquivo anexado.
       </p>

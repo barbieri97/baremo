@@ -17,6 +17,11 @@ import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from './BaseButton.vue'
 import ClassificationBadge from './ClassificationBadge.vue'
+import BaseCard from './BaseCard.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
+import BaseTable, { type TableColumn } from './BaseTable.vue'
 import {
   RESULT_STATUSES,
   RESULT_STATUS_LABELS,
@@ -35,6 +40,18 @@ import {
 import { resolveRange } from '@shared/domain/ranges'
 import type { ChannelOutput } from '@shared/contracts'
 import type { ClassificationRangeWithColor } from '@shared/contracts/entities'
+
+const COLUMNS: TableColumn[] = [
+  { key: 'instrument', label: 'Instrumento' },
+  { key: 'scoreType', label: 'Tipo de escore', class: 'w-52' },
+  { key: 'value', label: 'Valor', class: 'w-24' },
+  { key: 'status', label: 'Situação', class: 'w-36' },
+  { key: 'notes', label: 'Observação', class: 'w-48' },
+  { key: 'classification', label: 'Classificação', class: 'w-44' }
+]
+
+/** O que a tela usa de um `BaseInput`: foco e seleção ao avançar com Enter. */
+type ValueInput = { focus(): void; select(): void }
 
 type ResultRow = ChannelOutput<'results:listByAssessment'>[number]
 
@@ -70,8 +87,8 @@ const rows = ref<BatchRow[]>([])
 const rangesByKey = ref(new Map<string, ClassificationRangeWithColor[]>())
 const loading = ref(false)
 const saving = ref(false)
-const rootSelect = ref<HTMLSelectElement | null>(null)
-const valueInputs = ref<(HTMLInputElement | null)[]>([])
+const rootSelect = ref<{ focus(): void } | null>(null)
+const valueInputs = ref<(ValueInput | null)[]>([])
 
 onMounted(() => rootSelect.value?.focus())
 
@@ -277,7 +294,7 @@ const canSave = computed(() => pendingCount.value > 0 && !blocking.value && !sav
 function focusValue(index: number): void {
   for (let cursor = index; cursor < rows.value.length; cursor++) {
     const input = valueInputs.value[cursor]
-    if (input && !input.disabled) {
+    if (input && requiresValue(rows.value[cursor]!.status)) {
       input.focus()
       input.select()
       return
@@ -334,39 +351,30 @@ async function save(): Promise<void> {
 <template>
   <div>
     <div class="flex flex-wrap items-end gap-3">
-      <div class="min-w-72 flex-1">
-        <label class="field-label" :for="`batch-root-${assessmentId}`">Teste</label>
-        <select
-          :id="`batch-root-${assessmentId}`"
-          ref="rootSelect"
-          v-model="rootId"
-          class="field-input"
-        >
+      <BaseField :id="`batch-root-${assessmentId}`" label="Teste" class="min-w-72 flex-1">
+        <BaseSelect ref="rootSelect" v-model="rootId">
           <option value="">Selecione o teste…</option>
           <option v-for="entry in parentOptions" :key="entry.node.id" :value="entry.node.id">
             {{ '— '.repeat(entry.depth) }}{{ entry.node.name
             }}{{ entry.node.acronym ? ` (${entry.node.acronym})` : '' }}
           </option>
-        </select>
-      </div>
+        </BaseSelect>
+      </BaseField>
 
-      <div v-if="rows.length > 0" class="w-60">
-        <label class="field-label" :for="`batch-bulk-type-${assessmentId}`">
-          Tipo de escore para todos
-        </label>
-        <select
-          :id="`batch-bulk-type-${assessmentId}`"
-          v-model="bulkScoreType"
-          class="field-input"
-          @change="applyScoreTypeToAll"
-        >
+      <BaseField
+        v-if="rows.length > 0"
+        :id="`batch-bulk-type-${assessmentId}`"
+        label="Tipo de escore para todos"
+        class="w-60"
+      >
+        <BaseSelect v-model="bulkScoreType" @change="applyScoreTypeToAll">
           <option value="">Aplicar a todos…</option>
           <option v-for="option in bulkOptions" :key="option.type" :value="option.type">
             {{ SCORE_TYPE_LABELS[option.type]
             }}{{ option.count < rows.length ? ` (${option.count} de ${rows.length})` : '' }}
           </option>
-        </select>
-      </div>
+        </BaseSelect>
+      </BaseField>
 
       <div class="ml-auto flex items-center gap-2 pb-0.5">
         <BaseButton size="sm" variant="ghost" @click="emit('cancel')">Fechar</BaseButton>
@@ -382,117 +390,91 @@ async function save(): Promise<void> {
       </div>
     </div>
 
-    <p v-if="parentOptions.length === 0" class="mt-3 text-xs text-ink-500">
+    <p v-if="parentOptions.length === 0" class="mt-3 text-xs text-fg-subtle">
       Nenhum instrumento tem subtestes cadastrados. Use "Item individual" ou organize os subtestes
       em Instrumentos.
     </p>
 
-    <p v-if="loading" class="mt-3 text-sm text-ink-500">Carregando subtestes…</p>
+    <p v-if="loading" class="mt-3 text-sm text-fg-subtle">Carregando subtestes…</p>
 
-    <div
-      v-else-if="rows.length > 0"
-      class="mt-3 overflow-x-auto rounded border border-ink-200 bg-white"
-    >
-      <table class="w-full text-sm">
-        <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-          <tr>
-            <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-            <th class="w-52 px-2 py-2 text-left font-semibold">Tipo de escore</th>
-            <th class="w-24 px-2 py-2 text-left font-semibold">Valor</th>
-            <th class="w-36 px-2 py-2 text-left font-semibold">Situação</th>
-            <th class="w-48 px-2 py-2 text-left font-semibold">Observação</th>
-            <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(row, index) in rows"
-            :key="row.instrumentId"
-            class="border-t border-ink-200"
-            :class="{ 'bg-brand-50/40': states[index]!.pending }"
-          >
-            <td
-              class="px-3 py-1.5 text-ink-800"
-              :style="{ paddingLeft: `${0.75 + row.depth * 1.25}rem` }"
+    <BaseCard v-else-if="rows.length > 0" class="mt-3 overflow-x-auto">
+      <BaseTable :columns="COLUMNS" density="compact">
+        <tr
+          v-for="(row, index) in rows"
+          :key="row.instrumentId"
+          :class="{ 'bg-accent-soft/40': states[index]!.pending }"
+        >
+          <td class="text-fg" :style="{ paddingLeft: `${0.75 + row.depth * 1.25}rem` }">
+            <span :class="{ 'font-semibold': row.depth === 0 }">{{ row.label }}</span>
+            <span v-if="row.resultId !== null" class="ml-2 text-xs text-fg-faint">já lançado</span>
+          </td>
+          <td>
+            <BaseSelect
+              v-model="row.scoreType"
+              size="sm"
+              :aria-label="`Tipo de escore — ${row.label}`"
+              @change="onScoreTypeChange(row)"
             >
-              <span :class="{ 'font-semibold': row.depth === 0 }">{{ row.label }}</span>
-              <span v-if="row.resultId !== null" class="ml-2 text-xs text-ink-400">já lançado</span>
-            </td>
-            <td class="px-2 py-1.5">
-              <select
-                v-model="row.scoreType"
-                class="field-input py-1 text-sm"
-                :aria-label="`Tipo de escore — ${row.label}`"
-                @change="onScoreTypeChange(row)"
-              >
-                <option v-for="type in availableFor(row)" :key="type" :value="type">
-                  {{ SCORE_TYPE_LABELS[type] }}
-                </option>
-              </select>
-            </td>
-            <td class="px-2 py-1.5">
-              <input
-                :ref="(element) => (valueInputs[index] = element as HTMLInputElement | null)"
-                v-model="row.rawValue"
-                class="field-input tabular py-1 text-right text-sm"
-                :class="{ 'field-input-invalid': states[index]!.error !== null }"
-                :aria-label="`Valor — ${row.label}`"
-                :disabled="!requiresValue(row.status)"
-                :title="states[index]!.error ?? undefined"
-                inputmode="decimal"
-                autocomplete="off"
-                @keydown.enter.prevent="onValueEnter(index)"
-              />
-            </td>
-            <td class="px-2 py-1.5">
-              <select
-                v-model="row.status"
-                class="field-input py-1 text-sm"
-                :aria-label="`Situação — ${row.label}`"
-              >
-                <option v-for="value in RESULT_STATUSES" :key="value" :value="value">
-                  {{ RESULT_STATUS_LABELS[value] }}
-                </option>
-              </select>
-            </td>
-            <td class="px-2 py-1.5">
-              <input
-                v-model="row.notes"
-                class="field-input py-1 text-sm"
-                :aria-label="`Observação — ${row.label}`"
-              />
-            </td>
-            <td class="px-3 py-1.5">
-              <span v-if="states[index]!.error !== null" class="text-xs text-danger-500">
-                {{ states[index]!.error }}
-              </span>
-              <ClassificationBadge
-                v-else-if="states[index]!.preview.name !== null"
-                :name="states[index]!.preview.name"
-                :color-hex="states[index]!.preview.colorHex"
-              />
-              <span
-                v-else-if="states[index]!.noRanges && requiresValue(row.status)"
-                class="text-xs text-warn-700"
-              >
-                Sem faixas
-              </span>
-              <span
-                v-else-if="
-                  states[index]!.parsed !== null && SCORE_TYPE_DOMAINS[row.scoreType].autoClassify
-                "
-                class="text-xs text-warn-700"
-              >
-                Fora das faixas
-              </span>
-              <span v-else class="text-xs text-ink-400">—</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+              <option v-for="type in availableFor(row)" :key="type" :value="type">
+                {{ SCORE_TYPE_LABELS[type] }}
+              </option>
+            </BaseSelect>
+          </td>
+          <td>
+            <BaseInput
+              :ref="(component) => (valueInputs[index] = component as ValueInput | null)"
+              v-model="row.rawValue"
+              size="sm"
+              class="tabular text-right"
+              :invalid="states[index]!.error !== null"
+              :aria-label="`Valor — ${row.label}`"
+              :disabled="!requiresValue(row.status)"
+              :title="states[index]!.error ?? undefined"
+              inputmode="decimal"
+              autocomplete="off"
+              @keydown.enter.prevent="onValueEnter(index)"
+            />
+          </td>
+          <td>
+            <BaseSelect v-model="row.status" size="sm" :aria-label="`Situação — ${row.label}`">
+              <option v-for="value in RESULT_STATUSES" :key="value" :value="value">
+                {{ RESULT_STATUS_LABELS[value] }}
+              </option>
+            </BaseSelect>
+          </td>
+          <td>
+            <BaseInput v-model="row.notes" size="sm" :aria-label="`Observação — ${row.label}`" />
+          </td>
+          <td>
+            <span v-if="states[index]!.error !== null" class="text-xs text-danger">
+              {{ states[index]!.error }}
+            </span>
+            <ClassificationBadge
+              v-else-if="states[index]!.preview.name !== null"
+              :name="states[index]!.preview.name"
+              :color-hex="states[index]!.preview.colorHex"
+            />
+            <span
+              v-else-if="states[index]!.noRanges && requiresValue(row.status)"
+              class="text-xs text-warn-strong"
+            >
+              Sem faixas
+            </span>
+            <span
+              v-else-if="
+                states[index]!.parsed !== null && SCORE_TYPE_DOMAINS[row.scoreType].autoClassify
+              "
+              class="text-xs text-warn-strong"
+            >
+              Fora das faixas
+            </span>
+            <span v-else class="text-xs text-fg-faint">—</span>
+          </td>
+        </tr>
+      </BaseTable>
+    </BaseCard>
 
-    <p v-if="rows.length > 0" class="mt-2 text-xs text-ink-500">
+    <p v-if="rows.length > 0" class="mt-2 text-xs text-fg-subtle">
       Linhas em branco não são lançadas. <kbd>Enter</kbd> no valor vai para o próximo subteste; no
       último, lança o teste inteiro.
     </p>

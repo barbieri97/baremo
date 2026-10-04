@@ -61,7 +61,7 @@ defineExpose({ handleKey })
 <template>
   <div
     v-if="position !== null && items.length > 0"
-    class="fixed z-50 w-80 overflow-hidden rounded-md border border-ink-300 bg-white shadow-xl"
+    class="fixed z-50 w-80 overflow-hidden rounded-control border border-line-strong bg-surface shadow-xl"
     :style="{ top: `${position.top}px`, left: `${position.left}px` }"
     role="listbox"
     aria-label="Inserir bloco"
@@ -74,21 +74,21 @@ defineExpose({ handleKey })
         role="option"
         :aria-selected="index === selected"
         class="cursor-pointer px-3 py-1.5"
-        :class="index === selected ? 'bg-brand-50' : 'hover:bg-ink-50'"
+        :class="index === selected ? 'bg-accent-soft' : 'hover:bg-canvas'"
         @mouseenter="selected = index"
         @mousedown.prevent="emit('pick', item)"
       >
         <p
           class="text-sm"
-          :class="index === selected ? 'font-semibold text-brand-700' : 'text-ink-800'"
+          :class="index === selected ? 'font-semibold text-accent-strong' : 'text-fg'"
         >
           {{ item.title }}
         </p>
-        <p class="text-xs text-ink-500">{{ item.hint }}</p>
+        <p class="text-xs text-fg-subtle">{{ item.hint }}</p>
       </li>
     </ul>
 
-    <p class="border-t border-ink-200 px-3 py-1.5 text-xs text-ink-400">
+    <p class="border-t border-line px-3 py-1.5 text-xs text-fg-faint">
       ↑↓ navegar · Enter inserir · Esc fechar
     </p>
   </div>

@@ -49,7 +49,7 @@ const segments = computed(() => {
 
 <template>
   <div
-    class="flex overflow-hidden rounded-full bg-ink-100"
+    class="flex overflow-hidden rounded-full bg-surface-muted"
     :style="{ height: `${height ?? 10}px` }"
     role="img"
     :aria-label="segments.map((s) => s.title).join('; ') || 'Sem resultados'"

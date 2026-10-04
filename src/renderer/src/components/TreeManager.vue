@@ -11,6 +11,18 @@
  */
 import { computed, ref, watch } from 'vue'
 import BaseButton from './BaseButton.vue'
+import BaseCard from './BaseCard.vue'
+import BaseIconButton from './BaseIconButton.vue'
+import BaseEmptyState from './BaseEmptyState.vue'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  IndentDecrease,
+  IndentIncrease,
+  Plus
+} from 'lucide-vue-next'
 import type { TreeNode, TreeNodeLike } from '@shared/domain/tree'
 
 interface Props {
@@ -143,79 +155,83 @@ function outdent(id: string): void {
 </script>
 
 <template>
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between border-b border-ink-200 px-3 py-2">
-      <p class="text-xs font-semibold uppercase tracking-wide text-ink-500">Estrutura</p>
-      <BaseButton size="sm" @click="emit('addChild', null)">Adicionar na raiz</BaseButton>
+  <BaseCard class="overflow-hidden">
+    <div class="flex items-center justify-between border-b border-line px-3 py-2">
+      <p class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">Estrutura</p>
+      <BaseButton size="sm" :icon="Plus" @click="emit('addChild', null)">
+        Adicionar na raiz
+      </BaseButton>
     </div>
 
     <ul v-if="visible.length > 0" class="max-h-[60vh] overflow-y-auto py-1">
       <li v-for="row in visible" :key="row.node.id">
         <div
           class="group flex items-center gap-1 px-2 py-1 text-sm"
-          :class="selectedId === row.node.id ? 'bg-brand-50' : 'hover:bg-ink-50'"
+          :class="selectedId === row.node.id ? 'bg-accent-soft' : 'hover:bg-canvas'"
           :style="{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }"
         >
-          <button
+          <BaseIconButton
             v-if="row.hasChildren"
-            class="h-5 w-5 shrink-0 rounded text-ink-400 hover:bg-ink-200"
-            :aria-label="isCollapsed(row.node.id) ? `Expandir ${row.node.name}` : `Recolher ${row.node.name}`"
+            :icon="isCollapsed(row.node.id) ? ChevronRight : ChevronDown"
+            :label="
+              isCollapsed(row.node.id) ? `Expandir ${row.node.name}` : `Recolher ${row.node.name}`
+            "
             :aria-expanded="!isCollapsed(row.node.id)"
+            size="sm"
             @click="toggle(row.node.id)"
-          >
-            {{ isCollapsed(row.node.id) ? '▸' : '▾' }}
-          </button>
-          <span v-else class="h-5 w-5 shrink-0" aria-hidden="true" />
+          />
+          <span v-else class="size-5 shrink-0" aria-hidden="true" />
 
           <button
+            type="button"
             class="flex-1 truncate text-left"
-            :class="selectedId === row.node.id ? 'font-semibold text-brand-700' : 'text-ink-700'"
+            :class="
+              selectedId === row.node.id ? 'font-semibold text-accent-strong' : 'text-fg-secondary'
+            "
             @click="emit('select', row.node.id)"
           >
             {{ row.node.name }}
           </button>
 
-          <div class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-            <button
-              class="rounded px-1 text-xs text-ink-500 hover:bg-ink-200"
-              title="Mover para cima"
+          <div
+            class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+          >
+            <BaseIconButton
+              :icon="ArrowUp"
+              label="Mover para cima"
+              size="sm"
               @click="moveWithinSiblings(row.node.id, -1)"
-            >
-              ↑
-            </button>
-            <button
-              class="rounded px-1 text-xs text-ink-500 hover:bg-ink-200"
-              title="Mover para baixo"
+            />
+            <BaseIconButton
+              :icon="ArrowDown"
+              label="Mover para baixo"
+              size="sm"
               @click="moveWithinSiblings(row.node.id, 1)"
-            >
-              ↓
-            </button>
-            <button
-              class="rounded px-1 text-xs text-ink-500 hover:bg-ink-200"
-              title="Aninhar sob o item anterior"
+            />
+            <BaseIconButton
+              :icon="IndentIncrease"
+              label="Aninhar sob o item anterior"
+              size="sm"
               @click="indent(row.node.id)"
-            >
-              →
-            </button>
-            <button
-              class="rounded px-1 text-xs text-ink-500 hover:bg-ink-200"
-              title="Promover um nível"
+            />
+            <BaseIconButton
+              :icon="IndentDecrease"
+              label="Promover um nível"
+              size="sm"
               @click="outdent(row.node.id)"
-            >
-              ←
-            </button>
-            <button
-              class="rounded px-1 text-xs text-brand-500 hover:bg-brand-100"
-              title="Adicionar subitem"
+            />
+            <BaseIconButton
+              :icon="Plus"
+              label="Adicionar subitem"
+              variant="accent"
+              size="sm"
               @click="emit('addChild', row.node.id)"
-            >
-              +
-            </button>
+            />
           </div>
         </div>
       </li>
     </ul>
 
-    <p v-else class="px-4 py-8 text-center text-sm text-ink-400">{{ emptyMessage }}</p>
-  </div>
+    <BaseEmptyState v-else :message="emptyMessage" class="px-4" />
+  </BaseCard>
 </template>

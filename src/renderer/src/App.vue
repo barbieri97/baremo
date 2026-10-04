@@ -8,6 +8,7 @@
  */
 import { onMounted, ref } from 'vue'
 import AppShell from './components/AppShell.vue'
+import BaseCard from './components/BaseCard.vue'
 import { useAppStore } from './stores/app'
 import { errorMessage } from './api'
 
@@ -25,14 +26,14 @@ onMounted(async () => {
 
 <template>
   <div v-if="bootError !== null" class="flex h-full items-center justify-center p-8">
-    <div class="card max-w-md p-6">
-      <h1 class="text-base font-semibold text-danger-600">Não foi possível iniciar</h1>
-      <p class="mt-2 text-sm text-ink-600">{{ bootError }}</p>
-    </div>
+    <BaseCard class="max-w-md p-6">
+      <h1 class="text-base font-semibold text-danger-strong">Não foi possível iniciar</h1>
+      <p class="mt-2 text-sm text-fg-muted">{{ bootError }}</p>
+    </BaseCard>
   </div>
 
   <div v-else-if="appStore.state === null" class="flex h-full items-center justify-center">
-    <p class="text-sm text-ink-500">Carregando…</p>
+    <p class="text-sm text-fg-subtle">Carregando…</p>
   </div>
 
   <AppShell v-else />

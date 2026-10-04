@@ -9,6 +9,10 @@ import { api, fieldIssues } from '../api'
 import { useAppStore } from '../stores/app'
 import { HANDEDNESS, HANDEDNESS_LABELS, SEX_LABELS, SEXES } from '@shared/labels'
 import type { Patient, PatientInput } from '@shared/contracts/entities'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
+import BaseTextarea from './BaseTextarea.vue'
 
 const props = defineProps<{ patient: Patient | null }>()
 const emit = defineEmits<{ saved: [patient: Patient] }>()
@@ -84,7 +88,8 @@ async function save(): Promise<void> {
     guardian: form.value.guardian === null ? null : emptyToNull(form.value.guardian),
     contact: form.value.contact === null ? null : emptyToNull(form.value.contact),
     notes: form.value.notes === null ? null : emptyToNull(form.value.notes),
-    birthDate: form.value.birthDate === null || form.value.birthDate === '' ? null : form.value.birthDate
+    birthDate:
+      form.value.birthDate === null || form.value.birthDate === '' ? null : form.value.birthDate
   }
 
   try {
@@ -108,93 +113,64 @@ async function save(): Promise<void> {
 <template>
   <BaseDialog v-model:open="open" :title="title" wide>
     <form class="grid grid-cols-2 gap-4" @submit.prevent="save">
-      <div class="col-span-2">
-        <label class="field-label" for="patient-name">Nome completo</label>
-        <input
-          id="patient-name"
-          v-model="form.fullName"
-          class="field-input"
-          :class="{ 'field-input-invalid': issueFor('fullName') }"
-          required
-          autocomplete="off"
-        />
-        <p v-if="issueFor('fullName')" class="mt-1 text-xs text-danger-500">
-          {{ issueFor('fullName') }}
-        </p>
-      </div>
+      <BaseField
+        id="patient-name"
+        label="Nome completo"
+        class="col-span-2"
+        :error="issueFor('fullName')"
+      >
+        <BaseInput v-model="form.fullName" required autocomplete="off" />
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-birth">Data de nascimento</label>
-        <input
-          id="patient-birth"
-          v-model="form.birthDate"
-          type="date"
-          class="field-input"
-          :class="{ 'field-input-invalid': issueFor('birthDate') }"
-        />
-        <p v-if="issueFor('birthDate')" class="mt-1 text-xs text-danger-500">
-          {{ issueFor('birthDate') }}
-        </p>
-      </div>
+      <BaseField id="patient-birth" label="Data de nascimento" :error="issueFor('birthDate')">
+        <BaseInput v-model="form.birthDate" type="date" />
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-sex">Sexo</label>
-        <select id="patient-sex" v-model="form.sex" class="field-input">
+      <BaseField id="patient-sex" label="Sexo">
+        <BaseSelect v-model="form.sex">
           <option v-for="value in SEXES" :key="value" :value="value">
             {{ SEX_LABELS[value] }}
           </option>
-        </select>
-      </div>
+        </BaseSelect>
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-education">Escolaridade</label>
-        <input
-          id="patient-education"
-          :value="form.education ?? ''"
-          class="field-input"
+      <BaseField id="patient-education" label="Escolaridade">
+        <BaseInput
+          :model-value="form.education ?? ''"
           placeholder="Ex.: Ensino médio completo"
-          @input="form.education = ($event.target as HTMLInputElement).value"
+          @update:model-value="form.education = String($event ?? '')"
         />
-      </div>
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-handedness">Lateralidade</label>
-        <select id="patient-handedness" v-model="form.handedness" class="field-input">
+      <BaseField id="patient-handedness" label="Lateralidade">
+        <BaseSelect v-model="form.handedness">
           <option v-for="value in HANDEDNESS" :key="value" :value="value">
             {{ HANDEDNESS_LABELS[value] }}
           </option>
-        </select>
-      </div>
+        </BaseSelect>
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-guardian">Responsável</label>
-        <input
-          id="patient-guardian"
-          :value="form.guardian ?? ''"
-          class="field-input"
-          @input="form.guardian = ($event.target as HTMLInputElement).value"
+      <BaseField id="patient-guardian" label="Responsável">
+        <BaseInput
+          :model-value="form.guardian ?? ''"
+          @update:model-value="form.guardian = String($event ?? '')"
         />
-      </div>
+      </BaseField>
 
-      <div>
-        <label class="field-label" for="patient-contact">Contato</label>
-        <input
-          id="patient-contact"
-          :value="form.contact ?? ''"
-          class="field-input"
-          @input="form.contact = ($event.target as HTMLInputElement).value"
+      <BaseField id="patient-contact" label="Contato">
+        <BaseInput
+          :model-value="form.contact ?? ''"
+          @update:model-value="form.contact = String($event ?? '')"
         />
-      </div>
+      </BaseField>
 
-      <div class="col-span-2">
-        <label class="field-label" for="patient-notes">Observações</label>
-        <textarea
-          id="patient-notes"
-          :value="form.notes ?? ''"
-          class="field-input min-h-24"
-          @input="form.notes = ($event.target as HTMLTextAreaElement).value"
+      <BaseField id="patient-notes" label="Observações" class="col-span-2">
+        <BaseTextarea
+          :model-value="form.notes ?? ''"
+          class="min-h-24"
+          @update:model-value="form.notes = $event ?? ''"
         />
-      </div>
+      </BaseField>
     </form>
 
     <template #footer>

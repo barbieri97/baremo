@@ -16,6 +16,11 @@ import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import BaseButton from './BaseButton.vue'
 import EChart from './EChart.vue'
+import BaseCard from './BaseCard.vue'
+import BaseCheckbox from './BaseCheckbox.vue'
+import BaseField from './BaseField.vue'
+import BaseSelect from './BaseSelect.vue'
+import SectionHeader from './SectionHeader.vue'
 import { CHART_KINDS } from '@shared/charts/options'
 import type { ChartKind } from '@shared/charts/options'
 import type { EChartsOption } from 'echarts'
@@ -74,38 +79,29 @@ async function download(format: 'png' | 'svg'): Promise<void> {
 </script>
 
 <template>
-  <section class="card p-4">
-    <header class="mb-3 flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="text-sm font-semibold text-ink-800">{{ title }}</h3>
-        <p v-if="subtitle" class="mt-0.5 text-xs text-ink-500">{{ subtitle }}</p>
-      </div>
+  <BaseCard as="section" padding="md">
+    <SectionHeader :title="title" :description="subtitle" size="sm" as="h3" class="mb-3">
+      <template #actions>
+        <BaseCheckbox v-if="showBandToggle" v-model="normBand" size="sm" label="Faixa esperada" />
 
-      <div class="flex flex-wrap items-center gap-2">
-        <label v-if="showBandToggle" class="flex items-center gap-1.5 text-xs text-ink-600">
-          <input v-model="normBand" type="checkbox" />
-          Faixa esperada
-        </label>
-
-        <label v-if="availableKinds.length > 1" class="sr-only" :for="`kind-${fileName}`">
-          Tipo de gráfico
-        </label>
-        <select
+        <BaseField
           v-if="availableKinds.length > 1"
           :id="`kind-${fileName}`"
-          v-model="kind"
-          class="field-input w-auto py-1 text-xs"
+          label="Tipo de gráfico"
+          hide-label
         >
-          <option v-for="entry in availableKinds" :key="entry.kind" :value="entry.kind">
-            {{ entry.label }}
-          </option>
-        </select>
+          <BaseSelect v-model="kind" size="xs" class="w-auto">
+            <option v-for="entry in availableKinds" :key="entry.kind" :value="entry.kind">
+              {{ entry.label }}
+            </option>
+          </BaseSelect>
+        </BaseField>
 
         <BaseButton size="sm" :loading="exporting" @click="download('png')">PNG</BaseButton>
         <BaseButton size="sm" :loading="exporting" @click="download('svg')">SVG</BaseButton>
-      </div>
-    </header>
+      </template>
+    </SectionHeader>
 
     <EChart ref="chart" :option="option" :height="height" />
-  </section>
+  </BaseCard>
 </template>

@@ -30,6 +30,15 @@ import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from './BaseButton.vue'
+import BaseAlert from './BaseAlert.vue'
+import BaseCheckbox from './BaseCheckbox.vue'
+import BaseEmptyState from './BaseEmptyState.vue'
+import BaseField from './BaseField.vue'
+import BaseIconButton from './BaseIconButton.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
+import BaseTable, { type TableColumn } from './BaseTable.vue'
+import { Plus, X } from 'lucide-vue-next'
 import { SCORE_TYPES, SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import type { ScoreType } from '@shared/domain/score-types'
 import { describeRange, suggestNextMin, validateRangeSet } from '@shared/domain/ranges'
@@ -38,6 +47,16 @@ import type { ClassificationLevel } from '@shared/domain/levels'
 import { SCORE_TYPE_LABELS } from '@shared/labels'
 import { checkContrast } from '@shared/domain/color'
 import type { Instrument, RangeOrigin } from '@shared/contracts/entities'
+
+const COLUMNS: TableColumn[] = [
+  { key: 'name', label: 'Classificação' },
+  { key: 'min', label: 'Mínimo', align: 'right', class: 'w-24' },
+  { key: 'max', label: 'Máximo', align: 'right', class: 'w-24' },
+  { key: 'color', label: 'Cor', class: 'w-40' },
+  { key: 'level', label: 'Nível', class: 'w-48' },
+  { key: 'interval', label: 'Intervalo', class: 'w-28' },
+  { key: 'actions', class: 'w-10' }
+]
 
 const props = defineProps<{ instrument: Instrument }>()
 
@@ -335,41 +354,39 @@ async function reattach(): Promise<void> {
 
 <template>
   <div>
-    <div
-      v-if="origin.inherited"
-      class="mb-4 flex flex-wrap items-start justify-between gap-3 rounded border border-ink-200 bg-ink-50 p-3"
-    >
-      <p class="max-w-2xl text-sm text-ink-700">
+    <BaseAlert v-if="origin.inherited" class="mb-4">
+      <p class="max-w-2xl">
         <span class="font-medium">Este subteste usa as faixas de {{ origin.ownerName }}.</span>
         Editá-las lá vale para este e para os demais subtestes que herdam. Personalize só se as
         faixas deste subteste forem diferentes das do teste.
       </p>
-      <BaseButton size="sm" :loading="changingSource" @click="detach">
-        Personalizar para este subteste
-      </BaseButton>
-    </div>
+      <template #actions>
+        <BaseButton size="sm" :loading="changingSource" @click="detach">
+          Personalizar para este subteste
+        </BaseButton>
+      </template>
+    </BaseAlert>
 
     <div
       v-else-if="origin.canInherit"
-      class="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500"
+      class="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-fg-subtle"
     >
       <p>Faixas próprias deste subteste — alterá-las não afeta o teste nem os outros subtestes.</p>
-      <button class="text-ink-600 hover:underline" :disabled="changingSource" @click="reattach">
+      <BaseButton variant="link-muted" size="sm" :disabled="changingSource" @click="reattach">
         Voltar a herdar do teste pai
-      </button>
+      </BaseButton>
     </div>
 
     <div class="mb-4 flex flex-wrap items-end gap-3">
-      <div>
-        <label class="field-label" for="range-score-type">Tipo de escore</label>
-        <select id="range-score-type" v-model="scoreType" class="field-input min-w-64">
+      <BaseField id="range-score-type" label="Tipo de escore">
+        <BaseSelect v-model="scoreType" class="min-w-64">
           <option v-for="type in classifiableTypes" :key="type" :value="type">
             {{ SCORE_TYPE_LABELS[type] }}{{ configured.includes(type) ? ' ✓' : '' }}
           </option>
-        </select>
-      </div>
+        </BaseSelect>
+      </BaseField>
 
-      <div class="text-xs text-ink-500">
+      <div class="text-xs text-fg-subtle">
         Domínio:
         <span class="tabular font-medium">
           {{ String(domain.min).replace('.', ',') }} a {{ String(domain.max).replace('.', ',') }}
@@ -380,147 +397,129 @@ async function reattach(): Promise<void> {
       <div v-if="!locked" class="ml-auto flex gap-2">
         <BaseButton size="sm" @click="fillDomain(5)">Gerar 5 faixas</BaseButton>
         <BaseButton size="sm" @click="fillDomain(7)">Gerar 7 faixas</BaseButton>
-        <BaseButton size="sm" @click="addRow">Adicionar faixa</BaseButton>
+        <BaseButton size="sm" :icon="Plus" @click="addRow">Adicionar faixa</BaseButton>
       </div>
     </div>
 
-    <label class="mb-4 flex max-w-3xl items-start gap-2 text-sm text-ink-700">
-      <input v-model="inverted" type="checkbox" class="mt-0.5" :disabled="locked" />
-      <span>
-        Escore alto indica <strong>pior</strong> desempenho
-        <span class="mt-0.5 block text-xs text-ink-500">
-          Marque em escalas de sintoma, em que um valor maior é o achado mais grave. Não muda em que
-          faixa o valor cai — muda a direção dos gráficos e a sugestão de níveis abaixo.
-        </span>
-      </span>
-    </label>
+    <BaseCheckbox v-model="inverted" :disabled="locked" class="mb-4 max-w-3xl">
+      Escore alto indica <strong>pior</strong> desempenho
+      <template #description>
+        Marque em escalas de sintoma, em que um valor maior é o achado mais grave. Não muda em que
+        faixa o valor cai — muda a direção dos gráficos e a sugestão de níveis abaixo.
+      </template>
+    </BaseCheckbox>
 
-    <p v-if="loading" class="py-6 text-center text-sm text-ink-400">Carregando faixas…</p>
+    <BaseEmptyState v-if="loading" message="Carregando faixas…" />
 
     <div v-else>
-      <table v-if="rows.length > 0" class="w-full text-sm">
-        <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-          <tr>
-            <th class="px-2 py-2 text-left font-semibold">Classificação</th>
-            <th class="w-24 px-2 py-2 text-right font-semibold">Mínimo</th>
-            <th class="w-24 px-2 py-2 text-right font-semibold">Máximo</th>
-            <th class="w-40 px-2 py-2 text-left font-semibold">Cor</th>
-            <th class="w-48 px-2 py-2 text-left font-semibold">Nível</th>
-            <th class="w-28 px-2 py-2 text-left font-semibold">Intervalo</th>
-            <th class="w-10 px-2 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.key" class="border-t border-ink-200">
-            <td class="px-2 py-1.5">
-              <input
-                v-model="row.classificationName"
-                class="field-input py-1"
-                placeholder="Ex.: Média superior"
-                :disabled="locked"
-              />
-            </td>
-            <td class="px-2 py-1.5">
-              <input
-                v-model.number="row.minValue"
-                type="number"
-                :step="step()"
-                class="field-input tabular py-1 text-right"
-                :disabled="locked"
-              />
-            </td>
-            <td class="px-2 py-1.5">
-              <input
-                v-model.number="row.maxValue"
-                type="number"
-                :step="step()"
-                class="field-input tabular py-1 text-right"
-                :disabled="locked"
-              />
-            </td>
-            <td class="px-2 py-1.5">
-              <select v-model="row.colorId" class="field-input py-1" :disabled="locked">
-                <option v-for="color in catalog.colors" :key="color.id" :value="color.id">
-                  {{ color.name }}
-                </option>
-              </select>
-              <p v-if="contrastWarning(row.colorId)" class="mt-0.5 text-xs text-warn-700">
-                {{ contrastWarning(row.colorId) }}
-              </p>
-            </td>
-            <td class="px-2 py-1.5">
-              <select v-model="row.level" class="field-input py-1" :disabled="locked">
-                <option :value="null">— não definido</option>
-                <option
-                  v-for="entry in CLASSIFICATION_LEVELS"
-                  :key="entry.level"
-                  :value="entry.level"
-                >
-                  {{ entry.level }} · {{ entry.label }}
-                </option>
-              </select>
-            </td>
-            <td class="px-2 py-1.5 tabular text-xs text-ink-500">{{ rangeLabel(row.key) }}</td>
-            <td class="px-2 py-1.5 text-right">
-              <button
-                v-if="!locked"
-                class="text-xs text-danger-500 hover:underline"
-                :aria-label="`Remover faixa ${row.classificationName}`"
-                @click="removeRow(row.key)"
+      <BaseTable v-if="rows.length > 0" :columns="COLUMNS" density="compact">
+        <tr v-for="row in rows" :key="row.key">
+          <td>
+            <BaseInput
+              v-model="row.classificationName"
+              size="sm"
+              placeholder="Ex.: Média superior"
+              :disabled="locked"
+            />
+          </td>
+          <td>
+            <BaseInput
+              v-model.number="row.minValue"
+              type="number"
+              size="sm"
+              :step="step()"
+              class="tabular text-right"
+              :disabled="locked"
+            />
+          </td>
+          <td>
+            <BaseInput
+              v-model.number="row.maxValue"
+              type="number"
+              size="sm"
+              :step="step()"
+              class="tabular text-right"
+              :disabled="locked"
+            />
+          </td>
+          <td>
+            <BaseSelect v-model="row.colorId" size="sm" :disabled="locked">
+              <option v-for="color in catalog.colors" :key="color.id" :value="color.id">
+                {{ color.name }}
+              </option>
+            </BaseSelect>
+            <p v-if="contrastWarning(row.colorId)" class="mt-0.5 text-xs text-warn-strong">
+              {{ contrastWarning(row.colorId) }}
+            </p>
+          </td>
+          <td>
+            <BaseSelect v-model="row.level" size="sm" :disabled="locked">
+              <option :value="null">— não definido</option>
+              <option
+                v-for="entry in CLASSIFICATION_LEVELS"
+                :key="entry.level"
+                :value="entry.level"
               >
-                ×
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                {{ entry.level }} · {{ entry.label }}
+              </option>
+            </BaseSelect>
+          </td>
+          <td class="tabular text-xs text-fg-subtle">{{ rangeLabel(row.key) }}</td>
+          <td class="text-right">
+            <BaseIconButton
+              v-if="!locked"
+              :icon="X"
+              variant="danger"
+              size="sm"
+              :label="`Remover faixa ${row.classificationName}`"
+              @click="removeRow(row.key)"
+            />
+          </td>
+        </tr>
+      </BaseTable>
 
-      <div v-else class="py-8 text-center text-sm text-ink-400">
-        <p v-if="origin.inherited">
+      <BaseEmptyState v-else class="py-8">
+        <template v-if="origin.inherited">
           {{ origin.ownerName }} não tem faixas de {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas,
           os resultados deste instrumento são gravados sem classificação automática.
-        </p>
-        <p v-else>
+        </template>
+        <template v-else>
           Nenhuma faixa cadastrada para {{ SCORE_TYPE_LABELS[scoreType] }}. Sem faixas, os
           resultados deste instrumento são gravados sem classificação automática.
-        </p>
-        <p v-if="configuredElsewhere.length > 0" class="mt-2 text-ink-600">
+        </template>
+        <span v-if="configuredElsewhere.length > 0" class="mt-2 block text-fg-muted">
           {{ origin.inherited ? `${origin.ownerName} tem` : 'Este instrumento tem' }} faixas em
           <span class="font-medium">{{ configuredElsewhere.join(', ') }}</span> — troque o tipo de
           escore acima para vê-las.
-        </p>
+        </span>
         <!--
           Um subteste próprio e sem faixa nenhuma quase sempre é engano: ele
           herdava e alguém salvou um conjunto vazio. Dizer só "nenhuma faixa"
           esconderia que as faixas do pai estão a um clique de distância.
         -->
-        <p
+        <span
           v-else-if="origin.canInherit && !origin.inherited"
-          class="mx-auto mt-2 max-w-xl text-ink-600"
+          class="mx-auto mt-2 block max-w-xl text-fg-muted"
         >
-          Este subteste está marcado como tendo faixas próprias, mas não tem nenhuma cadastrada.
-          Use <span class="font-medium">Voltar a herdar do teste pai</span>, acima, para usar as
-          faixas do teste.
-        </p>
-      </div>
+          Este subteste está marcado como tendo faixas próprias, mas não tem nenhuma cadastrada. Use
+          <span class="font-medium">Voltar a herdar do teste pai</span>, acima, para usar as faixas
+          do teste.
+        </span>
+      </BaseEmptyState>
 
-      <div
+      <BaseAlert
         v-if="blockingIssues.length > 0"
-        class="mt-4 rounded border border-danger-500 bg-danger-50 p-3"
+        tone="danger"
+        title="Corrija antes de salvar"
+        class="mt-4"
       >
-        <p class="text-xs font-semibold uppercase tracking-wide text-danger-600">
-          Corrija antes de salvar
-        </p>
-        <ul class="mt-2 space-y-1 text-sm text-danger-600">
+        <ul class="space-y-1">
           <li v-for="(issue, index) in blockingIssues" :key="index">{{ issue.message }}</li>
         </ul>
-      </div>
+      </BaseAlert>
 
-      <div
-        v-if="rows.length > 0 && missingLevels > 0 && !locked"
-        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-200 bg-warn-50 p-3"
-      >
-        <p class="max-w-xl text-sm text-warn-700">
+      <BaseAlert v-if="rows.length > 0 && missingLevels > 0 && !locked" tone="warn" class="mt-4">
+        <p class="max-w-xl">
           <span class="font-medium">
             {{ missingLevels }} de {{ rows.length }}
             {{ missingLevels === 1 ? 'faixa está' : 'faixas estão' }} sem nível.
@@ -528,11 +527,13 @@ async function reattach(): Promise<void> {
           Resultados classificados por elas aparecem em cinza na visualização — sem nível, o app não
           sabe se a faixa é boa ou ruim.
         </p>
-        <BaseButton size="sm" @click="applySuggestedLevels">Sugerir níveis</BaseButton>
-      </div>
+        <template #actions>
+          <BaseButton size="sm" @click="applySuggestedLevels">Sugerir níveis</BaseButton>
+        </template>
+      </BaseAlert>
 
       <div v-if="!locked" class="mt-4 flex items-center justify-between">
-        <p class="max-w-lg text-xs text-ink-500">
+        <p class="max-w-lg text-xs text-fg-subtle">
           O limite inferior é inclusivo e o superior exclusivo; a última faixa da série inclui o
           máximo. Faixas contíguas devem se encostar — o máximo de uma é o mínimo da seguinte.
         </p>

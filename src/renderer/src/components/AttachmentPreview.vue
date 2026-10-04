@@ -26,9 +26,10 @@ const url = ref<string | null>(null)
 const pdfPage = ref(1)
 const pdfPageCount = ref(0)
 const canvas = ref<HTMLCanvasElement | null>(null)
-const pdfDocument = shallowRef<{ numPages: number; getPage: (n: number) => Promise<unknown> } | null>(
-  null
-)
+const pdfDocument = shallowRef<{
+  numPages: number
+  getPage: (n: number) => Promise<unknown>
+} | null>(null)
 const loading = ref(true)
 
 const isImage = props.attachment.detectedMime.startsWith('image/')
@@ -95,18 +96,18 @@ async function goToPage(delta: number): Promise<void> {
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col bg-ink-900/80"
+    class="fixed inset-0 z-50 flex flex-col bg-scrim/80"
     role="dialog"
     aria-modal="true"
     @keydown.esc="emit('close')"
   >
-    <header class="flex items-center justify-between gap-4 bg-white px-4 py-2">
-      <p class="truncate text-sm font-medium text-ink-800">{{ attachment.originalName }}</p>
+    <header class="flex items-center justify-between gap-4 bg-surface px-4 py-2">
+      <p class="truncate text-sm font-medium text-fg">{{ attachment.originalName }}</p>
 
       <div class="flex items-center gap-2">
         <template v-if="isPdf && pdfPageCount > 0">
           <BaseButton size="sm" :disabled="pdfPage <= 1" @click="goToPage(-1)">Anterior</BaseButton>
-          <span class="tabular text-xs text-ink-600">{{ pdfPage }} / {{ pdfPageCount }}</span>
+          <span class="tabular text-xs text-fg-muted">{{ pdfPage }} / {{ pdfPageCount }}</span>
           <BaseButton size="sm" :disabled="pdfPage >= pdfPageCount" @click="goToPage(1)">
             Próxima
           </BaseButton>
@@ -116,7 +117,7 @@ async function goToPage(delta: number): Promise<void> {
     </header>
 
     <div class="flex flex-1 items-center justify-center overflow-auto p-6">
-      <p v-if="loading" class="text-sm text-white">Carregando…</p>
+      <p v-if="loading" class="text-sm text-fg-inverse">Carregando…</p>
 
       <img
         v-else-if="isImage && url !== null"
@@ -127,9 +128,9 @@ async function goToPage(delta: number): Promise<void> {
 
       <audio v-else-if="isAudio && url !== null" :src="url" controls class="w-full max-w-2xl" />
 
-      <canvas v-else-if="isPdf" ref="canvas" class="max-w-full bg-white shadow-lg" />
+      <canvas v-else-if="isPdf" ref="canvas" class="max-w-full bg-surface shadow-lg" />
 
-      <p v-else class="text-sm text-white">
+      <p v-else class="text-sm text-fg-inverse">
         Este tipo de arquivo não tem visualização interna.
       </p>
     </div>

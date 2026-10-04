@@ -12,10 +12,26 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PatientFormDialog from '../components/PatientFormDialog.vue'
 import AttachmentsPanel from '../components/AttachmentsPanel.vue'
 import DocumentsPanel from '../components/DocumentsPanel.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseBadge from '../components/BaseBadge.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
+import BaseField from '../components/BaseField.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseSelect from '../components/BaseSelect.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
 import { ageAt, formatAge, formatIsoDate, today } from '@shared/domain/dates'
 import { HANDEDNESS_LABELS, SEX_LABELS } from '@shared/labels'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Patient } from '@shared/contracts/entities'
+
+const ASSESSMENT_COLUMNS: TableColumn[] = [
+  { key: 'date', label: 'Data' },
+  { key: 'reason', label: 'Motivo do encaminhamento' },
+  { key: 'results', label: 'Resultados', align: 'right' },
+  { key: 'status', label: 'Situação' }
+]
 
 const props = defineProps<{ id: string }>()
 
@@ -71,7 +87,10 @@ async function toggleArchived(): Promise<void> {
       id: props.id,
       archived: patient.value.archivedAt === null
     })
-    appStore.notify('success', patient.value.archivedAt === null ? 'Paciente reativado.' : 'Paciente arquivado.')
+    appStore.notify(
+      'success',
+      patient.value.archivedAt === null ? 'Paciente reativado.' : 'Paciente arquivado.'
+    )
   } catch (error) {
     appStore.notifyError(error)
   }
@@ -150,42 +169,29 @@ async function generateComparison(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="loading" class="p-6 text-sm text-ink-500">Carregando prontuário…</div>
+  <div v-if="loading" class="p-6 text-sm text-fg-subtle">Carregando prontuário…</div>
 
-  <div v-else-if="patient === null" class="p-6 text-sm text-ink-500">
+  <div v-else-if="patient === null" class="p-6 text-sm text-fg-subtle">
     Paciente não encontrado.
   </div>
 
   <div v-else class="p-6">
-    <header class="mb-6 flex items-start justify-between gap-6">
-      <div>
-        <button class="text-xs text-ink-500 hover:underline" @click="router.push('/pacientes')">
-          ← Pacientes
-        </button>
-        <h1 class="mt-1 text-xl font-bold text-ink-800">
-          {{ patient.fullName }}
-          <span
-            v-if="patient.archivedAt !== null"
-            class="ml-2 rounded bg-ink-200 px-2 py-0.5 align-middle text-xs font-medium text-ink-600"
-          >
-            Arquivado
-          </span>
-        </h1>
-        <p class="mt-1 text-sm text-ink-500">
-          {{ age }} ·
-          {{ patient.birthDate !== null ? formatIsoDate(patient.birthDate) : 'nascimento não informado' }} ·
-          {{ SEX_LABELS[patient.sex] }} · {{ HANDEDNESS_LABELS[patient.handedness] }}
-        </p>
-      </div>
-
-      <div class="flex flex-wrap items-center justify-end gap-2">
+    <PageHeader :back="{ label: 'Pacientes', to: '/pacientes' }" class="mb-6">
+      <template #title>
+        {{ patient.fullName }}
+        <BaseBadge v-if="patient.archivedAt !== null" class="ml-2">Arquivado</BaseBadge>
+      </template>
+      <template #subtitle>
+        {{ age }} ·
+        {{
+          patient.birthDate !== null ? formatIsoDate(patient.birthDate) : 'nascimento não informado'
+        }}
+        · {{ SEX_LABELS[patient.sex] }} · {{ HANDEDNESS_LABELS[patient.handedness] }}
+      </template>
+      <template #actions>
         <BaseButton size="sm" @click="editOpen = true">Editar</BaseButton>
         <BaseButton size="sm" @click="exportRecord">Exportar prontuário</BaseButton>
-        <BaseButton
-          v-if="assessments.length >= 2"
-          size="sm"
-          @click="comparisonOpen = true"
-        >
+        <BaseButton v-if="assessments.length >= 2" size="sm" @click="comparisonOpen = true">
           Comparar avaliações
         </BaseButton>
         <BaseButton size="sm" @click="router.push(`/pacientes/${id}/assistente`)">
@@ -195,59 +201,52 @@ async function generateComparison(): Promise<void> {
           {{ patient.archivedAt === null ? 'Arquivar' : 'Reativar' }}
         </BaseButton>
         <BaseButton size="sm" variant="danger" @click="openDelete">Excluir</BaseButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <section class="mb-6">
-      <div class="mb-2 flex items-center justify-between">
-        <h2 class="text-base font-semibold text-ink-800">Avaliações</h2>
-        <BaseButton size="sm" variant="primary" @click="assessmentOpen = true">
-          Nova avaliação
-        </BaseButton>
-      </div>
+      <SectionHeader title="Avaliações" class="mb-2">
+        <template #actions>
+          <BaseButton size="sm" variant="primary" @click="assessmentOpen = true">
+            Nova avaliação
+          </BaseButton>
+        </template>
+      </SectionHeader>
 
-      <div class="card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th class="px-4 py-2 text-left font-semibold">Data</th>
-              <th class="px-4 py-2 text-left font-semibold">Motivo do encaminhamento</th>
-              <th class="px-4 py-2 text-right font-semibold">Resultados</th>
-              <th class="px-4 py-2 text-left font-semibold">Situação</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="assessments.length === 0">
-              <td colspan="4" class="px-4 py-8 text-center text-ink-400">
-                Nenhuma avaliação registrada. Um reteste é sempre uma nova avaliação — é o que
-                permite a comparação longitudinal.
-              </td>
-            </tr>
-            <tr
-              v-for="assessment in assessments"
-              :key="assessment.id"
-              class="cursor-pointer border-t border-ink-200 hover:bg-ink-50"
-              tabindex="0"
-              @click="router.push(`/avaliacoes/${assessment.id}`)"
-              @keydown.enter="router.push(`/avaliacoes/${assessment.id}`)"
-            >
-              <td class="px-4 py-2.5 tabular font-medium text-ink-800">
-                {{ formatIsoDate(assessment.date) }}
-              </td>
-              <td class="px-4 py-2.5 text-ink-600">{{ assessment.referralReason ?? '—' }}</td>
-              <td class="px-4 py-2.5 text-right tabular text-ink-600">
-                {{ assessment.resultCount }}
-              </td>
-              <td class="px-4 py-2.5">
-                <span v-if="assessment.archivedAt !== null" class="text-xs text-ink-500">
-                  Arquivada
-                </span>
-                <span v-else class="text-xs text-ink-400">Ativa</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <BaseCard class="overflow-hidden">
+        <BaseTable
+          :columns="ASSESSMENT_COLUMNS"
+          density="comfortable"
+          :empty-text="
+            assessments.length === 0
+              ? 'Nenhuma avaliação registrada. Um reteste é sempre uma nova avaliação — é o que permite a comparação longitudinal.'
+              : null
+          "
+        >
+          <tr
+            v-for="assessment in assessments"
+            :key="assessment.id"
+            class="cursor-pointer hover:bg-canvas"
+            tabindex="0"
+            @click="router.push(`/avaliacoes/${assessment.id}`)"
+            @keydown.enter="router.push(`/avaliacoes/${assessment.id}`)"
+          >
+            <td class="tabular font-medium text-fg">
+              {{ formatIsoDate(assessment.date) }}
+            </td>
+            <td class="text-fg-muted">{{ assessment.referralReason ?? '—' }}</td>
+            <td class="text-right tabular text-fg-muted">
+              {{ assessment.resultCount }}
+            </td>
+            <td>
+              <span v-if="assessment.archivedAt !== null" class="text-xs text-fg-subtle">
+                Arquivada
+              </span>
+              <span v-else class="text-xs text-fg-faint">Ativa</span>
+            </td>
+          </tr>
+        </BaseTable>
+      </BaseCard>
     </section>
 
     <DocumentsPanel :patient-id="id" :assessment-id="null" class="mb-6" />
@@ -272,32 +271,15 @@ async function generateComparison(): Promise<void> {
 
     <BaseDialog v-model:open="assessmentOpen" title="Nova avaliação">
       <form class="space-y-4" @submit.prevent="createAssessment">
-        <div>
-          <label class="field-label" for="assessment-date">Data da avaliação</label>
-          <input
-            id="assessment-date"
-            v-model="assessmentForm.date"
-            type="date"
-            class="field-input"
-            required
-          />
-        </div>
-        <div>
-          <label class="field-label" for="assessment-reason">Motivo do encaminhamento</label>
-          <textarea
-            id="assessment-reason"
-            v-model="assessmentForm.referralReason"
-            class="field-input min-h-20"
-          />
-        </div>
-        <div>
-          <label class="field-label" for="assessment-complaint">Queixa</label>
-          <textarea
-            id="assessment-complaint"
-            v-model="assessmentForm.complaint"
-            class="field-input min-h-20"
-          />
-        </div>
+        <BaseField id="assessment-date" label="Data da avaliação">
+          <BaseInput v-model="assessmentForm.date" type="date" required />
+        </BaseField>
+        <BaseField id="assessment-reason" label="Motivo do encaminhamento">
+          <BaseTextarea v-model="assessmentForm.referralReason" />
+        </BaseField>
+        <BaseField id="assessment-complaint" label="Queixa">
+          <BaseTextarea v-model="assessmentForm.complaint" />
+        </BaseField>
       </form>
 
       <template #footer>
@@ -314,24 +296,22 @@ async function generateComparison(): Promise<void> {
       description="Compara duas avaliações deste paciente, pareando por instrumento e tipo de escore."
     >
       <div class="space-y-4">
-        <div>
-          <label class="field-label" for="comparison-a">Avaliação A</label>
-          <select id="comparison-a" v-model="comparisonA" class="field-input">
+        <BaseField id="comparison-a" label="Avaliação A">
+          <BaseSelect v-model="comparisonA">
             <option value="">Selecione…</option>
             <option v-for="item in assessments" :key="item.id" :value="item.id">
               {{ formatIsoDate(item.date) }} — {{ item.resultCount }} resultado(s)
             </option>
-          </select>
-        </div>
-        <div>
-          <label class="field-label" for="comparison-b">Avaliação B</label>
-          <select id="comparison-b" v-model="comparisonB" class="field-input">
+          </BaseSelect>
+        </BaseField>
+        <BaseField id="comparison-b" label="Avaliação B">
+          <BaseSelect v-model="comparisonB">
             <option value="">Selecione…</option>
             <option v-for="item in assessments" :key="item.id" :value="item.id">
               {{ formatIsoDate(item.date) }} — {{ item.resultCount }} resultado(s)
             </option>
-          </select>
-        </div>
+          </BaseSelect>
+        </BaseField>
       </div>
 
       <template #footer>

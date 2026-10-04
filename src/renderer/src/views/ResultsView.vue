@@ -20,7 +20,6 @@
  * discordar sem ninguém notar.
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
@@ -28,6 +27,13 @@ import ChartCard from '../components/ChartCard.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
 import FunctionHeatCard from '../components/FunctionHeatCard.vue'
 import LevelHeatBar from '../components/LevelHeatBar.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseAlert from '../components/BaseAlert.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseCheckbox from '../components/BaseCheckbox.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
 import { comparisonOption, evolutionOption, functionRadarOption } from '@shared/charts/options'
 import type { ChartKind } from '@shared/charts/options'
 import { CLASSIFICATION_LEVELS, levelColor, levelLabel } from '@shared/domain/levels'
@@ -37,9 +43,17 @@ import type { ChannelOutput } from '@shared/contracts'
 import type { FunctionRadar, ResultPoint, TestGroup } from '@shared/contracts/results'
 import type { EChartsOption } from 'echarts'
 
+const FUNCTION_COLUMNS: TableColumn[] = [
+  { key: 'instrument', label: 'Instrumento' },
+  { key: 'scoreType', label: 'Escore', class: 'w-24' },
+  { key: 'value', label: 'Valor', align: 'right', class: 'w-20' },
+  { key: 'classification', label: 'Classificação', class: 'w-44' },
+  { key: 'level', label: 'Nível', class: 'w-32' },
+  { key: 'status', label: 'Situação', class: 'w-28' }
+]
+
 const props = defineProps<{ id: string }>()
 
-const router = useRouter()
 const appStore = useAppStore()
 
 type Overview = ChannelOutput<'results:overview'>
@@ -85,6 +99,17 @@ watch(comparisonIds, load, { deep: true })
 
 const assessments = computed(() => overview.value?.assessments ?? [])
 const comparing = computed(() => assessments.value.length > 1)
+const testColumns = computed<TableColumn[]>(() => [
+  { key: 'subtest', label: 'Subteste' },
+  { key: 'scoreType', label: 'Escore', class: 'w-20' },
+  ...assessments.value.map((assessment) => ({
+    key: assessment.id,
+    label: assessment.dateLabel,
+    align: 'right' as const,
+    class: 'w-32'
+  })),
+  ...(comparing.value ? [] : [{ key: 'classification', label: 'Classificação', class: 'w-44' }])
+])
 
 /** As outras avaliações do paciente, que podem entrar na comparação. */
 const comparableSiblings = computed(() =>
@@ -154,39 +179,30 @@ async function exportPdf(): Promise<void> {
 
 <template>
   <div class="p-6">
-    <p v-if="loading" class="py-16 text-center text-sm text-ink-400">Carregando resultados…</p>
+    <BaseEmptyState v-if="loading" message="Carregando resultados…" class="py-16" />
 
     <template v-else-if="overview !== null">
-      <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <button
-            class="text-xs text-brand-500 hover:underline"
-            @click="router.push(`/avaliacoes/${id}`)"
-          >
-            ← Voltar à avaliação
-          </button>
-          <h1 class="mt-1 text-xl font-bold text-ink-800">
-            Resultados de {{ overview.patient.fullName }}
-          </h1>
-          <p class="mt-1 text-sm text-ink-500">
-            Avaliação de {{ overview.assessmentDate }}
-            <template v-if="overview.patient.ageAtAssessment">
-              · {{ overview.patient.ageAtAssessment }}
-            </template>
-            · {{ overview.totalResults }}
-            {{ overview.totalResults === 1 ? 'resultado' : 'resultados' }}
-          </p>
-        </div>
-
-        <BaseButton variant="primary" :loading="exporting" @click="exportPdf">
-          Exportar PDF
-        </BaseButton>
-      </header>
-
-      <div
-        v-if="overview.missingLevels > 0"
-        class="mb-6 rounded border border-warn-200 bg-warn-50 p-3 text-sm text-warn-700"
+      <PageHeader
+        :title="`Resultados de ${overview.patient.fullName}`"
+        :back="{ label: 'Voltar à avaliação', to: `/avaliacoes/${id}` }"
+        class="mb-6"
       >
+        <template #subtitle>
+          Avaliação de {{ overview.assessmentDate }}
+          <template v-if="overview.patient.ageAtAssessment">
+            · {{ overview.patient.ageAtAssessment }}
+          </template>
+          · {{ overview.totalResults }}
+          {{ overview.totalResults === 1 ? 'resultado' : 'resultados' }}
+        </template>
+        <template #actions>
+          <BaseButton variant="primary" :loading="exporting" @click="exportPdf">
+            Exportar PDF
+          </BaseButton>
+        </template>
+      </PageHeader>
+
+      <BaseAlert v-if="overview.missingLevels > 0" tone="warn" class="mb-6">
         <span class="font-medium">
           {{ overview.missingLevels }} de {{ overview.totalResults }}
           {{ overview.missingLevels === 1 ? 'resultado está' : 'resultados estão' }} sem nível.
@@ -194,35 +210,36 @@ async function exportPdf(): Promise<void> {
         Eles aparecem em cinza, e não entram na média das funções. Defina o nível das faixas em
         Instrumentos e use "Reprocessar classificações" na avaliação para aplicá-lo — reprocessar é
         ação explícita, e mostra a prévia antes de gravar.
-      </div>
+      </BaseAlert>
 
       <!-- ── Comparar com outras avaliações ────────────────────────────── -->
-      <section v-if="comparableSiblings.length > 0" class="card mb-6 p-4">
-        <h2 class="mb-2 text-sm font-semibold text-ink-800">Comparar com outras avaliações</h2>
+      <BaseCard v-if="comparableSiblings.length > 0" as="section" padding="md" class="mb-6">
+        <SectionHeader title="Comparar com outras avaliações" size="sm" class="mb-2" />
         <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <label
+          <BaseCheckbox
             v-for="assessment in comparableSiblings"
             :key="assessment.id"
-            class="flex items-center gap-2 text-sm text-ink-700"
-          >
-            <input v-model="comparisonIds" type="checkbox" :value="assessment.id" />
-            {{ formatIsoDate(assessment.date) }}
-          </label>
+            v-model="comparisonIds"
+            :value="assessment.id"
+            :label="formatIsoDate(assessment.date)"
+          />
         </div>
-      </section>
+      </BaseCard>
 
-      <div v-if="overview.totalResults === 0" class="card p-10 text-center text-sm text-ink-400">
-        Esta avaliação ainda não tem resultados lançados.
-      </div>
+      <BaseEmptyState
+        v-if="overview.totalResults === 0"
+        framed
+        message="Esta avaliação ainda não tem resultados lançados."
+      />
 
       <template v-else>
         <!-- ── Panorama por função ─────────────────────────────────────── -->
         <section class="mb-8">
-          <h2 class="mb-1 text-base font-semibold text-ink-800">Panorama por função</h2>
-          <p class="mb-3 text-xs text-ink-500">
-            Ordenado da função mais rebaixada para a mais preservada. O número é o nível médio, de 1
-            (muito rebaixado) a 5 (muito acima do esperado).
-          </p>
+          <SectionHeader
+            title="Panorama por função"
+            description="Ordenado da função mais rebaixada para a mais preservada. O número é o nível médio, de 1 (muito rebaixado) a 5 (muito acima do esperado)."
+            class="mb-3"
+          />
 
           <div class="grid gap-4 lg:grid-cols-[1fr_460px]">
             <!-- `content-start`: sem isso as linhas esticam até a altura do
@@ -247,13 +264,13 @@ async function exportPdf(): Promise<void> {
             />
           </div>
 
-          <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
+          <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-subtle">
             <span
               v-for="entry in CLASSIFICATION_LEVELS"
               :key="entry.level"
               class="flex items-center gap-1.5"
             >
-              <span class="h-2.5 w-2.5 rounded-sm" :style="{ backgroundColor: entry.hex }" />
+              <span class="size-2.5 rounded-chip" :style="{ backgroundColor: entry.hex }" />
               {{ entry.level }} · {{ entry.label }}
             </span>
           </div>
@@ -261,7 +278,7 @@ async function exportPdf(): Promise<void> {
 
         <!-- ── Detalhe por função ──────────────────────────────────────── -->
         <section class="mb-8">
-          <h2 class="mb-3 text-base font-semibold text-ink-800">Detalhe por função</h2>
+          <SectionHeader title="Detalhe por função" class="mb-3" />
 
           <!-- Agrupado por função raiz: o radar de um pai compara as filhas dele,
                e só se lê junto das tabelas dessas filhas. Uma função pai sem
@@ -272,13 +289,13 @@ async function exportPdf(): Promise<void> {
             class="mb-6"
           >
             <div class="mb-2 flex items-center gap-3">
-              <h3 class="text-sm font-semibold text-ink-800">{{ group.name }}</h3>
+              <h3 class="text-sm font-semibold text-fg">{{ group.name }}</h3>
               <LevelHeatBar
                 :distribution="group.distribution"
                 class="max-w-40 flex-1"
                 :height="6"
               />
-              <span class="text-xs text-ink-500">
+              <span class="text-xs text-fg-subtle">
                 {{ group.resultCount }}
                 {{ group.resultCount === 1 ? 'resultado' : 'resultados' }}
               </span>
@@ -300,10 +317,10 @@ async function exportPdf(): Promise<void> {
               v-for="summary in group.functions"
               :id="`funcao-${summary.id ?? 'sem-funcao'}`"
               :key="summary.id ?? '__none__'"
-              class="mb-4 scroll-mt-4 border-l border-ink-200 pl-3"
+              class="mb-4 scroll-mt-4 border-l border-line pl-3"
             >
               <div class="mb-1 flex items-center gap-3">
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
                   {{ summary.name }}
                 </h4>
                 <LevelHeatBar
@@ -313,115 +330,75 @@ async function exportPdf(): Promise<void> {
                 />
               </div>
 
-              <div class="card overflow-hidden">
-                <table class="w-full text-sm">
-                  <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-                    <tr>
-                      <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-                      <th class="w-24 px-3 py-2 text-left font-semibold">Escore</th>
-                      <th class="w-20 px-3 py-2 text-right font-semibold">Valor</th>
-                      <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
-                      <th class="w-32 px-3 py-2 text-left font-semibold">Nível</th>
-                      <th class="w-28 px-3 py-2 text-left font-semibold">Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="point in summary.points"
-                      :key="point.resultId"
-                      class="border-t border-ink-200"
-                    >
-                      <td class="px-3 py-2 text-ink-800">{{ point.instrumentPath }}</td>
-                      <td class="px-3 py-2 text-ink-600">{{ point.scoreTypeLabel }}</td>
-                      <td class="tabular px-3 py-2 text-right font-medium text-ink-800">
-                        {{ formatValue(point) }}
-                      </td>
-                      <td class="px-3 py-2">
-                        <ClassificationBadge
-                          :name="point.classificationName"
-                          :color-hex="point.colorHex"
-                          :overridden="point.manuallyOverridden"
+              <BaseCard class="overflow-hidden">
+                <BaseTable :columns="FUNCTION_COLUMNS">
+                  <tr v-for="point in summary.points" :key="point.resultId">
+                    <td class="text-fg">{{ point.instrumentPath }}</td>
+                    <td class="text-fg-muted">{{ point.scoreTypeLabel }}</td>
+                    <td class="tabular text-right font-medium text-fg">
+                      {{ formatValue(point) }}
+                    </td>
+                    <td>
+                      <ClassificationBadge
+                        :name="point.classificationName"
+                        :color-hex="point.colorHex"
+                        :overridden="point.manuallyOverridden"
+                      />
+                    </td>
+                    <td>
+                      <span class="flex items-center gap-1.5 text-xs text-fg-muted">
+                        <span
+                          class="size-2.5 shrink-0 rounded-chip"
+                          :style="{ backgroundColor: levelColor(point.classificationLevel) }"
                         />
-                      </td>
-                      <td class="px-3 py-2">
-                        <span class="flex items-center gap-1.5 text-xs text-ink-600">
-                          <span
-                            class="h-2.5 w-2.5 shrink-0 rounded-sm"
-                            :style="{ backgroundColor: levelColor(point.classificationLevel) }"
-                          />
-                          {{ levelLabel(point.classificationLevel) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-2 text-ink-600">{{ point.statusLabel }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                        {{ levelLabel(point.classificationLevel) }}
+                      </span>
+                    </td>
+                    <td class="text-fg-muted">{{ point.statusLabel }}</td>
+                  </tr>
+                </BaseTable>
+              </BaseCard>
             </div>
           </div>
         </section>
 
         <!-- ── Por teste ───────────────────────────────────────────────── -->
         <section>
-          <h2 class="mb-1 text-base font-semibold text-ink-800">Por teste</h2>
-          <p class="mb-3 text-xs text-ink-500">
-            Os subtestes na régua normalizada de 0 a 100, em que 100 é sempre o melhor desempenho —
-            é o que torna comparáveis escores de escalas diferentes.
-          </p>
+          <SectionHeader
+            title="Por teste"
+            description="Os subtestes na régua normalizada de 0 a 100, em que 100 é sempre o melhor desempenho — é o que torna comparáveis escores de escalas diferentes."
+            class="mb-3"
+          />
 
           <div v-for="group in overview.tests" :key="group.instrumentId" class="mb-6">
-            <div class="card mb-3 overflow-hidden">
-              <table class="w-full text-sm">
-                <caption class="bg-ink-50 px-3 py-2 text-left text-sm font-semibold text-ink-800">
-                  {{
-                    group.label
-                  }}
-                  <span v-if="group.inverted" class="ml-2 text-xs font-normal text-warn-700">
+            <BaseCard class="mb-3 overflow-hidden">
+              <BaseTable :columns="testColumns">
+                <template #caption>
+                  {{ group.label }}
+                  <span v-if="group.inverted" class="ml-2 text-xs font-normal text-warn-strong">
                     escore alto indica pior desempenho
                   </span>
-                </caption>
-                <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-semibold">Subteste</th>
-                    <th class="w-20 px-3 py-2 text-left font-semibold">Escore</th>
-                    <th
-                      v-for="assessment in assessments"
-                      :key="assessment.id"
-                      class="w-32 px-3 py-2 text-right font-semibold"
-                    >
-                      {{ assessment.dateLabel }}
-                    </th>
-                    <th v-if="!comparing" class="w-44 px-3 py-2 text-left font-semibold">
-                      Classificação
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="entry in group.entries"
-                    :key="entry.key"
-                    class="border-t border-ink-200"
+                </template>
+                <tr v-for="entry in group.entries" :key="entry.key">
+                  <td class="text-fg">{{ entry.label }}</td>
+                  <td class="text-fg-muted">{{ entry.scoreTypeLabel }}</td>
+                  <td
+                    v-for="(point, index) in entry.values"
+                    :key="index"
+                    class="tabular text-right font-medium text-fg"
                   >
-                    <td class="px-3 py-2 text-ink-800">{{ entry.label }}</td>
-                    <td class="px-3 py-2 text-ink-600">{{ entry.scoreTypeLabel }}</td>
-                    <td
-                      v-for="(point, index) in entry.values"
-                      :key="index"
-                      class="tabular px-3 py-2 text-right font-medium text-ink-800"
-                    >
-                      {{ formatValue(point) }}
-                    </td>
-                    <td v-if="!comparing" class="px-3 py-2">
-                      <ClassificationBadge
-                        :name="entry.values[0]?.classificationName ?? null"
-                        :color-hex="entry.values[0]?.colorHex ?? null"
-                        :overridden="entry.values[0]?.manuallyOverridden ?? false"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                    {{ formatValue(point) }}
+                  </td>
+                  <td v-if="!comparing">
+                    <ClassificationBadge
+                      :name="entry.values[0]?.classificationName ?? null"
+                      :color-hex="entry.values[0]?.colorHex ?? null"
+                      :overridden="entry.values[0]?.manuallyOverridden ?? false"
+                    />
+                  </td>
+                </tr>
+              </BaseTable>
+            </BaseCard>
 
             <ChartCard
               v-if="group.comparable"

@@ -10,9 +10,21 @@
 import { useCatalogStore } from '../stores/catalog'
 import ClassificationBadge from './ClassificationBadge.vue'
 import ResultRowEditor from './ResultRowEditor.vue'
+import BaseCard from './BaseCard.vue'
+import BaseTable, { type TableColumn } from './BaseTable.vue'
 import { RESULT_STATUS_LABELS, SCORE_TYPE_SHORT_LABELS } from '@shared/labels'
 import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
 import type { ChannelOutput } from '@shared/contracts'
+
+const COLUMNS: TableColumn[] = [
+  { key: 'instrument', label: 'Instrumento' },
+  { key: 'scoreType', label: 'Escore', class: 'w-28' },
+  { key: 'value', label: 'Valor', align: 'right', class: 'w-20' },
+  { key: 'classification', label: 'Classificação', class: 'w-44' },
+  { key: 'status', label: 'Situação', class: 'w-28' },
+  { key: 'notes', label: 'Observação' },
+  { key: 'actions', class: 'w-24' }
+]
 
 type ResultRow = ChannelOutput<'results:listByAssessment'>[number]
 
@@ -48,67 +60,48 @@ function formatValue(result: ResultRow): string {
 </script>
 
 <template>
-  <div class="card overflow-hidden">
-    <table class="w-full text-sm">
-      <thead class="bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-        <tr>
-          <th class="px-3 py-2 text-left font-semibold">Instrumento</th>
-          <th class="w-28 px-3 py-2 text-left font-semibold">Escore</th>
-          <th class="w-20 px-3 py-2 text-right font-semibold">Valor</th>
-          <th class="w-44 px-3 py-2 text-left font-semibold">Classificação</th>
-          <th class="w-28 px-3 py-2 text-left font-semibold">Situação</th>
-          <th class="px-3 py-2 text-left font-semibold">Observação</th>
-          <th class="w-24 px-3 py-2" />
+  <BaseCard class="overflow-hidden">
+    <BaseTable :columns="COLUMNS">
+      <template v-for="result in rows" :key="result.id">
+        <tr v-if="editingId !== result.id">
+          <td class="text-fg">{{ labelOf(result) }}</td>
+          <td class="text-fg-muted">
+            {{ SCORE_TYPE_SHORT_LABELS[result.scoreType] }}
+          </td>
+          <td class="text-right tabular font-medium text-fg">
+            {{ formatValue(result) }}
+          </td>
+          <td>
+            <ClassificationBadge
+              :name="result.classificationName"
+              :color-hex="result.colorHex"
+              :overridden="result.manuallyOverridden"
+            />
+          </td>
+          <td class="text-fg-muted">
+            {{ RESULT_STATUS_LABELS[result.status] }}
+          </td>
+          <td class="text-fg-subtle">{{ result.notes ?? '' }}</td>
+          <td class="text-right">
+            <BaseButton variant="link" size="sm" class="mr-2" @click="emit('edit', result.id)">
+              Editar
+            </BaseButton>
+            <BaseButton variant="link-danger" size="sm" @click="emit('remove', result)">
+              Remover
+            </BaseButton>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        <template v-for="result in rows" :key="result.id">
-          <tr v-if="editingId !== result.id" class="border-t border-ink-200">
-            <td class="px-3 py-2 text-ink-800">{{ labelOf(result) }}</td>
-            <td class="px-3 py-2 text-ink-600">
-              {{ SCORE_TYPE_SHORT_LABELS[result.scoreType] }}
-            </td>
-            <td class="px-3 py-2 text-right tabular font-medium text-ink-800">
-              {{ formatValue(result) }}
-            </td>
-            <td class="px-3 py-2">
-              <ClassificationBadge
-                :name="result.classificationName"
-                :color-hex="result.colorHex"
-                :overridden="result.manuallyOverridden"
-              />
-            </td>
-            <td class="px-3 py-2 text-ink-600">
-              {{ RESULT_STATUS_LABELS[result.status] }}
-            </td>
-            <td class="px-3 py-2 text-ink-500">{{ result.notes ?? '' }}</td>
-            <td class="px-3 py-2 text-right">
-              <button
-                class="mr-2 text-xs text-brand-500 hover:underline"
-                @click="emit('edit', result.id)"
-              >
-                Editar
-              </button>
-              <button
-                class="text-xs text-danger-500 hover:underline"
-                @click="emit('remove', result)"
-              >
-                Remover
-              </button>
-            </td>
-          </tr>
-          <tr v-else class="border-t border-ink-200 bg-brand-50/40">
-            <td colspan="7" class="px-3 py-3">
-              <ResultRowEditor
-                :assessment-id="assessmentId"
-                :result="result"
-                @saved="emit('saved')"
-                @cancel="emit('cancel')"
-              />
-            </td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
-  </div>
+        <tr v-else class="bg-accent-soft/40">
+          <td colspan="7">
+            <ResultRowEditor
+              :assessment-id="assessmentId"
+              :result="result"
+              @saved="emit('saved')"
+              @cancel="emit('cancel')"
+            />
+          </td>
+        </tr>
+      </template>
+    </BaseTable>
+  </BaseCard>
 </template>

@@ -17,6 +17,7 @@ import { levelColorContinuous, levelLabel } from '@shared/domain/levels'
 import { readableTextColor } from '@shared/domain/color'
 import type { FunctionSummary } from '@shared/contracts/results'
 import LevelHeatBar from './LevelHeatBar.vue'
+import BaseCard from './BaseCard.vue'
 
 const props = defineProps<{ summary: FunctionSummary }>()
 defineEmits<{ select: [id: string | null] }>()
@@ -39,24 +40,26 @@ const nearestLabel = computed(() =>
 </script>
 
 <template>
-  <button
+  <BaseCard
+    as="button"
     type="button"
-    class="card flex w-full flex-col gap-3 p-4 text-left transition hover:border-ink-400"
+    padding="md"
+    class="flex w-full flex-col gap-3 text-left transition hover:border-line-hover"
     @click="$emit('select', summary.id)"
   >
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <p class="truncate text-sm font-semibold text-ink-800" :title="summary.name">
+        <p class="truncate text-sm font-semibold text-fg" :title="summary.name">
           {{ summary.name }}
         </p>
-        <p class="mt-0.5 text-xs text-ink-500">
+        <p class="mt-0.5 text-xs text-fg-subtle">
           {{ summary.points.length }}
           {{ summary.points.length === 1 ? 'resultado' : 'resultados' }}
         </p>
       </div>
 
       <span
-        class="tabular shrink-0 rounded px-2 py-1 text-lg font-bold leading-none"
+        class="tabular shrink-0 rounded-chip px-2 py-1 text-lg font-bold leading-none"
         :style="{ backgroundColor: accent, color: textOnAccent }"
         :title="nearestLabel"
       >
@@ -66,7 +69,7 @@ const nearestLabel = computed(() =>
 
     <LevelHeatBar :distribution="summary.distribution" />
 
-    <p class="text-xs" :class="summary.belowExpected > 0 ? 'text-danger-500' : 'text-ink-500'">
+    <p class="text-xs" :class="summary.belowExpected > 0 ? 'text-danger' : 'text-fg-subtle'">
       <template v-if="summary.belowExpected > 0">
         {{ summary.belowExpected }} de {{ summary.points.length }} abaixo do esperado
       </template>
@@ -75,5 +78,5 @@ const nearestLabel = computed(() =>
       </template>
       <template v-else>Nenhum resultado abaixo do esperado</template>
     </p>
-  </button>
+  </BaseCard>
 </template>

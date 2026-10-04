@@ -10,8 +10,21 @@ import { api } from '../api'
 import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseAlert from '../components/BaseAlert.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
 import { AUDIT_ACTION_LABELS } from '@shared/labels'
 import type { ChannelOutput } from '@shared/contracts'
+
+const AUDIT_COLUMNS: TableColumn[] = [
+  { key: 'when', label: 'Quando' },
+  { key: 'action', label: 'Ação' },
+  { key: 'entity', label: 'Entidade' },
+  { key: 'summary', label: 'Resumo' }
+]
 
 const appStore = useAppStore()
 
@@ -118,36 +131,34 @@ function formatDateTime(iso: string): string {
 
 <template>
   <div class="p-6">
-    <header class="mb-5">
-      <h1 class="text-xl font-bold text-ink-800">Manutenção</h1>
-      <p class="text-sm text-ink-500">
-        Backups do banco, verificação de integridade, consistência do armazenamento de arquivos e
-        registro de auditoria.
-      </p>
-    </header>
+    <PageHeader
+      title="Manutenção"
+      subtitle="Backups do banco, verificação de integridade, consistência do armazenamento de arquivos e registro de auditoria."
+      class="mb-6"
+    />
 
     <div class="grid grid-cols-2 gap-6">
-      <section class="card p-5">
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-ink-800">Backups do banco de dados</h2>
-          <BaseButton size="sm" :loading="busy" @click="createBackup">Criar backup</BaseButton>
-        </div>
+      <BaseCard as="section" padding="lg">
+        <SectionHeader title="Backups do banco de dados" size="sm" class="mb-3">
+          <template #actions>
+            <BaseButton size="sm" :loading="busy" @click="createBackup">Criar backup</BaseButton>
+          </template>
+        </SectionHeader>
 
-        <p class="mb-3 text-xs text-ink-500">
+        <p class="mb-3 text-xs text-fg-subtle">
           Um backup preventivo é criado automaticamente antes de cada atualização de estrutura. Os
-          dez mais recentes são mantidos. O backup cobre o banco, <strong>não os arquivos
-          anexados</strong> — para isso, use "Exportar prontuário" na ficha do paciente.
+          dez mais recentes são mantidos. O backup cobre o banco,
+          <strong>não os arquivos anexados</strong> — para isso, use "Exportar prontuário" na ficha
+          do paciente.
         </p>
 
-        <p v-if="backups.length === 0" class="py-4 text-center text-sm text-ink-400">
-          Nenhum backup ainda.
-        </p>
+        <BaseEmptyState v-if="backups.length === 0" message="Nenhum backup ainda." class="py-4" />
 
-        <ul v-else class="max-h-64 divide-y divide-ink-200 overflow-y-auto">
+        <ul v-else class="max-h-64 divide-y divide-line overflow-y-auto">
           <li v-for="backup in backups" :key="backup.fileName" class="flex items-center gap-3 py-2">
             <div class="min-w-0 flex-1">
-              <p class="truncate font-mono text-xs text-ink-700">{{ backup.fileName }}</p>
-              <p class="text-xs text-ink-500">
+              <p class="truncate font-mono text-xs text-fg-secondary">{{ backup.fileName }}</p>
+              <p class="text-xs text-fg-subtle">
                 {{ formatDateTime(backup.createdAt) }} · {{ formatSize(backup.sizeBytes) }} ·
                 estrutura v{{ backup.schemaVersion }}
               </p>
@@ -165,59 +176,64 @@ function formatDateTime(iso: string): string {
             </BaseButton>
           </li>
         </ul>
-      </section>
+      </BaseCard>
 
-      <section class="card p-5">
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-ink-800">Integridade</h2>
-          <BaseButton size="sm" :loading="busy" @click="checkIntegrity">Verificar</BaseButton>
-        </div>
+      <BaseCard as="section" padding="lg">
+        <SectionHeader title="Integridade" size="sm" class="mb-3">
+          <template #actions>
+            <BaseButton size="sm" :loading="busy" @click="checkIntegrity">Verificar</BaseButton>
+          </template>
+        </SectionHeader>
 
-        <p v-if="integrity === null" class="text-xs text-ink-500">
+        <p v-if="integrity === null" class="text-xs text-fg-subtle">
           A verificação também roda automaticamente a cada inicialização.
         </p>
-        <p v-else-if="integrity.ok" class="text-sm text-ok-500">
+        <p v-else-if="integrity.ok" class="text-sm text-ok">
           Banco íntegro. Nenhum problema encontrado.
         </p>
-        <div v-else class="rounded bg-danger-50 p-3">
-          <p class="text-sm font-semibold text-danger-600">Problemas encontrados</p>
-          <pre class="mt-1 whitespace-pre-wrap text-xs text-danger-600">{{ integrity.detail }}</pre>
-          <p class="mt-2 text-xs text-danger-600">Restaure um backup recente.</p>
-        </div>
+        <BaseAlert v-else tone="danger" title="Problemas encontrados">
+          <pre class="whitespace-pre-wrap text-xs">{{ integrity.detail }}</pre>
+          <p class="mt-2 text-xs">Restaure um backup recente.</p>
+        </BaseAlert>
 
-        <hr class="my-4 border-ink-200" />
+        <hr class="my-4 border-line" />
 
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-ink-800">Armazenamento de arquivos</h2>
-          <BaseButton size="sm" :loading="busy" @click="runScan">Varrer</BaseButton>
-        </div>
+        <SectionHeader title="Armazenamento de arquivos" size="sm" class="mb-3">
+          <template #actions>
+            <BaseButton size="sm" :loading="busy" @click="runScan">Varrer</BaseButton>
+          </template>
+        </SectionHeader>
 
-        <p v-if="scan === null" class="text-xs text-ink-500">
+        <p v-if="scan === null" class="text-xs text-fg-subtle">
           Detecta arquivos no disco sem registro no banco (órfãos) e registros sem o arquivo
           correspondente (referências quebradas).
         </p>
 
         <div v-else class="space-y-2 text-sm">
-          <p class="text-ink-700">
+          <p class="text-fg-secondary">
             <span class="tabular font-semibold">{{ scan.orphanBlobs.length }}</span>
             arquivo(s) órfão(s)
-            <span v-if="scan.orphanBlobs.length > 0" class="text-ink-500">
+            <span v-if="scan.orphanBlobs.length > 0" class="text-fg-subtle">
               ({{ formatSize(scan.orphanBlobs.reduce((sum, blob) => sum + blob.sizeBytes, 0)) }})
             </span>
           </p>
-          <p class="text-ink-700">
+          <p class="text-fg-secondary">
             <span class="tabular font-semibold">{{ scan.brokenReferences.length }}</span>
             referência(s) quebrada(s)
           </p>
 
-          <ul
+          <BaseAlert
             v-if="scan.brokenReferences.length > 0"
-            class="max-h-32 overflow-y-auto rounded bg-warn-50 p-2 text-xs text-warn-700"
+            tone="warn"
+            size="sm"
+            class="max-h-32 overflow-y-auto"
           >
-            <li v-for="reference in scan.brokenReferences" :key="reference.attachmentId">
-              {{ reference.originalName }}
-            </li>
-          </ul>
+            <ul>
+              <li v-for="reference in scan.brokenReferences" :key="reference.attachmentId">
+                {{ reference.originalName }}
+              </li>
+            </ul>
+          </BaseAlert>
 
           <BaseButton
             v-if="scan.orphanBlobs.length > 0 || scan.brokenReferences.length > 0"
@@ -227,45 +243,36 @@ function formatDateTime(iso: string): string {
           >
             Limpar
           </BaseButton>
-          <p v-else class="text-xs text-ok-500">Banco e disco estão consistentes.</p>
+          <p v-else class="text-xs text-ok">Banco e disco estão consistentes.</p>
         </div>
-      </section>
+      </BaseCard>
     </div>
 
     <section class="mt-6">
-      <h2 class="mb-2 text-sm font-semibold text-ink-800">Registro de auditoria</h2>
-      <p class="mb-2 text-xs text-ink-500">
-        Operações destrutivas e exportações. O histórico de conteúdo dos documentos fica no
-        versionamento de cada documento, não aqui.
-      </p>
+      <SectionHeader
+        title="Registro de auditoria"
+        size="sm"
+        description="Operações destrutivas e exportações. O histórico de conteúdo dos documentos fica no versionamento de cada documento, não aqui."
+        class="mb-2"
+      />
 
-      <div class="card max-h-96 overflow-y-auto">
-        <table class="w-full text-sm">
-          <thead class="sticky top-0 bg-ink-100 text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th class="px-4 py-2 text-left font-semibold">Quando</th>
-              <th class="px-4 py-2 text-left font-semibold">Ação</th>
-              <th class="px-4 py-2 text-left font-semibold">Entidade</th>
-              <th class="px-4 py-2 text-left font-semibold">Resumo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="audit.length === 0">
-              <td colspan="4" class="px-4 py-8 text-center text-ink-400">
-                Nenhum registro ainda.
-              </td>
-            </tr>
-            <tr v-for="entry in audit" :key="entry.id" class="border-t border-ink-200">
-              <td class="whitespace-nowrap px-4 py-2 tabular text-xs text-ink-500">
-                {{ formatDateTime(entry.timestamp) }}
-              </td>
-              <td class="px-4 py-2 text-ink-700">{{ AUDIT_ACTION_LABELS[entry.action] }}</td>
-              <td class="px-4 py-2 font-mono text-xs text-ink-500">{{ entry.entity }}</td>
-              <td class="px-4 py-2 text-ink-600">{{ entry.summary }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <BaseCard class="max-h-96 overflow-y-auto">
+        <BaseTable
+          :columns="AUDIT_COLUMNS"
+          density="comfortable"
+          sticky
+          :empty-text="audit.length === 0 ? 'Nenhum registro ainda.' : null"
+        >
+          <tr v-for="entry in audit" :key="entry.id">
+            <td class="whitespace-nowrap tabular text-xs text-fg-subtle">
+              {{ formatDateTime(entry.timestamp) }}
+            </td>
+            <td class="text-fg-secondary">{{ AUDIT_ACTION_LABELS[entry.action] }}</td>
+            <td class="font-mono text-xs text-fg-subtle">{{ entry.entity }}</td>
+            <td class="text-fg-muted">{{ entry.summary }}</td>
+          </tr>
+        </BaseTable>
+      </BaseCard>
     </section>
 
     <ConfirmDialog

@@ -9,6 +9,17 @@ import { useAppStore } from '../stores/app'
 import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseTabs from '../components/BaseTabs.vue'
+import BaseAlert from '../components/BaseAlert.vue'
+import BaseField from '../components/BaseField.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseSelect from '../components/BaseSelect.vue'
+import BaseCheckbox from '../components/BaseCheckbox.vue'
+import BaseProgress from '../components/BaseProgress.vue'
+import ClassificationBadge from '../components/ClassificationBadge.vue'
 import { checkContrast, normalizeHex } from '@shared/domain/color'
 import { AI_MODELS, AI_MODEL_LABELS } from '@shared/contracts/entities-ai'
 import type { AiConfig, AiModel } from '@shared/contracts/entities-ai'
@@ -19,7 +30,14 @@ import appIconUrl from '../../../../build/icon.png'
 const appStore = useAppStore()
 const catalog = useCatalogStore()
 
-const tab = ref<'profile' | 'palette' | 'ai' | 'about'>('profile')
+const TABS = [
+  { value: 'profile', label: 'Perfil profissional' },
+  { value: 'palette', label: 'Paleta de cores' },
+  { value: 'ai', label: 'Assistente de IA' },
+  { value: 'about', label: 'Sobre o sistema' }
+] as const
+
+const tab = ref<(typeof TABS)[number]['value']>('profile')
 
 // Literal em constante: chaves duplas dentro de uma interpolação quebram o
 // parser de template do Vue.
@@ -304,71 +322,49 @@ const budgetPercent = computed(() => {
 
 <template>
   <div class="p-6">
-    <header class="mb-5">
-      <h1 class="text-xl font-bold text-ink-800">Configurações</h1>
-    </header>
+    <PageHeader title="Configurações" class="mb-6" />
 
-    <div class="mb-4 flex gap-1 border-b border-ink-200">
-      <button
-        v-for="entry in [
-          { key: 'profile', label: 'Perfil profissional' },
-          { key: 'palette', label: 'Paleta de cores' },
-          { key: 'ai', label: 'Assistente de IA' },
-          { key: 'about', label: 'Sobre o sistema' }
-        ] as const"
-        :key="entry.key"
-        class="px-4 py-2 text-sm font-medium"
-        :class="
-          tab === entry.key
-            ? 'border-b-2 border-brand-500 text-brand-700'
-            : 'text-ink-500 hover:text-ink-700'
-        "
-        @click="tab = entry.key"
-      >
-        {{ entry.label }}
-      </button>
-    </div>
+    <BaseTabs v-model="tab" :items="TABS" label="Seções das configurações" class="mb-4" />
 
     <!-- Perfil profissional -->
-    <section v-if="tab === 'profile' && profile !== null" class="card max-w-3xl p-5">
+    <BaseCard
+      v-if="tab === 'profile' && profile !== null"
+      as="section"
+      padding="lg"
+      class="max-w-3xl"
+    >
       <form class="grid grid-cols-2 gap-4" @submit.prevent="saveProfile">
-        <div>
-          <label class="field-label" for="profile-name">Nome</label>
-          <input id="profile-name" v-model="profile.name" class="field-input" />
-        </div>
-        <div>
-          <label class="field-label" for="profile-crp">CRP</label>
-          <input id="profile-crp" v-model="profile.crp" class="field-input" />
-        </div>
-        <div>
-          <label class="field-label" for="profile-specialty">Especialidade</label>
-          <input id="profile-specialty" v-model="profile.specialty" class="field-input" />
-        </div>
-        <div>
-          <label class="field-label" for="profile-phone">Telefone</label>
-          <input id="profile-phone" v-model="profile.phone" class="field-input" />
-        </div>
-        <div>
-          <label class="field-label" for="profile-email">E-mail</label>
-          <input id="profile-email" v-model="profile.email" class="field-input" />
-        </div>
-        <div>
-          <label class="field-label" for="profile-address">Endereço de atendimento</label>
-          <input id="profile-address" v-model="profile.address" class="field-input" />
-        </div>
+        <BaseField id="profile-name" label="Nome">
+          <BaseInput v-model="profile.name" />
+        </BaseField>
+        <BaseField id="profile-crp" label="CRP">
+          <BaseInput v-model="profile.crp" />
+        </BaseField>
+        <BaseField id="profile-specialty" label="Especialidade">
+          <BaseInput v-model="profile.specialty" />
+        </BaseField>
+        <BaseField id="profile-phone" label="Telefone">
+          <BaseInput v-model="profile.phone" />
+        </BaseField>
+        <BaseField id="profile-email" label="E-mail">
+          <BaseInput v-model="profile.email" />
+        </BaseField>
+        <BaseField id="profile-address" label="Endereço de atendimento">
+          <BaseInput v-model="profile.address" />
+        </BaseField>
 
-        <div class="col-span-2">
-          <label class="field-label" for="profile-logo">Logotipo (cabeçalho dos relatórios)</label>
+        <BaseField id="profile-logo" label="Logotipo (cabeçalho dos relatórios)" class="col-span-2">
           <div class="flex items-center gap-4">
             <img
               v-if="profile.logoDataUrl"
               :src="profile.logoDataUrl"
               alt="Logotipo"
-              class="h-16 w-auto rounded border border-ink-200 object-contain"
+              class="h-16 w-auto rounded-chip border border-line object-contain"
             />
             <input
               id="profile-logo"
               type="file"
+              class="text-sm text-fg-muted"
               accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
               @change="onLogoSelected"
             />
@@ -376,7 +372,7 @@ const budgetPercent = computed(() => {
               Remover
             </BaseButton>
           </div>
-        </div>
+        </BaseField>
 
         <div class="col-span-2 flex justify-end">
           <BaseButton variant="primary" :loading="savingProfile" @click="saveProfile">
@@ -384,47 +380,42 @@ const budgetPercent = computed(() => {
           </BaseButton>
         </div>
       </form>
-    </section>
+    </BaseCard>
 
     <!-- Paleta -->
-    <section v-else-if="tab === 'palette'" class="card max-w-3xl p-5">
-      <p class="mb-4 text-sm text-ink-600">
+    <BaseCard v-else-if="tab === 'palette'" as="section" padding="lg" class="max-w-3xl">
+      <p class="mb-4 text-sm text-fg-muted">
         As cores são associadas livremente às faixas de classificação — o sistema não força vínculo
         entre cor e classificação. O aviso de contraste é informativo e não bloqueia.
       </p>
 
-      <ul class="mb-5 divide-y divide-ink-200">
+      <ul class="mb-5 divide-y divide-line">
         <li v-for="color in catalog.colors" :key="color.id" class="flex items-center gap-3 py-2">
           <input
             type="color"
             :value="color.hex"
-            class="h-8 w-12 rounded border border-ink-300"
+            class="h-8 w-12 rounded-chip border border-line-strong"
             :aria-label="`Cor ${color.name}`"
             @change="updateColor(color.id, color.name, ($event.target as HTMLInputElement).value)"
           />
-          <input
-            :value="color.name"
-            class="field-input max-w-xs py-1"
+          <BaseInput
+            :model-value="color.name"
+            size="sm"
+            class="max-w-xs"
             :aria-label="`Nome da cor ${color.name}`"
             @change="updateColor(color.id, ($event.target as HTMLInputElement).value, color.hex)"
           />
-          <span
-            class="rounded px-2 py-0.5 text-xs font-semibold"
-            :style="{
-              backgroundColor: color.hex,
-              color: contrastOf(color.hex)?.textColor ?? '#000'
-            }"
-          >
-            Exemplo
-          </span>
+          <ClassificationBadge name="Exemplo" :color-hex="color.hex" />
           <span
             v-if="contrastOf(color.hex) && !contrastOf(color.hex)!.passesAA"
-            class="text-xs text-warn-700"
+            class="text-xs text-warn-strong"
           >
             Contraste {{ contrastOf(color.hex)!.ratio.toFixed(2) }}:1 — abaixo de AA
           </span>
-          <button
-            class="ml-auto text-xs text-danger-500 hover:underline"
+          <BaseButton
+            variant="link-danger"
+            size="sm"
+            class="ml-auto"
             @click="
               () => {
                 deletingColorId = color.id
@@ -433,35 +424,28 @@ const budgetPercent = computed(() => {
             "
           >
             Remover
-          </button>
+          </BaseButton>
         </li>
       </ul>
 
-      <div class="flex items-end gap-3 border-t border-ink-200 pt-4">
-        <div>
-          <label class="field-label" for="new-color-name">Nova cor</label>
-          <input
-            id="new-color-name"
-            v-model="newColor.name"
-            class="field-input"
-            placeholder="Nome"
-          />
-        </div>
+      <div class="flex items-end gap-3 border-t border-line pt-4">
+        <BaseField id="new-color-name" label="Nova cor">
+          <BaseInput v-model="newColor.name" placeholder="Nome" />
+        </BaseField>
         <input
           v-model="newColor.hex"
           type="color"
-          class="h-9 w-12 rounded border border-ink-300"
+          class="h-9 w-12 rounded-chip border border-line-strong"
           aria-label="Cor"
         />
         <BaseButton :disabled="newColor.name.trim() === ''" @click="addColor">Adicionar</BaseButton>
       </div>
-    </section>
+    </BaseCard>
 
     <!-- Módulo de IA -->
     <section v-else-if="tab === 'ai' && aiConfig !== null" class="max-w-3xl space-y-4">
-      <div class="rounded-md border border-warn-200 bg-warn-50 p-4 text-sm text-warn-700">
-        <p class="font-semibold">Este módulo envia dados de saúde a um provedor externo.</p>
-        <p class="mt-1 leading-snug">
+      <BaseAlert tone="warn" title="Este módulo envia dados de saúde a um provedor externo.">
+        <p>
           O Baremo é local-first, com processamento em nuvem opcional e consentido. Com o módulo
           ligado, consultas ao assistente enviam dados do prontuário à API do Google Gemini.
           Recomendamos fortemente usar uma chave de projeto com
@@ -469,56 +453,45 @@ const budgetPercent = computed(() => {
           política de retenção e uso para melhoria de produto distinta — o que é inadequado para
           dado sensível de saúde.
         </p>
-      </div>
+      </BaseAlert>
 
-      <div class="card p-5">
-        <label class="flex items-start gap-3">
-          <input
-            type="checkbox"
-            :checked="aiConfig.enabled"
-            class="mt-1 rounded border-ink-300"
-            @change="setEnabled(($event.target as HTMLInputElement).checked)"
-          />
-          <span>
-            <span class="text-sm font-medium text-ink-800">Ativar o assistente de IA</span>
-            <span class="block text-xs text-ink-500">
-              Desligado por padrão. Todo o restante do aplicativo funciona sem ele.
-            </span>
-          </span>
-        </label>
-      </div>
+      <BaseCard padding="lg">
+        <BaseCheckbox
+          :model-value="aiConfig.enabled"
+          label="Ativar o assistente de IA"
+          description="Desligado por padrão. Todo o restante do aplicativo funciona sem ele."
+          @update:model-value="setEnabled($event === true)"
+        />
+      </BaseCard>
 
-      <div class="card p-5">
-        <h2 class="mb-3 text-sm font-semibold text-ink-800">Chave de API</h2>
+      <BaseCard padding="lg">
+        <SectionHeader title="Chave de API" size="sm" class="mb-3" />
 
-        <p
-          v-if="!aiConfig.safeStorageAvailable"
-          class="mb-3 rounded bg-warn-50 p-3 text-xs text-warn-700"
-        >
+        <BaseAlert v-if="!aiConfig.safeStorageAvailable" tone="warn" size="sm" class="mb-3">
           A criptografia do sistema não está disponível neste computador (comum em Linux sem keyring
           configurado). Gravar a chave em disco aqui não teria proteção real — use a opção de não
           persistir e informe a chave a cada execução.
-        </p>
+        </BaseAlert>
 
-        <p v-if="aiConfig.hasKey" class="mb-3 text-sm text-ink-600">
+        <p v-if="aiConfig.hasKey" class="mb-3 text-sm text-fg-muted">
           Chave cadastrada, terminada em <span class="font-mono">…{{ aiConfig.keyHint }}</span>
           <span v-if="!aiConfig.keyPersisted"> (não persistida em disco)</span>.
         </p>
 
         <div class="flex items-end gap-3">
-          <div class="flex-1">
-            <label class="field-label" for="api-key">
-              {{ aiConfig.hasKey ? 'Substituir chave' : 'Chave de API do Gemini' }}
-            </label>
-            <input
-              id="api-key"
+          <BaseField
+            id="api-key"
+            :label="aiConfig.hasKey ? 'Substituir chave' : 'Chave de API do Gemini'"
+            class="flex-1"
+          >
+            <BaseInput
               v-model="apiKey"
               type="password"
-              class="field-input font-mono"
+              class="font-mono"
               autocomplete="off"
               placeholder="AIza…"
             />
-          </div>
+          </BaseField>
           <BaseButton :disabled="apiKey === ''" :loading="testing" @click="testKey">
             Testar
           </BaseButton>
@@ -532,122 +505,106 @@ const budgetPercent = computed(() => {
           <BaseButton v-if="aiConfig.hasKey" variant="danger" @click="clearKey">Remover</BaseButton>
         </div>
 
-        <label class="mt-3 flex items-center gap-2 text-xs text-ink-600">
-          <input
-            v-model="persistKey"
-            type="checkbox"
-            class="rounded border-ink-300"
-            :disabled="!aiConfig.safeStorageAvailable"
-          />
-          Guardar a chave criptografada neste computador
-        </label>
+        <BaseCheckbox
+          v-model="persistKey"
+          size="sm"
+          class="mt-3"
+          :disabled="!aiConfig.safeStorageAvailable"
+          label="Guardar a chave criptografada neste computador"
+        />
 
         <p
           v-if="testResult !== null"
           class="mt-3 text-sm"
-          :class="testResult.ok ? 'text-ok-500' : 'text-danger-500'"
+          :class="testResult.ok ? 'text-ok' : 'text-danger'"
         >
           {{ testResult.message }}
         </p>
-      </div>
+      </BaseCard>
 
-      <div class="card p-5">
-        <h2 class="mb-3 text-sm font-semibold text-ink-800">Modelo e custo</h2>
+      <BaseCard padding="lg">
+        <SectionHeader title="Modelo e custo" size="sm" class="mb-3" />
 
         <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="field-label" for="ai-model">Modelo</label>
-            <select
-              id="ai-model"
-              :value="aiConfig.model"
-              class="field-input"
-              @change="setModel(($event.target as HTMLSelectElement).value as AiModel)"
+          <BaseField id="ai-model" label="Modelo">
+            <BaseSelect
+              :model-value="aiConfig.model"
+              @update:model-value="setModel($event as AiModel)"
             >
               <option v-for="model in AI_MODELS" :key="model" :value="model">
                 {{ AI_MODEL_LABELS[model] }}
               </option>
-            </select>
-          </div>
+            </BaseSelect>
+          </BaseField>
 
-          <div>
-            <label class="field-label" for="ai-budget">Teto mensal de tokens</label>
-            <input
-              id="ai-budget"
-              :value="aiConfig.monthlyTokenBudget"
+          <BaseField id="ai-budget" label="Teto mensal de tokens">
+            <BaseInput
+              :model-value="aiConfig.monthlyTokenBudget"
               type="number"
               min="0"
               step="100000"
-              class="field-input tabular"
+              class="tabular"
               @change="setBudget(Number(($event.target as HTMLInputElement).value))"
             />
-          </div>
+          </BaseField>
         </div>
 
         <div class="mt-4">
-          <div class="mb-1 flex justify-between text-xs text-ink-500">
+          <div class="mb-1 flex justify-between text-xs text-fg-subtle">
             <span>Consumo em {{ aiConfig.budgetPeriod || 'este mês' }}</span>
             <span class="tabular">
               {{ aiConfig.tokensUsedThisMonth.toLocaleString('pt-BR') }} /
               {{ aiConfig.monthlyTokenBudget.toLocaleString('pt-BR') }}
             </span>
           </div>
-          <div class="h-2 overflow-hidden rounded-full bg-ink-200">
-            <div
-              class="h-full rounded-full"
-              :class="budgetPercent >= 100 ? 'bg-danger-500' : 'bg-brand-500'"
-              :style="{ width: `${budgetPercent}%` }"
-            />
-          </div>
-          <p v-if="budgetPercent >= 100" class="mt-1 text-xs text-danger-500">
+          <BaseProgress
+            :value="budgetPercent"
+            :tone="budgetPercent >= 100 ? 'danger' : 'accent'"
+            label="Consumo do teto mensal de tokens"
+          />
+          <p v-if="budgetPercent >= 100" class="mt-1 text-xs text-danger">
             Teto atingido. Novas consultas serão recusadas até você aumentar o limite.
           </p>
         </div>
-      </div>
+      </BaseCard>
 
-      <div class="card p-5">
-        <h2 class="mb-3 text-sm font-semibold text-ink-800">Pseudonimização</h2>
+      <BaseCard padding="lg">
+        <SectionHeader title="Pseudonimização" size="sm" class="mb-3" />
 
-        <label class="flex items-start gap-3">
-          <input
-            type="checkbox"
-            :checked="aiConfig.pseudonymize"
-            class="mt-1 rounded border-ink-300"
-            @change="togglePseudonymize(($event.target as HTMLInputElement).checked)"
-          />
-          <span>
-            <span class="text-sm font-medium text-ink-800">
-              Pseudonimizar antes de enviar (recomendado)
-            </span>
-            <span class="block text-xs leading-snug text-ink-500">
-              Nome completo vira iniciais, data de nascimento vira idade, e responsável, escola,
-              endereço e contatos são removidos. Ao redigir documentos, o assistente usa tokens como
-              <span class="font-mono">{{ NAME_TOKEN }}</span
-              >, que o editor resolve localmente — o documento final sai com o nome real sem que ele
-              saia do computador.
-            </span>
-          </span>
-        </label>
-      </div>
+        <BaseCheckbox
+          :model-value="aiConfig.pseudonymize"
+          label="Pseudonimizar antes de enviar (recomendado)"
+          @update:model-value="togglePseudonymize($event === true)"
+        >
+          <template #description>
+            Nome completo vira iniciais, data de nascimento vira idade, e responsável, escola,
+            endereço e contatos são removidos. Ao redigir documentos, o assistente usa tokens como
+            <span class="font-mono">{{ NAME_TOKEN }}</span
+            >, que o editor resolve localmente — o documento final sai com o nome real sem que ele
+            saia do computador.
+          </template>
+        </BaseCheckbox>
+      </BaseCard>
     </section>
 
     <!-- Sobre o sistema -->
-    <section v-else-if="tab === 'about'" class="card max-w-3xl p-5">
+    <BaseCard v-else-if="tab === 'about'" as="section" padding="lg" class="max-w-3xl">
       <div class="flex items-center gap-4">
-        <img :src="appIconUrl" alt="" class="h-16 w-16 shrink-0" />
+        <img :src="appIconUrl" alt="" class="size-16 shrink-0" />
         <div>
-          <p class="text-lg font-bold tracking-tight text-ink-800">Baremo</p>
-          <p class="text-sm text-ink-500">Avaliação neuropsicológica</p>
-          <p class="mt-1 text-sm text-ink-700">
+          <p class="text-lg font-bold tracking-tight text-fg">Baremo</p>
+          <p class="text-sm text-fg-subtle">Avaliação neuropsicológica</p>
+          <p class="mt-1 text-sm text-fg-secondary">
             Versão
             <span class="tabular font-semibold">{{ appStore.state?.appVersion ?? '—' }}</span>
           </p>
         </div>
       </div>
 
-      <div class="mt-5 flex items-center gap-3 border-t border-ink-200 pt-4">
+      <div class="mt-5 flex items-center gap-3 border-t border-line pt-4">
         <p
           class="flex-1 text-sm"
-          :class="appStore.updateStatus.kind === 'error' ? 'text-danger-500' : 'text-ink-600'"
+          :class="appStore.updateStatus.kind === 'error' ? 'text-danger' : 'text-fg-muted'"
         >
           {{ updateMessage }}
         </p>
@@ -667,7 +624,7 @@ const budgetPercent = computed(() => {
           Verificar atualizações
         </BaseButton>
       </div>
-    </section>
+    </BaseCard>
 
     <ConfirmDialog
       v-model:open="deleteColorOpen"

@@ -12,6 +12,7 @@
  * quais nós estão abertos.
  */
 import ResultsTable from './ResultsTable.vue'
+import { ChevronRight } from 'lucide-vue-next'
 import type { ResultGroup } from '@shared/domain/result-grouping'
 import type { ChannelOutput } from '@shared/contracts'
 
@@ -35,29 +36,27 @@ const emit = defineEmits<{
 <template>
   <details class="group/node">
     <summary
-      class="flex cursor-pointer select-none list-none items-center gap-2 rounded px-1 py-1 hover:bg-ink-50"
+      class="flex cursor-pointer select-none list-none items-center gap-2 rounded-chip px-1 py-1 hover:bg-canvas"
     >
-      <span
-        class="w-3 shrink-0 text-center text-ink-400 transition-transform group-open/node:rotate-90"
+      <ChevronRight
+        class="size-3.5 shrink-0 text-fg-faint transition-transform group-open/node:rotate-90"
         aria-hidden="true"
-      >
-        ▸
-      </span>
+      />
       <span
         :class="
           group.depth === 0
-            ? 'text-sm font-semibold text-ink-800'
-            : 'text-xs font-semibold uppercase tracking-wide text-ink-500'
+            ? 'text-sm font-semibold text-fg'
+            : 'text-xs font-semibold uppercase tracking-wide text-fg-subtle'
         "
       >
         {{ group.name }}
       </span>
-      <span class="text-xs font-normal text-ink-400">
+      <span class="text-xs font-normal text-fg-faint">
         {{ group.total }} {{ group.total === 1 ? 'resultado' : 'resultados' }}
       </span>
     </summary>
 
-    <div class="mb-2 ml-2 space-y-2 border-l border-ink-200 pb-1 pl-3 pt-2">
+    <div class="mb-2 ml-2 space-y-2 border-l border-line pb-1 pl-3 pt-2">
       <ResultsTable
         v-if="group.rows.length > 0"
         :rows="group.rows"

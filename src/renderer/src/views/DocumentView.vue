@@ -10,7 +10,6 @@
  *    jurídica: quem assinou precisa poder demonstrar o que assinou.
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 // TipTap 3 moveu os menus flutuantes para o subcaminho `/menus`.
 import { BubbleMenu } from '@tiptap/vue-3/menus'
@@ -21,6 +20,8 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
 import EditorToolbar from '../components/EditorToolbar.vue'
 import SlashMenu from '../components/SlashMenu.vue'
+import PageHeader from '../components/PageHeader.vue'
+import BaseAlert from '../components/BaseAlert.vue'
 import { buildExtensions } from '../editor/extensions'
 import { createSlashMenu } from '../editor/slash-menu'
 import type { SlashItem } from '../editor/slash-menu'
@@ -36,7 +37,6 @@ import type { BaremoDocument } from '@shared/contracts/entities'
 
 const props = defineProps<{ id: string }>()
 
-const router = useRouter()
 const appStore = useAppStore()
 const catalog = useCatalogStore()
 
@@ -91,7 +91,10 @@ async function load(): Promise<void> {
     document.value = await api('documents:get', { id: props.id })
 
     editor.value = new Editor({
-      content: (document.value.contentJson as object) ?? { type: 'doc', content: [{ type: 'paragraph' }] },
+      content: (document.value.contentJson as object) ?? {
+        type: 'doc',
+        content: [{ type: 'paragraph' }]
+      },
       editable: !readOnly.value,
       extensions: [
         ...buildExtensions({
@@ -205,7 +208,10 @@ async function restore(versionId: string): Promise<void> {
     document.value = await api('documents:restoreVersion', { documentId: props.id, versionId })
     editor.value?.commands.setContent((document.value.contentJson as object) ?? {})
     versionsOpen.value = false
-    appStore.notify('success', 'Versão restaurada. O conteúdo anterior foi preservado no histórico.')
+    appStore.notify(
+      'success',
+      'Versão restaurada. O conteúdo anterior foi preservado no histórico.'
+    )
   } catch (error) {
     appStore.notifyError(error)
   }
@@ -259,80 +265,62 @@ const saveLabel = computed(() => {
 </script>
 
 <template>
-  <div v-if="loading" class="p-6 text-sm text-ink-500">Carregando documento…</div>
+  <div v-if="loading" class="p-6 text-sm text-fg-subtle">Carregando documento…</div>
 
-  <div v-else-if="document === null" class="p-6 text-sm text-ink-500">
+  <div v-else-if="document === null" class="p-6 text-sm text-fg-subtle">
     Documento não encontrado.
   </div>
 
   <div v-else class="flex h-full flex-col">
-    <header class="border-b border-ink-200 bg-white px-6 py-3">
-      <div class="flex items-start justify-between gap-6">
-        <div>
-          <button
-            class="text-xs text-ink-500 hover:underline"
-            @click="router.push(`/pacientes/${document.patientId}`)"
-          >
-            ← Prontuário
-          </button>
-          <h1 class="mt-1 text-lg font-bold text-ink-800">{{ document.title }}</h1>
-          <p class="mt-0.5 text-xs text-ink-500">
-            {{ DOCUMENT_TYPE_LABELS[document.type] }} ·
-            {{ DOCUMENT_STATUS_LABELS[document.status] }} ·
-            {{ DOCUMENT_ORIGIN_LABELS[document.origin] }}
-            <span v-if="saveLabel" class="ml-2">· {{ saveLabel }}</span>
-          </p>
-        </div>
+    <PageHeader
+      :title="document.title"
+      :back="{ label: 'Prontuário', to: `/pacientes/${document.patientId}` }"
+      size="md"
+      class="border-b border-line bg-surface px-6 py-3"
+    >
+      <template #subtitle>
+        {{ DOCUMENT_TYPE_LABELS[document.type] }} · {{ DOCUMENT_STATUS_LABELS[document.status] }} ·
+        {{ DOCUMENT_ORIGIN_LABELS[document.origin] }}
+        <span v-if="saveLabel" class="ml-2">· {{ saveLabel }}</span>
+      </template>
 
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <BaseButton size="sm" @click="openVersions">Histórico</BaseButton>
-          <BaseButton size="sm" @click="requestExport">Exportar PDF</BaseButton>
+      <template #actions>
+        <BaseButton size="sm" @click="openVersions">Histórico</BaseButton>
+        <BaseButton size="sm" @click="requestExport">Exportar PDF</BaseButton>
 
-          <BaseButton
-            v-if="needsReview"
-            size="sm"
-            variant="secondary"
-            @click="markReviewed"
-          >
-            Registrar revisão
-          </BaseButton>
+        <BaseButton v-if="needsReview" size="sm" variant="secondary" @click="markReviewed">
+          Registrar revisão
+        </BaseButton>
 
-          <BaseButton
-            v-if="!readOnly"
-            size="sm"
-            variant="primary"
-            :disabled="needsReview"
-            :title="
-              needsReview
-                ? 'Documento assistido por IA precisa de revisão explícita antes de ser finalizado.'
-                : undefined
-            "
-            @click="setStatus('finalized')"
-          >
-            Finalizar
-          </BaseButton>
-          <BaseButton v-else size="sm" @click="setStatus('draft')">Reabrir para edição</BaseButton>
-        </div>
-      </div>
+        <BaseButton
+          v-if="!readOnly"
+          size="sm"
+          variant="primary"
+          :disabled="needsReview"
+          :title="
+            needsReview
+              ? 'Documento assistido por IA precisa de revisão explícita antes de ser finalizado.'
+              : undefined
+          "
+          @click="setStatus('finalized')"
+        >
+          Finalizar
+        </BaseButton>
+        <BaseButton v-else size="sm" @click="setStatus('draft')">Reabrir para edição</BaseButton>
+      </template>
 
-      <div
-        v-if="needsReview"
-        class="mt-3 rounded border border-warn-200 bg-warn-50 px-3 py-2 text-xs text-warn-700"
-      >
-        Este documento foi redigido com auxílio de IA. A responsabilidade técnica é integralmente
-        do profissional que assina — registre a revisão antes de finalizá-lo. A marcação é interna:
-        o PDF exportado não estampa nada sobre uso de IA.
-      </div>
+      <BaseAlert v-if="needsReview" tone="warn" size="sm" class="mt-3">
+        Este documento foi redigido com auxílio de IA. A responsabilidade técnica é integralmente do
+        profissional que assina — registre a revisão antes de finalizá-lo. A marcação é interna: o
+        PDF exportado não estampa nada sobre uso de IA.
+      </BaseAlert>
 
-      <div
-        v-if="readOnly"
-        class="mt-3 rounded border border-ink-200 bg-ink-50 px-3 py-2 text-xs text-ink-600"
-      >
+      <BaseAlert v-if="readOnly" size="sm" class="mt-3">
         Documento finalizado em
         {{ document.finalizedAt !== null ? formatIsoDate(document.finalizedAt.slice(0, 10)) : '' }}
         e somente leitura. Reabrir cria uma nova versão e preserva a atual no histórico.
-      </div>
-    </header>
+      </BaseAlert>
+    </PageHeader>
 
     <EditorToolbar
       v-if="editor !== null && !readOnly"
@@ -340,41 +328,51 @@ const saveLabel = computed(() => {
       :assessment-id="document.assessmentId"
     />
 
-    <div class="flex-1 overflow-y-auto bg-ink-100 px-6 py-6">
-      <div class="mx-auto max-w-3xl rounded-lg bg-white p-10 shadow-sm">
+    <div class="flex-1 overflow-y-auto bg-surface-muted px-6 py-6">
+      <div class="mx-auto max-w-3xl rounded-surface bg-surface p-10 shadow-sm">
         <BubbleMenu
           v-if="editor !== null && !readOnly"
           :editor="editor"
-          class="flex gap-1 rounded-md border border-ink-300 bg-white p-1 shadow-lg"
+          class="flex gap-1 rounded-control border border-line-strong bg-surface p-1 shadow-lg"
         >
-          <button
-            class="rounded px-2 py-1 text-xs font-semibold hover:bg-ink-100"
-            :class="{ 'bg-ink-200': editor.isActive('bold') }"
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            class="font-semibold"
+            :pressed="editor.isActive('bold')"
+            aria-label="Negrito"
             @click="editor.chain().focus().toggleBold().run()"
           >
             N
-          </button>
-          <button
-            class="rounded px-2 py-1 text-xs italic hover:bg-ink-100"
-            :class="{ 'bg-ink-200': editor.isActive('italic') }"
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            class="italic"
+            :pressed="editor.isActive('italic')"
+            aria-label="Itálico"
             @click="editor.chain().focus().toggleItalic().run()"
           >
             I
-          </button>
-          <button
-            class="rounded px-2 py-1 text-xs underline hover:bg-ink-100"
-            :class="{ 'bg-ink-200': editor.isActive('underline') }"
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            class="underline"
+            :pressed="editor.isActive('underline')"
+            aria-label="Sublinhado"
             @click="editor.chain().focus().toggleUnderline().run()"
           >
             S
-          </button>
-          <button
-            class="rounded px-2 py-1 text-xs hover:bg-ink-100"
-            :class="{ 'bg-ink-200': editor.isActive('highlight') }"
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            :pressed="editor.isActive('highlight')"
             @click="editor.chain().focus().toggleHighlight().run()"
           >
             Marcar
-          </button>
+          </BaseButton>
         </BubbleMenu>
 
         <EditorContent v-if="editor !== null" :editor="editor" />
@@ -389,18 +387,18 @@ const saveLabel = computed(() => {
     </div>
 
     <BaseDialog v-model:open="versionsOpen" title="Histórico de versões" wide>
-      <p v-if="versions.length === 0" class="text-sm text-ink-500">
+      <p v-if="versions.length === 0" class="text-sm text-fg-subtle">
         Nenhuma versão registrada ainda. Snapshots são criados a cada finalização e a cada dez
         minutos de edição ativa.
       </p>
 
-      <ul v-else class="divide-y divide-ink-200">
+      <ul v-else class="divide-y divide-line">
         <li v-for="version in versions" :key="version.id" class="flex items-center gap-4 py-2">
           <div class="flex-1">
-            <p class="text-sm text-ink-800">
+            <p class="text-sm text-fg">
               {{ VERSION_REASON_LABELS[version.reason] ?? version.reason }}
             </p>
-            <p class="text-xs text-ink-500">
+            <p class="text-xs text-fg-subtle">
               {{ new Date(version.createdAt).toLocaleString('pt-BR') }}
             </p>
           </div>
@@ -416,11 +414,11 @@ const saveLabel = computed(() => {
       title="Assinatura digital não incluída"
       description="Res. CFP nº 11/2018"
     >
-      <p class="text-sm text-ink-700">
+      <p class="text-sm text-fg-secondary">
         O Baremo não implementa assinatura digital ICP-Brasil. Documentos psicológicos em meio
         eletrônico exigem essa assinatura para ter validade.
       </p>
-      <p class="mt-3 text-sm text-ink-700">
+      <p class="mt-3 text-sm text-fg-secondary">
         Exporte o PDF e assine externamente — no
         <strong>gov.br</strong> ou no <strong>Assinador ITI</strong> — antes de entregá-lo.
       </p>

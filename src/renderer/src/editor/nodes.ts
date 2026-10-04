@@ -116,7 +116,7 @@ export const SignatureNode = Node.create({
   renderHTML() {
     return [
       'div',
-      { 'data-signature': 'true', class: 'my-8 text-center text-sm text-ink-500' },
+      { 'data-signature': 'true', class: 'my-8 text-center text-sm text-fg-subtle' },
       'Bloco de assinatura — nome, CRP e espaço para assinatura'
     ]
   },

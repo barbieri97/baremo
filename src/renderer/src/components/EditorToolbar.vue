@@ -6,6 +6,9 @@ import { computed, ref } from 'vue'
 import type { Editor } from '@tiptap/vue-3'
 import BaseDialog from './BaseDialog.vue'
 import BaseButton from './BaseButton.vue'
+import BaseField from './BaseField.vue'
+import BaseInput from './BaseInput.vue'
+import BaseSelect from './BaseSelect.vue'
 import { TOKENS } from '../editor/nodes'
 
 const props = defineProps<{
@@ -18,8 +21,7 @@ const linkUrl = ref('')
 
 const characterCount = computed(() => {
   const storage = props.editor.storage['characterCount'] as
-    | { characters: () => number; words: () => number }
-    | undefined
+    { characters: () => number; words: () => number } | undefined
   return storage ? { characters: storage.characters(), words: storage.words() } : null
 })
 
@@ -72,99 +74,115 @@ function applyLink(): void {
   }
 }
 
-const buttonClass =
-  'rounded px-2 py-1 text-xs font-medium text-ink-600 hover:bg-ink-200 disabled:opacity-40'
+/** Todos os botões da barra: fantasmas, pequenos, com estado ligado. */
+const toolProps = { variant: 'ghost', size: 'sm' } as const
 
-function activeClass(name: string, attrs?: Record<string, unknown>): string {
-  return props.editor.isActive(name, attrs) ? 'bg-ink-200 text-ink-900' : ''
+function isActive(name: string, attrs?: Record<string, unknown>): boolean {
+  return props.editor.isActive(name, attrs)
 }
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-1 border-b border-ink-200 bg-white px-6 py-2">
-    <button :class="[buttonClass, activeClass('bold')]" @click="editor.chain().focus().toggleBold().run()">
+  <div class="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-6 py-2">
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('bold')"
+      @click="editor.chain().focus().toggleBold().run()"
+    >
       Negrito
-    </button>
-    <button :class="[buttonClass, activeClass('italic')]" @click="editor.chain().focus().toggleItalic().run()">
+    </BaseButton>
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('italic')"
+      @click="editor.chain().focus().toggleItalic().run()"
+    >
       Itálico
-    </button>
-    <button
-      :class="[buttonClass, activeClass('underline')]"
+    </BaseButton>
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('underline')"
       @click="editor.chain().focus().toggleUnderline().run()"
     >
       Sublinhado
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <button
+    <BaseButton
       v-for="level in [1, 2, 3] as const"
       :key="level"
-      :class="[buttonClass, activeClass('heading', { level })]"
+      v-bind="toolProps"
+      :pressed="isActive('heading', { level })"
       @click="toggleHeading(level)"
     >
       H{{ level }}
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <button
-      :class="[buttonClass, activeClass('bulletList')]"
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('bulletList')"
       @click="editor.chain().focus().toggleBulletList().run()"
     >
       Lista
-    </button>
-    <button
-      :class="[buttonClass, activeClass('orderedList')]"
+    </BaseButton>
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('orderedList')"
       @click="editor.chain().focus().toggleOrderedList().run()"
     >
       Numerada
-    </button>
-    <button
-      :class="[buttonClass, activeClass('blockquote')]"
+    </BaseButton>
+    <BaseButton
+      v-bind="toolProps"
+      :pressed="isActive('blockquote')"
       @click="editor.chain().focus().toggleBlockquote().run()"
     >
       Citação
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <button
+    <BaseButton
       v-for="align in ['left', 'center', 'right', 'justify'] as const"
       :key="align"
-      :class="[buttonClass, activeClass('paragraph', { textAlign: align })]"
+      v-bind="toolProps"
+      :pressed="isActive('paragraph', { textAlign: align })"
       @click="editor.chain().focus().setTextAlign(align).run()"
     >
       {{ { left: 'Esq.', center: 'Centro', right: 'Dir.', justify: 'Just.' }[align] }}
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <button :class="buttonClass" @click="insertTable">Tabela</button>
-    <button :class="buttonClass" @click="linkOpen = true">Link</button>
-    <button :class="buttonClass" @click="editor.chain().focus().insertPageBreak().run()">
+    <BaseButton v-bind="toolProps" @click="insertTable">Tabela</BaseButton>
+    <BaseButton v-bind="toolProps" @click="linkOpen = true">Link</BaseButton>
+    <BaseButton v-bind="toolProps" @click="editor.chain().focus().insertPageBreak().run()">
       Quebra de página
-    </button>
-    <button :class="buttonClass" @click="editor.chain().focus().insertSignature().run()">
+    </BaseButton>
+    <BaseButton v-bind="toolProps" @click="editor.chain().focus().insertSignature().run()">
       Assinatura
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <button :class="buttonClass" :disabled="assessmentId === null" @click="insertResultsBlock">
+    <BaseButton v-bind="toolProps" :disabled="assessmentId === null" @click="insertResultsBlock">
       Tabela de resultados
-    </button>
-    <button :class="buttonClass" :disabled="assessmentId === null" @click="insertChartBlock">
+    </BaseButton>
+    <BaseButton v-bind="toolProps" :disabled="assessmentId === null" @click="insertChartBlock">
       Gráfico de perfil
-    </button>
+    </BaseButton>
 
-    <span class="mx-1 h-4 w-px bg-ink-200" />
+    <span class="mx-1 h-4 w-px bg-line" />
 
-    <select
-      class="rounded border border-ink-300 px-2 py-1 text-xs"
+    <BaseSelect
+      model-value=""
+      size="xs"
+      class="w-auto"
       aria-label="Inserir token"
       @change="
-        (event) => {
+        (event: Event) => {
           const value = (event.target as HTMLSelectElement).value
           if (value !== '') insertToken(value)
           ;(event.target as HTMLSelectElement).value = ''
@@ -175,24 +193,24 @@ function activeClass(name: string, attrs?: Record<string, unknown>): string {
       <option v-for="entry in TOKENS" :key="entry.token" :value="entry.token">
         {{ entry.label }}
       </option>
-    </select>
+    </BaseSelect>
 
-    <p v-if="characterCount" class="ml-auto text-xs text-ink-400">
+    <p v-if="characterCount" class="ml-auto text-xs text-fg-faint">
       {{ characterCount.words }} palavras · {{ characterCount.characters }} caracteres
     </p>
 
     <BaseDialog v-model:open="linkOpen" title="Inserir link">
-      <label class="field-label" for="link-url">Endereço</label>
-      <input
+      <BaseField
         id="link-url"
-        v-model="linkUrl"
-        class="field-input"
-        placeholder="https://exemplo.com"
-        @keydown.enter.prevent="applyLink"
-      />
-      <p class="mt-2 text-xs text-ink-500">
-        Apenas http, https e mailto são aceitos. Deixe em branco para remover o link da seleção.
-      </p>
+        label="Endereço"
+        hint="Apenas http, https e mailto são aceitos. Deixe em branco para remover o link da seleção."
+      >
+        <BaseInput
+          v-model="linkUrl"
+          placeholder="https://exemplo.com"
+          @keydown.enter.prevent="applyLink"
+        />
+      </BaseField>
 
       <template #footer>
         <BaseButton variant="ghost" @click="linkOpen = false">Cancelar</BaseButton>

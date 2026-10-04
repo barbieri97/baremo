@@ -11,6 +11,15 @@ import BaseDialog from '../components/BaseDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import TreeManager from '../components/TreeManager.vue'
 import RangeEditor from '../components/RangeEditor.vue'
+import PageHeader from '../components/PageHeader.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseTabs from '../components/BaseTabs.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseAlert from '../components/BaseAlert.vue'
+import BaseField from '../components/BaseField.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseSelect from '../components/BaseSelect.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Instrument } from '@shared/contracts/entities'
 import type { CatalogImportPlan } from '@shared/contracts/catalog'
@@ -22,6 +31,12 @@ const selectedId = ref<string | null>(null)
 const isNew = ref(false)
 const saving = ref(false)
 const tab = ref<'details' | 'ranges'>('details')
+const tabs = computed(() => [
+  { value: 'details' as const, label: 'Dados' },
+  ...(!isNew.value && selected.value !== null
+    ? [{ value: 'ranges' as const, label: 'Faixas de classificação' }]
+    : [])
+])
 
 const form = ref({
   name: '',
@@ -105,7 +120,11 @@ async function save(): Promise<void> {
   }
 }
 
-async function move(payload: { id: string; parentId: string | null; order: number }): Promise<void> {
+async function move(payload: {
+  id: string
+  parentId: string | null
+  order: number
+}): Promise<void> {
   try {
     await api('instruments:move', payload)
     await catalog.load(true)
@@ -264,24 +283,20 @@ const parentOptions = computed(() => {
 
 <template>
   <div class="p-6">
-    <header class="mb-5 flex items-start justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-ink-800">Instrumentos</h1>
-        <p class="text-sm text-ink-500">
-          Reflita aqui a estrutura psicométrica do instrumento — bateria, índices compostos e
-          subtestes. Tanto nós folha quanto nós compostos podem receber resultado.
-        </p>
-      </div>
-
-      <div class="flex shrink-0 gap-2">
+    <PageHeader
+      title="Instrumentos"
+      subtitle="Reflita aqui a estrutura psicométrica do instrumento — bateria, índices compostos e subtestes. Tanto nós folha quanto nós compostos podem receber resultado."
+      class="mb-6"
+    >
+      <template #actions>
         <BaseButton size="sm" :disabled="transferring" @click="pickImport">
           Importar catálogo
         </BaseButton>
         <BaseButton size="sm" :disabled="transferring" @click="exportCatalog">
           Exportar catálogo
         </BaseButton>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div class="grid grid-cols-5 gap-6">
       <div class="col-span-2">
@@ -298,62 +313,49 @@ const parentOptions = computed(() => {
       </div>
 
       <div class="col-span-3">
-        <div v-if="!isNew && selected === null" class="card p-8 text-center text-sm text-ink-400">
-          Selecione um instrumento para editar, ou adicione um novo.
-        </div>
+        <BaseEmptyState
+          v-if="!isNew && selected === null"
+          framed
+          message="Selecione um instrumento para editar, ou adicione um novo."
+        />
 
-        <div v-else class="card">
-          <div class="flex gap-1 border-b border-ink-200 px-3 pt-3">
-            <button
-              class="rounded-t px-3 py-2 text-sm font-medium"
-              :class="tab === 'details' ? 'bg-white text-brand-700' : 'text-ink-500 hover:text-ink-700'"
-              @click="tab = 'details'"
-            >
-              Dados
-            </button>
-            <button
-              v-if="!isNew && selected !== null"
-              class="rounded-t px-3 py-2 text-sm font-medium"
-              :class="tab === 'ranges' ? 'bg-white text-brand-700' : 'text-ink-500 hover:text-ink-700'"
-              @click="tab = 'ranges'"
-            >
-              Faixas de classificação
-            </button>
-          </div>
+        <BaseCard v-else>
+          <BaseTabs v-model="tab" :items="tabs" label="Ficha do instrumento" class="px-3 pt-1" />
 
           <div v-if="tab === 'details'" class="p-5">
             <form class="grid grid-cols-2 gap-4" @submit.prevent="save">
-              <div class="col-span-2">
-                <label class="field-label" for="instrument-name">Nome</label>
-                <input id="instrument-name" v-model="form.name" class="field-input" required />
-              </div>
+              <BaseField id="instrument-name" label="Nome" class="col-span-2">
+                <BaseInput v-model="form.name" required />
+              </BaseField>
 
-              <div>
-                <label class="field-label" for="instrument-acronym">Sigla</label>
-                <input id="instrument-acronym" v-model="form.acronym" class="field-input" />
-              </div>
+              <BaseField id="instrument-acronym" label="Sigla">
+                <BaseInput v-model="form.acronym" />
+              </BaseField>
 
-              <div>
-                <label class="field-label" for="instrument-parent">Instrumento pai</label>
-                <select id="instrument-parent" v-model="form.parentId" class="field-input">
+              <BaseField
+                id="instrument-parent"
+                label="Instrumento pai"
+                hint="Subtestes sem faixas próprias usam as do pai. Trocar o pai troca também as faixas herdadas — resultados já lançados não mudam."
+              >
+                <BaseSelect v-model="form.parentId">
                   <option :value="null">Nenhum (raiz)</option>
-                  <option v-for="entry in parentOptions" :key="entry.node.id" :value="entry.node.id">
+                  <option
+                    v-for="entry in parentOptions"
+                    :key="entry.node.id"
+                    :value="entry.node.id"
+                  >
                     {{ '— '.repeat(entry.depth) }}{{ entry.node.name }}
                   </option>
-                </select>
-                <p class="mt-1 text-xs text-ink-500">
-                  Subtestes sem faixas próprias usam as do pai. Trocar o pai troca também as
-                  faixas herdadas — resultados já lançados não mudam.
-                </p>
-              </div>
+                </BaseSelect>
+              </BaseField>
 
-              <div class="col-span-2">
-                <label class="field-label" for="instrument-function">Função cognitiva</label>
-                <select
-                  id="instrument-function"
-                  v-model="form.cognitiveFunctionId"
-                  class="field-input"
-                >
+              <BaseField
+                id="instrument-function"
+                label="Função cognitiva"
+                class="col-span-2"
+                hint="Vincule no nó que produz escore. É por este vínculo que o relatório por função cognitiva organiza os resultados."
+              >
+                <BaseSelect v-model="form.cognitiveFunctionId">
                   <option :value="null">Nenhuma</option>
                   <option
                     v-for="entry in catalog.flatFunctions"
@@ -362,58 +364,41 @@ const parentOptions = computed(() => {
                   >
                     {{ '— '.repeat(entry.depth) }}{{ entry.node.name }}
                   </option>
-                </select>
-                <p class="mt-1 text-xs text-ink-500">
-                  Vincule no nó que produz escore. É por este vínculo que o relatório por função
-                  cognitiva organiza os resultados.
-                </p>
-              </div>
+                </BaseSelect>
+              </BaseField>
 
-              <div>
-                <label class="field-label" for="instrument-min-age">Idade mínima (anos)</label>
-                <input
-                  id="instrument-min-age"
-                  :value="form.minAgeYears ?? ''"
+              <BaseField id="instrument-min-age" label="Idade mínima (anos)">
+                <BaseInput
+                  :model-value="form.minAgeYears ?? ''"
                   type="number"
                   min="0"
                   max="120"
-                  class="field-input tabular"
-                  @input="
-                    form.minAgeYears =
-                      ($event.target as HTMLInputElement).value === ''
-                        ? null
-                        : Number(($event.target as HTMLInputElement).value)
-                  "
+                  class="tabular"
+                  @update:model-value="form.minAgeYears = $event === '' ? null : Number($event)"
                 />
-              </div>
+              </BaseField>
 
-              <div>
-                <label class="field-label" for="instrument-max-age">Idade máxima (anos)</label>
-                <input
-                  id="instrument-max-age"
-                  :value="form.maxAgeYears ?? ''"
+              <BaseField id="instrument-max-age" label="Idade máxima (anos)">
+                <BaseInput
+                  :model-value="form.maxAgeYears ?? ''"
                   type="number"
                   min="0"
                   max="120"
-                  class="field-input tabular"
-                  @input="
-                    form.maxAgeYears =
-                      ($event.target as HTMLInputElement).value === ''
-                        ? null
-                        : Number(($event.target as HTMLInputElement).value)
-                  "
+                  class="tabular"
+                  @update:model-value="form.maxAgeYears = $event === '' ? null : Number($event)"
                 />
-              </div>
+              </BaseField>
 
-              <div class="col-span-2">
-                <label class="field-label" for="instrument-reference">Referência bibliográfica</label>
-                <textarea
-                  id="instrument-reference"
+              <BaseField
+                id="instrument-reference"
+                label="Referência bibliográfica"
+                class="col-span-2"
+              >
+                <BaseTextarea
                   v-model="form.reference"
-                  class="field-input min-h-20"
                   placeholder="Manual, edição e normatização utilizada"
                 />
-              </div>
+              </BaseField>
 
               <div class="col-span-2 flex items-center justify-between">
                 <BaseButton
@@ -439,41 +424,43 @@ const parentOptions = computed(() => {
           </div>
 
           <RangeEditor v-else-if="selected !== null" :instrument="selected" class="p-5" />
-        </div>
+        </BaseCard>
       </div>
     </div>
 
     <BaseDialog v-model:open="importOpen" title="Importar catálogo" wide>
-      <p class="text-sm text-ink-700">
+      <p class="text-sm text-fg-secondary">
         Arquivo: <span class="font-medium">{{ importFileName }}</span>
       </p>
-      <p v-if="importOrigin !== ''" class="mt-1 text-xs text-ink-500">{{ importOrigin }}</p>
+      <p v-if="importOrigin !== ''" class="mt-1 text-xs text-fg-subtle">{{ importOrigin }}</p>
 
-      <p v-if="importChangesNothing" class="mt-4 text-sm text-ink-700">
+      <p v-if="importChangesNothing" class="mt-4 text-sm text-fg-secondary">
         Este catálogo já está inteiramente neste computador. Importar não mudaria nada.
       </p>
 
-      <div v-else class="mt-4 rounded-md border border-ink-200 bg-ink-50 p-3">
-        <p class="text-xs font-semibold uppercase tracking-wide text-ink-600">O que será feito</p>
-        <ul class="mt-2 space-y-1 text-sm text-ink-700">
+      <BaseAlert v-else title="O que será feito" class="mt-4">
+        <ul class="space-y-1">
           <li v-for="entry in importCounts" :key="entry.label" class="flex justify-between gap-4">
             <span>{{ entry.label }}</span>
             <span class="tabular font-semibold">{{ entry.value }}</span>
           </li>
         </ul>
-      </div>
+      </BaseAlert>
 
-      <div
+      <BaseAlert
         v-if="importPlan !== null && importPlan.warnings.length > 0"
-        class="mt-4 rounded-md border border-warn-200 bg-warn-50 p-3"
+        tone="warn"
+        title="Avisos"
+        class="mt-4"
       >
-        <p class="text-xs font-semibold uppercase tracking-wide text-warn-700">Avisos</p>
-        <ul class="mt-2 space-y-2 text-sm text-warn-700">
-          <li v-for="(warning, index) in importPlan.warnings" :key="index">{{ warning.message }}</li>
+        <ul class="space-y-2">
+          <li v-for="(warning, index) in importPlan.warnings" :key="index">
+            {{ warning.message }}
+          </li>
         </ul>
-      </div>
+      </BaseAlert>
 
-      <p class="mt-4 text-xs text-ink-500">
+      <p class="mt-4 text-xs text-fg-subtle">
         Importar não exclui nada: instrumentos e faixas que existem aqui e não estão no arquivo
         permanecem. Os conjuntos de faixas que estiverem no arquivo substituem os equivalentes, e as
         classificações já gravadas em avaliações não mudam.

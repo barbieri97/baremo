@@ -9,6 +9,14 @@ import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import TreeManager from '../components/TreeManager.vue'
+import PageHeader from '../components/PageHeader.vue'
+import SectionHeader from '../components/SectionHeader.vue'
+import BaseCard from '../components/BaseCard.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseField from '../components/BaseField.vue'
+import BaseInput from '../components/BaseInput.vue'
+import BaseSelect from '../components/BaseSelect.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
 import type { ChannelOutput } from '@shared/contracts'
 import type { CognitiveFunction } from '@shared/contracts/entities'
 
@@ -74,7 +82,11 @@ async function save(): Promise<void> {
   }
 }
 
-async function move(payload: { id: string; parentId: string | null; order: number }): Promise<void> {
+async function move(payload: {
+  id: string
+  parentId: string | null
+  order: number
+}): Promise<void> {
   try {
     await api('cognitiveFunctions:move', payload)
     await catalog.load(true)
@@ -129,13 +141,11 @@ const parentOptions = computed(() => {
 
 <template>
   <div class="p-6">
-    <header class="mb-5">
-      <h1 class="text-xl font-bold text-ink-800">Funções cognitivas</h1>
-      <p class="text-sm text-ink-500">
-        Árvore de profundidade ilimitada. Os instrumentos são vinculados a estas funções, e o
-        relatório por função segue exatamente esta estrutura.
-      </p>
-    </header>
+    <PageHeader
+      title="Funções cognitivas"
+      subtitle="Árvore de profundidade ilimitada. Os instrumentos são vinculados a estas funções, e o relatório por função segue exatamente esta estrutura."
+      class="mb-6"
+    />
 
     <div class="grid grid-cols-5 gap-6">
       <div class="col-span-2">
@@ -152,39 +162,35 @@ const parentOptions = computed(() => {
       </div>
 
       <div class="col-span-3">
-        <div v-if="!isNew && selected === null" class="card p-8 text-center text-sm text-ink-400">
-          Selecione uma função para editar, ou adicione uma nova.
-        </div>
+        <BaseEmptyState
+          v-if="!isNew && selected === null"
+          framed
+          message="Selecione uma função para editar, ou adicione uma nova."
+        />
 
-        <div v-else class="card p-5">
-          <h2 class="mb-4 text-base font-semibold text-ink-800">
-            {{ isNew ? 'Nova função cognitiva' : selected?.name }}
-          </h2>
+        <BaseCard v-else padding="lg">
+          <SectionHeader
+            :title="isNew ? 'Nova função cognitiva' : (selected?.name ?? '')"
+            class="mb-4"
+          />
 
           <form class="space-y-4" @submit.prevent="save">
-            <div>
-              <label class="field-label" for="function-name">Nome</label>
-              <input id="function-name" v-model="form.name" class="field-input" required />
-            </div>
+            <BaseField id="function-name" label="Nome">
+              <BaseInput v-model="form.name" required />
+            </BaseField>
 
-            <div>
-              <label class="field-label" for="function-parent">Função pai</label>
-              <select id="function-parent" v-model="form.parentId" class="field-input">
+            <BaseField id="function-parent" label="Função pai">
+              <BaseSelect v-model="form.parentId">
                 <option :value="null">Nenhuma (raiz)</option>
                 <option v-for="entry in parentOptions" :key="entry.node.id" :value="entry.node.id">
                   {{ '— '.repeat(entry.depth) }}{{ entry.node.name }}
                 </option>
-              </select>
-            </div>
+              </BaseSelect>
+            </BaseField>
 
-            <div>
-              <label class="field-label" for="function-description">Descrição</label>
-              <textarea
-                id="function-description"
-                v-model="form.description"
-                class="field-input min-h-24"
-              />
-            </div>
+            <BaseField id="function-description" label="Descrição">
+              <BaseTextarea v-model="form.description" class="min-h-24" />
+            </BaseField>
 
             <div class="flex items-center justify-between">
               <BaseButton
@@ -207,7 +213,7 @@ const parentOptions = computed(() => {
               </BaseButton>
             </div>
           </form>
-        </div>
+        </BaseCard>
       </div>
     </div>
 

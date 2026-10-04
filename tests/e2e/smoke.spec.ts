@@ -87,7 +87,7 @@ test('cadastra instrumento e faixas de classificação', async () => {
   await page.getByLabel('Sigla').fill('TAC')
   await page.getByRole('button', { name: 'Salvar' }).click()
 
-  await page.getByRole('button', { name: 'Faixas de classificação' }).click()
+  await page.getByRole('tab', { name: 'Faixas de classificação' }).click()
   await page.getByRole('button', { name: 'Gerar 5 faixas' }).click()
 
   const names = ['Inferior', 'Média inferior', 'Média', 'Média superior', 'Superior']

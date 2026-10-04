@@ -12,6 +12,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { NodeViewWrapper } from '@tiptap/vue-3'
 import type { NodeViewProps } from '@tiptap/vue-3'
 import { api } from '../api'
+import BaseCard from '../components/BaseCard.vue'
 import type { ChannelOutput } from '@shared/contracts'
 
 const props = defineProps<NodeViewProps>()
@@ -62,78 +63,90 @@ function truncate(value: string, max = 28): string {
 </script>
 
 <template>
-  <NodeViewWrapper
-    class="my-4 rounded-md border border-brand-200 bg-brand-50/40 p-3"
-    :class="{ 'ring-2 ring-brand-500': selected }"
-  >
-    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-700" contenteditable="false">
-      Perfil por função cognitiva
-    </p>
-
-    <div contenteditable="false">
-      <p v-if="error !== null" class="py-4 text-center text-xs text-warn-700">{{ error }}</p>
-
+  <NodeViewWrapper>
+    <BaseCard
+      variant="accent"
+      padding="sm"
+      class="my-4"
+      :class="{ 'ring-2 ring-accent': selected }"
+    >
       <p
-        v-else-if="data !== null && data.points.length === 0"
-        class="py-4 text-center text-xs text-ink-400"
+        class="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-strong"
+        contenteditable="false"
       >
-        Sem resultados suficientes para montar o perfil. Vincule os instrumentos a funções
-        cognitivas e lance ao menos um resultado com valor.
+        Perfil por função cognitiva
       </p>
 
-      <svg
-        v-else-if="data !== null"
-        :viewBox="`0 0 ${width} ${height}`"
-        class="w-full bg-white"
-        role="img"
-        aria-label="Perfil por função cognitiva"
-      >
-        <line
-          v-for="percent in [25, 50, 75]"
-          :key="percent"
-          :x1="LABEL_WIDTH + (percent / 100) * CHART_WIDTH"
-          y1="8"
-          :x2="LABEL_WIDTH + (percent / 100) * CHART_WIDTH"
-          :y2="height - 8"
-          stroke="#cbd5e0"
-          stroke-width="0.5"
-          stroke-dasharray="2 2"
-        />
+      <div contenteditable="false">
+        <p v-if="error !== null" class="py-4 text-center text-xs text-warn-strong">{{ error }}</p>
 
-        <template v-for="(point, index) in data.points" :key="point.cognitiveFunctionName">
-          <text x="0" :y="barY(index) + BAR_HEIGHT * 0.72" font-size="9" fill="#2d3748">
-            {{ truncate(point.cognitiveFunctionName) }}
-          </text>
-          <rect
-            :x="LABEL_WIDTH"
-            :y="barY(index)"
-            :width="CHART_WIDTH"
-            :height="BAR_HEIGHT"
-            fill="#edf2f7"
-          />
-          <rect
-            :x="LABEL_WIDTH"
-            :y="barY(index)"
-            :width="barLength(point.normalized)"
-            :height="BAR_HEIGHT"
-            fill="#2b6cb0"
-          />
-          <text
-            :x="LABEL_WIDTH + barLength(point.normalized) + 6"
-            :y="barY(index) + BAR_HEIGHT * 0.72"
-            font-size="8.5"
-            fill="#4a5568"
-          >
-            {{ point.normalized.toFixed(0) }}
-          </text>
-        </template>
-      </svg>
+        <p
+          v-else-if="data !== null && data.points.length === 0"
+          class="py-4 text-center text-xs text-fg-faint"
+        >
+          Sem resultados suficientes para montar o perfil. Vincule os instrumentos a funções
+          cognitivas e lance ao menos um resultado com valor.
+        </p>
 
-      <p class="mt-2 text-xs leading-snug text-ink-500">
-        Escores de tipos diferentes são normalizados pela posição no domínio de cada métrica, para
-        caberem na mesma escala. A conversão é posicional, não psicométrica: o gráfico serve para
-        leitura de perfil, não para comparar magnitude entre instrumentos.
-      </p>
-    </div>
+        <svg
+          v-else-if="data !== null"
+          :viewBox="`0 0 ${width} ${height}`"
+          class="w-full bg-surface"
+          role="img"
+          aria-label="Perfil por função cognitiva"
+        >
+          <line
+            v-for="percent in [25, 50, 75]"
+            :key="percent"
+            :x1="LABEL_WIDTH + (percent / 100) * CHART_WIDTH"
+            y1="8"
+            :x2="LABEL_WIDTH + (percent / 100) * CHART_WIDTH"
+            :y2="height - 8"
+            class="stroke-line-strong"
+            stroke-width="0.5"
+            stroke-dasharray="2 2"
+          />
+
+          <template v-for="(point, index) in data.points" :key="point.cognitiveFunctionName">
+            <text
+              x="0"
+              :y="barY(index) + BAR_HEIGHT * 0.72"
+              font-size="9"
+              class="fill-fg-secondary"
+            >
+              {{ truncate(point.cognitiveFunctionName) }}
+            </text>
+            <rect
+              :x="LABEL_WIDTH"
+              :y="barY(index)"
+              :width="CHART_WIDTH"
+              :height="BAR_HEIGHT"
+              class="fill-surface-muted"
+            />
+            <rect
+              :x="LABEL_WIDTH"
+              :y="barY(index)"
+              :width="barLength(point.normalized)"
+              :height="BAR_HEIGHT"
+              class="fill-accent"
+            />
+            <text
+              :x="LABEL_WIDTH + barLength(point.normalized) + 6"
+              :y="barY(index) + BAR_HEIGHT * 0.72"
+              font-size="8.5"
+              class="fill-fg-muted"
+            >
+              {{ point.normalized.toFixed(0) }}
+            </text>
+          </template>
+        </svg>
+
+        <p class="mt-2 text-xs leading-snug text-fg-subtle">
+          Escores de tipos diferentes são normalizados pela posição no domínio de cada métrica, para
+          caberem na mesma escala. A conversão é posicional, não psicométrica: o gráfico serve para
+          leitura de perfil, não para comparar magnitude entre instrumentos.
+        </p>
+      </div>
+    </BaseCard>
   </NodeViewWrapper>
 </template>
