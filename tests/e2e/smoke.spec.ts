@@ -218,6 +218,46 @@ test('salva o perfil profissional', async () => {
   await expect(page.getByText('An object could not be cloned.')).toHaveCount(0)
 })
 
+test('cria, edita, desativa e exclui uma skill do assistente', async () => {
+  // Skills ficam nas configurações da IA e funcionam com o módulo desligado.
+  await page.getByRole('link', { name: /Configurações/ }).click()
+  await page.getByRole('tab', { name: 'Assistente de IA' }).click()
+
+  const card = page.getByTestId('skills-card')
+  await expect(card.getByText('Nenhuma skill cadastrada')).toBeVisible()
+
+  await card.getByRole('button', { name: 'Nova skill' }).click()
+  const editor = page.getByRole('dialog', { name: 'Nova skill' })
+  await editor.getByLabel('Nome').fill('devolutiva-escolar')
+  await editor.getByLabel('Quando usar').fill('Redigir a devolutiva para a escola.')
+  await editor.getByLabel('Conteúdo').fill('1. Linguagem acessível.\n2. Sem jargão.')
+  await editor.getByRole('button', { name: 'Salvar skill' }).click()
+
+  const row = page.getByTestId('skill-row-devolutiva-escolar')
+  await expect(row.getByText('/devolutiva-escolar')).toBeVisible()
+  await expect(row.getByText('Redigir a devolutiva para a escola.')).toBeVisible()
+
+  await row.getByRole('button', { name: 'Editar' }).click()
+  const edit = page.getByRole('dialog', { name: 'Editar skill' })
+  await edit.getByLabel('Quando usar').fill('Devolutiva para a escola, no formato do consultório.')
+  await edit.getByRole('button', { name: 'Salvar skill' }).click()
+  await expect(row.getByText('Devolutiva para a escola, no formato do consultório.')).toBeVisible()
+
+  await row.getByLabel('Ativar a skill devolutiva-escolar').uncheck()
+  await expect(row.getByText('inativa')).toBeVisible()
+
+  await row.getByRole('button', { name: 'Excluir' }).click()
+  await page
+    .getByRole('dialog', { name: 'Excluir skill' })
+    .getByRole('button', { name: 'Excluir' })
+    .click()
+  await expect(page.getByTestId('skill-row-devolutiva-escolar')).toHaveCount(0)
+  await expect(card.getByText('Nenhuma skill cadastrada')).toBeVisible()
+
+  // Os testes seguintes partem da aba de perfil.
+  await page.getByRole('tab', { name: 'Perfil profissional' }).click()
+})
+
 test('exporta o catálogo, e o arquivo não leva dado de paciente', async () => {
   const target = join(userDataDir, 'catalogo.json')
   await app.evaluate(async ({ dialog }, filePath) => {

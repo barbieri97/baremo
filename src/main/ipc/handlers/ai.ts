@@ -22,6 +22,15 @@ import { listAiAudit, recordAiEvent } from '../../ai/audit'
 import { createAiDraft, getDocument, saveContent } from '../../repositories/documents'
 import { nowIso } from '../../repositories/helpers'
 import { applyResultImport, previewResultImport } from '../../services/ai-result-import'
+import { applySkillCreation, previewSkillCreation } from '../../services/ai-skill-write'
+import {
+  deleteSkill,
+  listSkills,
+  saveSkill,
+  setSkillEnabled,
+  SkillNameTakenError,
+  SkillNotFoundError
+} from '../../repositories/ai-skills'
 import { AI_STREAM_CHANNEL } from '@shared/contracts'
 import { AI_MODELS } from '@shared/contracts/entities-ai'
 import type { AiModel, AiSession, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
@@ -263,6 +272,36 @@ export function registerAiHandlers(): void {
   })
 
   registerHandler('ai:listAudit', ({ limit }) => listAiAudit(getDatabase(), limit))
+
+  // ─── Skills ──────────────────────────────────────────────────────────────
+
+  registerHandler('ai:listSkills', () => listSkills(getDatabase()))
+
+  registerHandler('ai:saveSkill', (input) =>
+    withSkillErrors(() => saveSkill(getDatabase(), input, 'user'))
+  )
+
+  registerHandler('ai:deleteSkill', ({ id }) =>
+    withSkillErrors(() => {
+      deleteSkill(getDatabase(), id)
+      return { ok: true as const }
+    })
+  )
+
+  registerHandler('ai:setSkillEnabled', ({ id, enabled }) =>
+    withSkillErrors(() => setSkillEnabled(getDatabase(), id, enabled))
+  )
+}
+
+/** Traduz os erros do repositório de skills para os códigos do IPC. */
+function withSkillErrors<T>(operation: () => T): T {
+  try {
+    return operation()
+  } catch (error) {
+    if (error instanceof SkillNameTakenError) throw conflict(error.message)
+    if (error instanceof SkillNotFoundError) throw notFound(error.message)
+    throw error
+  }
 }
 
 /** O banco guarda o modelo como texto; o contrato exige um dos valores do enum. */
@@ -355,6 +394,13 @@ function prepareWriteTool(
     return { description: preview.description, blockDiff: null, resultPreview: preview.rows }
   }
 
+  if (toolName === 'criar_skill') {
+    // Argumentos fora dos limites ou nome já usado lançam: o erro volta ao
+    // modelo e nenhum diálogo abre. A skill não usa o paciente da sessão.
+    const preview = previewSkillCreation(getDatabase(), args)
+    return { description: preview.description, blockDiff: null, skillPreview: preview.skill }
+  }
+
   return { description: 'Gravação solicitada pelo assistente.', blockDiff: null }
 }
 
@@ -426,6 +472,11 @@ async function applyWriteTool(
   if (toolName === 'registrar_resultados') {
     // `acceptedBlocks` aqui são os índices das linhas aceitas na tabela.
     return applyResultImport(handle, patientId, args, acceptedBlocks)
+  }
+
+  if (toolName === 'criar_skill') {
+    // Skill é global: o `patientId` não entra, e a origem fica marcada (§10.7).
+    return applySkillCreation(handle, args)
   }
 
   throw new Error(`Ferramenta de escrita desconhecida: ${toolName}.`)

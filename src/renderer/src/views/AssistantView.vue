@@ -23,10 +23,17 @@ import BaseEmptyState from '../components/BaseEmptyState.vue'
 import BaseIconButton from '../components/BaseIconButton.vue'
 import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
 import BaseTextarea from '../components/BaseTextarea.vue'
+import SkillCommandMenu from '../components/SkillCommandMenu.vue'
+import type { SkillCommandItem } from '../components/SkillCommandMenu.vue'
 import { Plus, X } from 'lucide-vue-next'
 import type { ToolActivityItem } from '../components/ToolActivityAccordion.vue'
 import { groupToolCallsByMessage } from '@shared/ai/tool-activity'
-import type { AiResultImportRow, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
+import type {
+  AiResultImportRow,
+  AiSkill,
+  AiStreamEvent,
+  AiToolCall
+} from '@shared/contracts/entities-ai'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Patient } from '@shared/contracts/entities'
 
@@ -51,6 +58,68 @@ const sessions = ref<Session[]>([])
 const activeSessionId = ref<string | null>(null)
 const messages = ref<Message[]>([])
 const draft = ref('')
+
+// ─── Skills no composer ──────────────────────────────────────────────────────
+
+/** Skills ativas: só elas aparecem no menu `/` e só elas o principal aplica. */
+const skills = ref<AiSkill[]>([])
+const skillMenu = ref<InstanceType<typeof SkillCommandMenu> | null>(null)
+/** Esc fecha o menu até o texto mudar de novo. */
+const skillMenuDismissed = ref(false)
+
+/** O que vem depois da `/`, enquanto o profissional ainda digita o comando. */
+const slashQuery = computed(() => /^\/([a-z0-9-]*)$/.exec(draft.value)?.[1] ?? null)
+
+const skillMenuItems = computed<SkillCommandItem[]>(() => {
+  const query = slashQuery.value
+  if (query === null || skillMenuDismissed.value) return []
+  return skills.value
+    .filter((skill) => skill.name.includes(query))
+    .map(({ name, description }) => ({ name, description }))
+})
+
+/** Skill aplicada à mensagem em edição, para o aviso abaixo do composer. */
+const invokedSkill = computed(() => {
+  const name = /^\/([a-z0-9-]+)(?:\s|$)/.exec(draft.value.trimStart())?.[1]
+  return skills.value.find((skill) => skill.name === name) ?? null
+})
+
+async function loadSkills(): Promise<void> {
+  try {
+    skills.value = (await api('ai:listSkills')).filter((skill) => skill.enabled)
+  } catch (error) {
+    appStore.notifyError(error)
+  }
+}
+
+function pickSkill(item: SkillCommandItem): void {
+  draft.value = `/${item.name} `
+}
+
+function onComposerKeydown(event: KeyboardEvent): void {
+  if (skillMenuItems.value.length > 0) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      skillMenuDismissed.value = true
+      return
+    }
+    if (skillMenu.value?.handleKey(event) === true) {
+      event.preventDefault()
+      return
+    }
+  }
+
+  if (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    event.preventDefault()
+    void send()
+  }
+}
 
 const consent = ref<{
   moduleGranted: boolean
@@ -80,6 +149,7 @@ const confirmation = ref<{
   preview: string
   blockDiff: BlockDiffEntry[] | null
   resultPreview: AiResultImportRow[] | null
+  skillPreview: { name: string; description: string; content: string } | null
 } | null>(null)
 
 /** Blocos que o profissional aceitou. Começa vazio: aceitar é ato deliberado. */
@@ -150,6 +220,7 @@ onMounted(async () => {
     patient.value = await api('patients:get', { id: props.patientId })
     consent.value = await api('ai:getConsent', { patientId: props.patientId })
     sessions.value = await api('ai:listSessions', { patientId: props.patientId })
+    await loadSkills()
 
     if (sessions.value.length > 0) await selectSession(sessions.value[0]!.id)
   } catch (error) {
@@ -206,7 +277,8 @@ function handleStream(event: AiStreamEvent): void {
         toolName: event.toolName,
         preview: event.preview,
         blockDiff: event.blockDiff,
-        resultPreview: event.resultPreview
+        resultPreview: event.resultPreview,
+        skillPreview: event.skillPreview
       }
       // Linhas novas já vêm marcadas; sobrescrever um resultado existente, não —
       // substituir o que já estava gravado é sempre um ato deliberado.
@@ -219,6 +291,8 @@ function handleStream(event: AiStreamEvent): void {
       streaming.value = false
       currentRequestId.value = null
       void refreshMessages()
+      // Uma skill criada pelo assistente neste turno já entra no menu `/`.
+      void loadSkills()
       break
 
     case 'error':
@@ -470,21 +544,28 @@ async function deleteSession(sessionId: string): Promise<void> {
           </div>
 
           <div class="border-t border-line bg-surface px-6 py-3">
-            <div class="flex items-end gap-2">
+            <div class="relative flex items-end gap-2">
+              <SkillCommandMenu ref="skillMenu" :items="skillMenuItems" @pick="pickSkill" />
               <BaseTextarea
                 v-model="draft"
                 class="flex-1 resize-none"
                 aria-label="Mensagem ao assistente"
                 placeholder="Pergunte sobre os resultados, peça um resumo ou um rascunho de documento."
                 :disabled="streaming"
-                @keydown.enter.exact.prevent="send"
+                @keydown="onComposerKeydown"
+                @input="skillMenuDismissed = false"
               />
               <BaseButton v-if="streaming" variant="secondary" @click="cancel">Cancelar</BaseButton>
               <BaseButton v-else variant="primary" :disabled="draft.trim() === ''" @click="send">
                 Enviar
               </BaseButton>
             </div>
+            <p v-if="invokedSkill !== null" class="mt-1 text-xs text-accent-strong">
+              A skill <span class="font-mono">/{{ invokedSkill.name }}</span> será aplicada a este
+              pedido.
+            </p>
             <p class="mt-1 text-xs text-fg-faint">
+              <template v-if="skills.length > 0">Digite / para aplicar uma skill · </template>
               Enter envia · Shift+Enter quebra linha. O assistente não emite diagnóstico e não
               substitui julgamento clínico.
             </p>
@@ -640,6 +721,24 @@ async function deleteSession(sessionId: string): Promise<void> {
         <p class="mt-2 text-xs text-fg-subtle">
           Linhas em amarelo substituem um resultado já gravado e vêm desmarcadas. A classificação é
           calculada pelas faixas cadastradas, como no lançamento manual.
+        </p>
+      </div>
+
+      <!-- criar_skill: o conteúdo inteiro, porque a skill vale para todos os pacientes. -->
+      <div v-if="confirmation?.skillPreview" class="mt-4" data-testid="skill-preview">
+        <p class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">Skill proposta</p>
+        <p class="mt-1 font-mono text-sm font-semibold text-fg">
+          /{{ confirmation.skillPreview.name }}
+        </p>
+        <p class="text-sm text-fg-muted">{{ confirmation.skillPreview.description }}</p>
+        <BaseCard class="mt-2 max-h-80 overflow-y-auto p-3">
+          <pre class="whitespace-pre-wrap font-mono text-xs text-fg">{{
+            confirmation.skillPreview.content
+          }}</pre>
+        </BaseCard>
+        <p class="mt-2 text-xs text-warn-strong">
+          Skills valem para todas as conversas, de todos os pacientes. Confira se o conteúdo não
+          traz dados de paciente e recuse se o pedido não partiu de você.
         </p>
       </div>
 

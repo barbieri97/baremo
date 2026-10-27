@@ -18,11 +18,22 @@ import BaseField from '../components/BaseField.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseSelect from '../components/BaseSelect.vue'
 import BaseCheckbox from '../components/BaseCheckbox.vue'
+import BaseBadge from '../components/BaseBadge.vue'
+import BaseDialog from '../components/BaseDialog.vue'
+import BaseEmptyState from '../components/BaseEmptyState.vue'
+import BaseTextarea from '../components/BaseTextarea.vue'
 import BaseProgress from '../components/BaseProgress.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
 import { checkContrast, normalizeHex } from '@shared/domain/color'
-import { AI_MODELS, AI_MODEL_LABELS } from '@shared/contracts/entities-ai'
-import type { AiConfig, AiModel } from '@shared/contracts/entities-ai'
+import {
+  AI_MODELS,
+  AI_MODEL_LABELS,
+  SKILL_CONTENT_MAX,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+  SKILL_NAME_PATTERN
+} from '@shared/contracts/entities-ai'
+import type { AiConfig, AiModel, AiSkill } from '@shared/contracts/entities-ai'
 import type { ProfessionalProfile } from '@shared/contracts/entities'
 // O mesmo ícone do instalador, para a aba "Sobre" não divergir dele.
 import appIconUrl from '../../../../build/icon.png'
@@ -57,10 +68,23 @@ const testing = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const pseudonymizeConfirmOpen = ref(false)
 
+const skills = ref<AiSkill[]>([])
+const skillEditorOpen = ref(false)
+const skillDraft = ref<{ id: string | null; name: string; description: string; content: string }>({
+  id: null,
+  name: '',
+  description: '',
+  content: ''
+})
+const savingSkill = ref(false)
+const deletingSkill = ref<AiSkill | null>(null)
+const deleteSkillOpen = ref(false)
+
 async function load(): Promise<void> {
   try {
     profile.value = await api('config:getProfile')
     aiConfig.value = await api('ai:getConfig')
+    skills.value = await api('ai:listSkills')
     await catalog.load(true)
   } catch (error) {
     appStore.notifyError(error)
@@ -318,6 +342,83 @@ const budgetPercent = computed(() => {
     (aiConfig.value.tokensUsedThisMonth / aiConfig.value.monthlyTokenBudget) * 100
   )
 })
+
+// ─── Skills do assistente ──────────────────────────────────────────────────
+
+const skillNameError = computed(() => {
+  const name = skillDraft.value.name.trim()
+  if (name === '' || SKILL_NAME_PATTERN.test(name)) return null
+  return 'Use só letras minúsculas sem acento, números e hífens (ex.: devolutiva-escolar).'
+})
+
+const canSaveSkill = computed(() => {
+  const draft = skillDraft.value
+  return (
+    draft.name.trim() !== '' &&
+    skillNameError.value === null &&
+    draft.description.trim() !== '' &&
+    draft.content.trim() !== '' &&
+    draft.description.length <= SKILL_DESCRIPTION_MAX &&
+    draft.content.length <= SKILL_CONTENT_MAX
+  )
+})
+
+function openSkillEditor(skill: AiSkill | null): void {
+  skillDraft.value =
+    skill === null
+      ? { id: null, name: '', description: '', content: '' }
+      : { id: skill.id, name: skill.name, description: skill.description, content: skill.content }
+  skillEditorOpen.value = true
+}
+
+async function saveSkillDraft(): Promise<void> {
+  if (!canSaveSkill.value) return
+  const draft = skillDraft.value
+  savingSkill.value = true
+  try {
+    await api('ai:saveSkill', {
+      ...(draft.id === null ? {} : { id: draft.id }),
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      content: draft.content.trim()
+    })
+    skills.value = await api('ai:listSkills')
+    skillEditorOpen.value = false
+    appStore.notify('success', 'Skill salva.')
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    savingSkill.value = false
+  }
+}
+
+async function toggleSkill(skill: AiSkill, enabled: boolean): Promise<void> {
+  try {
+    const updated = await api('ai:setSkillEnabled', { id: skill.id, enabled })
+    skills.value = skills.value.map((item) => (item.id === updated.id ? updated : item))
+  } catch (error) {
+    appStore.notifyError(error)
+  }
+}
+
+function askDeleteSkill(skill: AiSkill): void {
+  deletingSkill.value = skill
+  deleteSkillOpen.value = true
+}
+
+async function confirmDeleteSkill(): Promise<void> {
+  if (deletingSkill.value === null) return
+  try {
+    await api('ai:deleteSkill', { id: deletingSkill.value.id })
+    skills.value = skills.value.filter((item) => item.id !== deletingSkill.value?.id)
+    appStore.notify('success', 'Skill excluída.')
+  } catch (error) {
+    appStore.notifyError(error)
+  } finally {
+    deleteSkillOpen.value = false
+    deletingSkill.value = null
+  }
+}
 </script>
 
 <template>
@@ -585,6 +686,74 @@ const budgetPercent = computed(() => {
           </template>
         </BaseCheckbox>
       </BaseCard>
+
+      <BaseCard padding="lg" data-testid="skills-card">
+        <div class="mb-3 flex items-start justify-between gap-3">
+          <SectionHeader
+            title="Skills"
+            :count="skills.length"
+            size="sm"
+            description="Instruções reutilizáveis para tarefas que você repete — por exemplo, redigir a devolutiva no seu formato ou conferir um laudo contra a Resolução CFP 06/2019."
+          />
+          <BaseButton variant="primary" size="sm" @click="openSkillEditor(null)">
+            Nova skill
+          </BaseButton>
+        </div>
+
+        <p class="mb-3 text-sm text-fg-muted">
+          O assistente vê o nome e a descrição das skills ativas e carrega o conteúdo quando a
+          tarefa pede. Você também pode aplicar uma skill digitando
+          <span class="font-mono">/nome-da-skill</span> no início da mensagem no chat.
+        </p>
+
+        <BaseAlert tone="warn" size="sm" class="mb-3">
+          O conteúdo das skills é enviado ao provedor de IA e vale para todos os pacientes.
+          <strong>Não inclua dados de pacientes</strong> — use tokens como
+          <span class="font-mono">{{ NAME_TOKEN }}</span> se precisar referir-se a eles.
+        </BaseAlert>
+
+        <BaseEmptyState
+          v-if="skills.length === 0"
+          title="Nenhuma skill cadastrada"
+          message="Crie uma skill aqui ou peça ao assistente, no chat, para salvar uma instrução como skill."
+        />
+
+        <ul v-else class="divide-y divide-line">
+          <li
+            v-for="skill in skills"
+            :key="skill.id"
+            class="flex items-start gap-3 py-3"
+            :data-testid="`skill-row-${skill.name}`"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="flex flex-wrap items-center gap-2">
+                <span
+                  class="font-mono text-sm font-semibold"
+                  :class="skill.enabled ? 'text-fg' : 'text-fg-faint'"
+                >
+                  /{{ skill.name }}
+                </span>
+                <BaseBadge v-if="skill.origin === 'agent'" tone="accent">
+                  criada pelo assistente
+                </BaseBadge>
+                <BaseBadge v-if="!skill.enabled">inativa</BaseBadge>
+              </p>
+              <p class="mt-0.5 text-sm text-fg-muted">{{ skill.description }}</p>
+            </div>
+            <BaseCheckbox
+              :model-value="skill.enabled"
+              size="sm"
+              label="Ativa"
+              :aria-label="`Ativar a skill ${skill.name}`"
+              @update:model-value="toggleSkill(skill, $event === true)"
+            />
+            <BaseButton variant="link" size="sm" @click="openSkillEditor(skill)">Editar</BaseButton>
+            <BaseButton variant="link-danger" size="sm" @click="askDeleteSkill(skill)">
+              Excluir
+            </BaseButton>
+          </li>
+        </ul>
+      </BaseCard>
     </section>
 
     <!-- Sobre o sistema -->
@@ -632,6 +801,79 @@ const budgetPercent = computed(() => {
       message="A cor será removida da paleta. Faixas de classificação que a utilizam impedem a remoção."
       confirm-label="Remover"
       @confirm="confirmDeleteColor"
+    />
+
+    <BaseDialog
+      v-model:open="skillEditorOpen"
+      :title="skillDraft.id === null ? 'Nova skill' : 'Editar skill'"
+      wide
+    >
+      <form class="space-y-4" @submit.prevent="saveSkillDraft">
+        <BaseField
+          id="skill-name"
+          label="Nome"
+          :error="skillNameError"
+          :hint="`Vira o comando /${skillDraft.name.trim() || 'nome'} no chat. Letras minúsculas, números e hífens.`"
+        >
+          <BaseInput
+            v-model="skillDraft.name"
+            class="font-mono"
+            :maxlength="SKILL_NAME_MAX"
+            placeholder="devolutiva-escolar"
+            autocomplete="off"
+          />
+        </BaseField>
+
+        <BaseField
+          id="skill-description"
+          label="Quando usar"
+          :hint="`${skillDraft.description.length} / ${SKILL_DESCRIPTION_MAX} caracteres. É por esta descrição que o assistente decide carregar a skill.`"
+        >
+          <BaseInput
+            v-model="skillDraft.description"
+            :maxlength="SKILL_DESCRIPTION_MAX"
+            placeholder="Redigir a devolutiva para a escola no formato do consultório"
+          />
+        </BaseField>
+
+        <BaseField
+          id="skill-content"
+          label="Conteúdo"
+          :error="
+            skillDraft.content.length > SKILL_CONTENT_MAX
+              ? `Limite de ${SKILL_CONTENT_MAX.toLocaleString('pt-BR')} caracteres excedido.`
+              : null
+          "
+          :hint="`${skillDraft.content.length.toLocaleString('pt-BR')} / ${SKILL_CONTENT_MAX.toLocaleString('pt-BR')} caracteres.`"
+        >
+          <BaseTextarea v-model="skillDraft.content" rows="14" class="font-mono text-xs" />
+        </BaseField>
+
+        <BaseAlert tone="warn" size="sm">
+          Não inclua dados de pacientes: o conteúdo é enviado ao provedor de IA e vale em todas as
+          conversas.
+        </BaseAlert>
+      </form>
+
+      <template #footer>
+        <BaseButton variant="ghost" @click="skillEditorOpen = false">Cancelar</BaseButton>
+        <BaseButton
+          variant="primary"
+          :disabled="!canSaveSkill"
+          :loading="savingSkill"
+          @click="saveSkillDraft"
+        >
+          Salvar skill
+        </BaseButton>
+      </template>
+    </BaseDialog>
+
+    <ConfirmDialog
+      v-model:open="deleteSkillOpen"
+      title="Excluir skill"
+      :message="`A skill /${deletingSkill?.name ?? ''} será excluída. O comando deixa de funcionar no chat e o assistente deixa de vê-la.`"
+      confirm-label="Excluir"
+      @confirm="confirmDeleteSkill"
     />
 
     <ConfirmDialog
