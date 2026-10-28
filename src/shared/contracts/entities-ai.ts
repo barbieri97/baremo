@@ -114,6 +114,63 @@ export const aiAuditSchema = z.object({
 })
 export type AiAudit = z.infer<typeof aiAuditSchema>
 
+// ─── Skills ──────────────────────────────────────────────────────────────────
+
+/**
+ * Nome de skill: slug, porque vira o comando `/nome` no chat e o atributo do
+ * envelope `<skill nome="...">` — sem espaço, aspas nem sinais de tag.
+ */
+export const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
+export const SKILL_NAME_MAX = 64
+export const SKILL_DESCRIPTION_MAX = 300
+export const SKILL_CONTENT_MAX = 20_000
+
+export const AI_SKILL_ORIGINS = ['user', 'agent'] as const
+export type AiSkillOrigin = (typeof AI_SKILL_ORIGINS)[number]
+
+/**
+ * O que define uma skill. O MESMO schema valida o IPC das configurações e a
+ * tool `criar_skill` do agente — os limites não podem divergir entre os dois.
+ */
+export const aiSkillInputSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Informe o nome da skill.')
+    .max(SKILL_NAME_MAX, `O nome pode ter no máximo ${SKILL_NAME_MAX} caracteres.`)
+    .regex(
+      SKILL_NAME_PATTERN,
+      'O nome deve ter apenas letras minúsculas sem acento, números e hífens (ex.: devolutiva-escolar).'
+    ),
+  /** É por ela que o agente decide quando carregar a skill. */
+  description: z
+    .string()
+    .trim()
+    .min(1, 'Informe uma descrição de quando usar a skill.')
+    .max(
+      SKILL_DESCRIPTION_MAX,
+      `A descrição pode ter no máximo ${SKILL_DESCRIPTION_MAX} caracteres.`
+    ),
+  content: z
+    .string()
+    .trim()
+    .min(1, 'Informe o conteúdo da skill.')
+    .max(
+      SKILL_CONTENT_MAX,
+      `O conteúdo pode ter no máximo ${SKILL_CONTENT_MAX.toLocaleString('pt-BR')} caracteres.`
+    )
+})
+export type AiSkillInput = z.infer<typeof aiSkillInputSchema>
+
+export const aiSkillSchema = aiSkillInputSchema.extend({
+  id: idSchema,
+  enabled: z.boolean(),
+  origin: z.enum(AI_SKILL_ORIGINS),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+})
+export type AiSkill = z.infer<typeof aiSkillSchema>
+
 // ─── Transporte do chat ──────────────────────────────────────────────────────
 
 /**
@@ -188,7 +245,14 @@ export const aiStreamEventSchema = z.discriminatedUnion('kind', [
      * Tabela de resultados, quando a tool propõe registrar escores. O usuário
      * aceita linha a linha; os índices voltam em `acceptedBlocks`.
      */
-    resultPreview: z.array(aiResultImportRowSchema).nullable()
+    resultPreview: z.array(aiResultImportRowSchema).nullable(),
+    /**
+     * Skill proposta por `criar_skill`, com o conteúdo COMPLETO: ela passa a
+     * valer em todas as conversas, então o profissional precisa ler o que aprova.
+     */
+    skillPreview: z
+      .object({ name: z.string(), description: z.string(), content: z.string() })
+      .nullable()
   }),
   z.object({
     kind: z.literal('done'),

@@ -431,7 +431,34 @@ function collapseIdenticalRangeSets(raw: RawDatabase): void {
   }
 }
 
-export const MIGRATIONS: readonly Migration[] = [initial, classificationLevels, rangeInheritance]
+/**
+ * Skills do assistente de IA: prompts reutilizáveis criados pelo profissional
+ * (ou pelo assistente, com confirmação). Tabela global, sem vínculo com paciente.
+ */
+const aiSkills: Migration = {
+  version: 4,
+  name: 'skills-do-assistente',
+  statements: [
+    `CREATE TABLE ai_skills (
+       id TEXT PRIMARY KEY NOT NULL,
+       name TEXT NOT NULL,
+       description TEXT NOT NULL,
+       content TEXT NOT NULL,
+       enabled INTEGER NOT NULL DEFAULT 1,
+       origin TEXT NOT NULL DEFAULT 'user',
+       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     )`,
+    `CREATE UNIQUE INDEX uq_ai_skills_name ON ai_skills (name)`
+  ]
+}
+
+export const MIGRATIONS: readonly Migration[] = [
+  initial,
+  classificationLevels,
+  rangeInheritance,
+  aiSkills
+]
 
 /** Versão de schema que este binário conhece. */
 export const TARGET_SCHEMA_VERSION = MIGRATIONS.reduce(

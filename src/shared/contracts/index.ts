@@ -46,6 +46,8 @@ import {
   aiAuditSchema,
   aiConfigSchema,
   aiMessageSchema,
+  aiSkillInputSchema,
+  aiSkillSchema,
   aiToolCallSchema,
   aiSessionSchema
 } from './entities-ai'
@@ -610,7 +612,14 @@ export const contracts = {
   'ai:listAudit': channel(
     z.object({ limit: z.number().int().min(1).max(500).default(200) }),
     z.array(aiAuditSchema)
-  )
+  ),
+
+  // Skills são globais e funcionam com o módulo desligado: são só texto local.
+  'ai:listSkills': channel(empty, z.array(aiSkillSchema)),
+  /** Cria (sem `id`) ou atualiza (com `id`). Nome duplicado volta como `conflict`. */
+  'ai:saveSkill': channel(aiSkillInputSchema.extend({ id: idSchema.optional() }), aiSkillSchema),
+  'ai:deleteSkill': channel(z.object({ id: idSchema }), ok),
+  'ai:setSkillEnabled': channel(z.object({ id: idSchema, enabled: z.boolean() }), aiSkillSchema)
 } as const satisfies Record<string, ChannelContract>
 
 export type Contracts = typeof contracts

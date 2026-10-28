@@ -339,4 +339,25 @@ export const aiAudit = sqliteTable(
   (table) => [index('idx_ai_audit_timestamp').on(table.timestamp)]
 )
 
+/**
+ * Skills do assistente: prompts reutilizáveis, GLOBAIS — não pertencem a um
+ * paciente e ficam fora do `AgentReadRepository`. Por isso não podem conter
+ * dado clínico.
+ */
+export const aiSkills = sqliteTable(
+  'ai_skills',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    content: text('content').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /** `'agent'` quando criada pelo assistente via `criar_skill` (§10.7). */
+    origin: text('origin').notNull().default('user'),
+    createdAt: text('created_at').notNull().default(now),
+    updatedAt: text('updated_at').notNull().default(now)
+  },
+  (table) => [uniqueIndex('uq_ai_skills_name').on(table.name)]
+)
+
 export const SINGLETON_ID = 'singleton'

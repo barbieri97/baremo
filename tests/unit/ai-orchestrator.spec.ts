@@ -14,8 +14,11 @@ import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type * as GenAi from '@google/genai'
+import type { Content } from '@google/genai'
 
 const responses: unknown[] = []
+/** O que o orquestrador mandou ao modelo em cada chamada. */
+const requests: { contents: Content[]; config: { systemInstruction: string } }[] = []
 
 vi.mock('../../src/main/ai/key-store', () => ({ loadKey: () => 'chave-de-teste' }))
 
@@ -25,7 +28,14 @@ vi.mock('@google/genai', async (importOriginal) => {
     ...original,
     GoogleGenAI: class {
       models = {
-        generateContent: async (): Promise<unknown> => {
+        generateContent: async (request: (typeof requests)[number]): Promise<unknown> => {
+          // Cópia profunda: o orquestrador continua mexendo em `contents` depois.
+          requests.push(
+            structuredClone({
+              contents: request.contents,
+              config: { systemInstruction: request.config.systemInstruction }
+            })
+          )
           const next = responses.shift()
           if (next === undefined) throw new Error('Nenhuma resposta falsa restante.')
           return next
@@ -37,9 +47,14 @@ vi.mock('@google/genai', async (importOriginal) => {
 
 const { openDatabase } = await import('../../src/main/db/gateway')
 const { runMigrations } = await import('../../src/main/db/migrate')
-const { aiMessages, aiSessions, aiToolCalls, patients } = await import('../../src/main/db/schema')
+const { aiMessages, aiSessions, aiSkills, aiToolCalls, patients } =
+  await import('../../src/main/db/schema')
+const { listSkills, saveSkill, setSkillEnabled } =
+  await import('../../src/main/repositories/ai-skills')
+const { applySkillCreation, previewSkillCreation } =
+  await import('../../src/main/services/ai-skill-write')
 const { getAiConfig, updateAiConfig } = await import('../../src/main/repositories/ai-config')
-const { AgentOrchestrator } = await import('../../src/main/ai/orchestrator')
+const { AgentOrchestrator, parseSkillCommand } = await import('../../src/main/ai/orchestrator')
 
 type Handle = ReturnType<typeof openDatabase>
 type StreamEvent = Parameters<ConstructorParameters<typeof AgentOrchestrator>[1]>[0]
@@ -105,6 +120,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   responses.length = 0
+  requests.length = 0
+  handle.db.delete(aiSkills).run()
   handle.db.delete(aiToolCalls).run()
   handle.db.delete(aiMessages).run()
 })
@@ -202,5 +219,210 @@ describe('AgentOrchestrator — histórico de tools', () => {
     })
     expect(apply).not.toHaveBeenCalled()
     expect(handle.db.select().from(aiToolCalls).get()?.status).toBe('rejected')
+  })
+})
+
+/** Orquestrador que recusa (ou aprova) toda escrita assim que o diálogo aparece. */
+function orchestratorWith(
+  events: StreamEvent[],
+  approve: boolean,
+  writes: ConstructorParameters<typeof AgentOrchestrator>[2] = {
+    prepare: () => ({ description: '', blockDiff: null }),
+    apply: async () => ''
+  }
+): InstanceType<typeof AgentOrchestrator> {
+  const orchestrator = new AgentOrchestrator(
+    handle,
+    (event) => {
+      events.push(event)
+      if (event.kind === 'confirmation_required') {
+        queueMicrotask(() => orchestrator.confirm(event.confirmationId, approve, null))
+      }
+    },
+    writes
+  )
+  return orchestrator
+}
+
+/** prepare/apply reais de `criar_skill`, como os handlers de IPC os montam. */
+const skillWrites: ConstructorParameters<typeof AgentOrchestrator>[2] = {
+  prepare: (_patientId, _toolName, args) => {
+    const preview = previewSkillCreation(handle, args)
+    return { description: preview.description, blockDiff: null, skillPreview: preview.skill }
+  },
+  apply: async (_patientId, _toolName, args) => applySkillCreation(handle, args)
+}
+
+function functionResponseText(request: (typeof requests)[number]): string {
+  const last = request.contents.at(-1)
+  return JSON.stringify(last?.parts?.map((part) => part.functionResponse) ?? [])
+}
+
+describe('AgentOrchestrator — skills', () => {
+  it('lista só as skills ativas na instrução de sistema, sem o conteúdo', async () => {
+    saveSkill(
+      handle,
+      { name: 'devolutiva', description: 'Redigir devolutiva.', content: 'SEGREDO-ATIVA' },
+      'user'
+    )
+    const off = saveSkill(
+      handle,
+      { name: 'desligada', description: 'Não deve aparecer.', content: 'SEGREDO-INATIVA' },
+      'user'
+    )
+    setSkillEnabled(handle, off.id, false)
+
+    responses.push(textResponse('Ok.'))
+    await orchestratorWith([], false).send({ sessionId, text: 'Oi', requestId: 's1' })
+
+    const instruction = requests[0]!.config.systemInstruction
+    expect(instruction).toContain('## Skills')
+    expect(instruction).toContain('- devolutiva: Redigir devolutiva.')
+    expect(instruction).not.toContain('desligada')
+    expect(instruction).not.toContain('SEGREDO')
+  })
+
+  it('omite a seção de skills quando não há nenhuma ativa', async () => {
+    responses.push(textResponse('Ok.'))
+    await orchestratorWith([], false).send({ sessionId, text: 'Oi', requestId: 's2' })
+    expect(requests[0]!.config.systemInstruction).not.toContain('## Skills')
+  })
+
+  it('ler_skill devolve o conteúdo no envelope <skill>, não em <dados_do_prontuario>', async () => {
+    saveSkill(
+      handle,
+      { name: 'devolutiva', description: 'Redigir devolutiva.', content: 'Use o formato X.' },
+      'user'
+    )
+    const events: StreamEvent[] = []
+
+    responses.push(callResponse('ler_skill', { nome: 'devolutiva' }), textResponse('Feito.'))
+    await orchestratorWith(events, false).send({ sessionId, text: 'Devolutiva', requestId: 's3' })
+
+    const sent = functionResponseText(requests[1]!)
+    expect(sent).toContain('<skill nome=\\"devolutiva\\">')
+    expect(sent).toContain('Use o formato X.')
+    expect(sent).not.toContain('dados_do_prontuario')
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ ok: true })
+    expect(handle.db.select().from(aiToolCalls).get()?.toolName).toBe('ler_skill')
+  })
+
+  it('skill desativada não é lida', async () => {
+    const skill = saveSkill(
+      handle,
+      { name: 'devolutiva', description: 'Redigir devolutiva.', content: 'SEGREDO' },
+      'user'
+    )
+    setSkillEnabled(handle, skill.id, false)
+    const events: StreamEvent[] = []
+
+    responses.push(callResponse('ler_skill', { nome: 'devolutiva' }), textResponse('Ok.'))
+    await orchestratorWith(events, false).send({ sessionId, text: 'x', requestId: 's4' })
+
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ ok: false })
+    expect(functionResponseText(requests[1]!)).not.toContain('SEGREDO')
+  })
+
+  it('/nome injeta o conteúdo no turno e grava a mensagem como foi digitada', async () => {
+    saveSkill(
+      handle,
+      { name: 'devolutiva', description: 'Redigir devolutiva.', content: 'Use o formato X.' },
+      'user'
+    )
+
+    responses.push(textResponse('Ok.'))
+    await orchestratorWith([], false).send({
+      sessionId,
+      text: '/devolutiva para a escola',
+      requestId: 's5'
+    })
+
+    const turn = requests[0]!.contents.at(-1)!
+    expect(turn.role).toBe('user')
+    expect(turn.parts?.[0]?.text).toBe('<skill nome="devolutiva">\nUse o formato X.\n</skill>')
+    expect(turn.parts?.at(-1)?.text).toBe('/devolutiva para a escola')
+
+    const stored = handle.db.select().from(aiMessages).where(eq(aiMessages.role, 'user')).get()
+    expect(stored?.text).toBe('/devolutiva para a escola')
+  })
+
+  it('/comando desconhecido segue como texto normal', async () => {
+    responses.push(textResponse('Ok.'))
+    await orchestratorWith([], false).send({ sessionId, text: '/xyz oi', requestId: 's6' })
+
+    const turn = requests[0]!.contents.at(-1)!
+    expect(turn.parts).toHaveLength(1)
+    expect(turn.parts?.[0]?.text).toBe('/xyz oi')
+  })
+
+  it('reconhece só o formato de comando no início da mensagem', () => {
+    expect(parseSkillCommand('/devolutiva')).toBe('devolutiva')
+    expect(parseSkillCommand('/devolutiva-escolar texto')).toBe('devolutiva-escolar')
+    expect(parseSkillCommand('texto /devolutiva')).toBeNull()
+    expect(parseSkillCommand('/Devolutiva')).toBeNull()
+    expect(parseSkillCommand('/devolutiva/x')).toBeNull()
+  })
+
+  it('criar_skill não grava nada sem confirmação', async () => {
+    const events: StreamEvent[] = []
+
+    responses.push(
+      callResponse('criar_skill', {
+        nome: 'resumo',
+        descricao: 'Resumir anamnese.',
+        conteudo: 'Roteiro.'
+      }),
+      textResponse('Entendido.')
+    )
+    await orchestratorWith(events, false, skillWrites).send({
+      sessionId,
+      text: 'Salve isso como uma skill',
+      requestId: 's7'
+    })
+
+    const confirmation = events.find((event) => event.kind === 'confirmation_required')
+    expect(confirmation).toMatchObject({
+      skillPreview: { name: 'resumo', description: 'Resumir anamnese.', content: 'Roteiro.' }
+    })
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ rejected: true })
+    expect(listSkills(handle)).toHaveLength(0)
+  })
+
+  it('criar_skill aprovada grava com origin = agent', async () => {
+    responses.push(
+      callResponse('criar_skill', {
+        nome: 'resumo',
+        descricao: 'Resumir anamnese.',
+        conteudo: 'Roteiro.'
+      }),
+      textResponse('Criada.')
+    )
+    await orchestratorWith([], true, skillWrites).send({
+      sessionId,
+      text: 'Salve isso como uma skill',
+      requestId: 's8'
+    })
+
+    expect(listSkills(handle)).toMatchObject([
+      { name: 'resumo', origin: 'agent', enabled: true, content: 'Roteiro.' }
+    ])
+  })
+
+  it('criar_skill inválida volta ao modelo como erro, sem abrir diálogo', async () => {
+    const events: StreamEvent[] = []
+
+    responses.push(
+      callResponse('criar_skill', { nome: 'Nome Inválido', descricao: '', conteudo: 'x' }),
+      textResponse('Ok.')
+    )
+    await orchestratorWith(events, true, skillWrites).send({
+      sessionId,
+      text: 'Salve isso como uma skill',
+      requestId: 's9'
+    })
+
+    expect(events.some((event) => event.kind === 'confirmation_required')).toBe(false)
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ ok: false })
+    expect(listSkills(handle)).toHaveLength(0)
   })
 })
