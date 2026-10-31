@@ -24,6 +24,7 @@ import BaseEmptyState from '../components/BaseEmptyState.vue'
 import BaseTextarea from '../components/BaseTextarea.vue'
 import BaseProgress from '../components/BaseProgress.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
+import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import { checkContrast, normalizeHex } from '@shared/domain/color'
 import {
   AI_MODELS,
@@ -754,6 +755,8 @@ async function confirmDeleteSkill(): Promise<void> {
           </li>
         </ul>
       </BaseCard>
+
+      <KnowledgeBasePanel />
     </section>
 
     <!-- Sobre o sistema -->

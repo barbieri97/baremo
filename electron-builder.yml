@@ -9,11 +9,20 @@ directories:
 files:
   - out/**/*
   - package.json
+  # O transformers.js já traz o onnxruntime-web embutido no próprio bundle; no
+  # Node ele usa o onnxruntime-node. O pacote solto só somaria ~140 MB.
+  - '!**/node_modules/onnxruntime-web/**'
 
 # better-sqlite3 é módulo nativo: o `.node` precisa ficar FORA do asar, senão o
 # carregador nativo não consegue abri-lo em runtime.
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
+  # Base de referências (RAG local): extensão do SQLite (carregada por dlopen) e
+  # os binários do onnxruntime e do sharp, que o transformers.js importa.
+  - '**/node_modules/sqlite-vec*/**'
+  - '**/node_modules/onnxruntime-node/**'
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
 
 # O better-sqlite3 13 é Node-API: os prebuilds que vêm do npm não têm sufixo de
 # ABI (`win32-x64.node`) e o mesmo binário serve o Node e o Electron. Recompilar
@@ -33,6 +42,11 @@ nsis:
   runAfterFinish: false
 
 win:
+  # O onnxruntime-node traz binários de todas as plataformas (~290 MB). Cada
+  # instalador leva só os seus.
+  files:
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/{darwin,linux}/**'
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/win32/arm64/**'
   target:
     - target: nsis
       arch: [x64]
@@ -43,6 +57,8 @@ win:
   signAndEditExecutable: true
 
 mac:
+  files:
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/{win32,linux}/**'
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -55,6 +71,9 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
 
 linux:
+  files:
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/{win32,darwin}/**'
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/linux/arm64/**'
   # Apenas AppImage: arquivo único, executa sem instalação e sem root. O alvo
   # `.deb` exige um mantenedor identificado com e-mail, gravado em cada pacote
   # distribuído — identidade que este projeto ainda não tem. Acrescentar o .deb

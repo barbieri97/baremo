@@ -258,6 +258,31 @@ test('cria, edita, desativa e exclui uma skill do assistente', async () => {
   await page.getByRole('tab', { name: 'Perfil profissional' }).click()
 })
 
+test('a base de referências abre com a extensão vetorial carregada', async () => {
+  // Prova, no Electron de verdade, que a sqlite-vec carregou no banco separado
+  // (sem ela, o painel mostra o motivo e desabilita a importação). A indexação
+  // real exige baixar o modelo; ela fica em `knowledge.spec.ts`, opt-in.
+  const rejected = join(userDataDir, 'planilha.txt')
+  writeFileSync(rejected, Buffer.from([0, 1, 2, 3]))
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] })
+  }, rejected)
+
+  await page.getByRole('link', { name: /Configurações/ }).click()
+  await page.getByRole('tab', { name: 'Assistente de IA' }).click()
+
+  const card = page.getByTestId('knowledge-card')
+  await expect(card.getByText('Nenhum documento de referência')).toBeVisible()
+  await expect(card.getByText(/busca vetorial não pôde ser carregada/)).toHaveCount(0)
+
+  await card.getByRole('button', { name: 'Importar documentos' }).click()
+  await expect(page.getByText(/planilha\.txt: Tipo não aceito/)).toBeVisible()
+  await expect(card.getByText('Nenhum documento de referência')).toBeVisible()
+
+  expect(existsSync(join(userDataDir, 'referencias.db'))).toBe(true)
+  await page.getByRole('tab', { name: 'Perfil profissional' }).click()
+})
+
 test('exporta o catálogo, e o arquivo não leva dado de paciente', async () => {
   const target = join(userDataDir, 'catalogo.json')
   await app.evaluate(async ({ dialog }, filePath) => {

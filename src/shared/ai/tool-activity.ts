@@ -27,7 +27,8 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   registrar_resultados: 'Registrando resultados',
   listar_skills: 'Listando skills',
   ler_skill: 'Lendo skill',
-  criar_skill: 'Criando skill'
+  criar_skill: 'Criando skill',
+  buscar_referencias: 'Consultando a base de referências'
 }
 
 export function toolLabel(toolName: string): string {

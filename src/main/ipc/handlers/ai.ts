@@ -31,6 +31,7 @@ import {
   SkillNameTakenError,
   SkillNotFoundError
 } from '../../repositories/ai-skills'
+import { knowledgeDatabase, knowledgeEmbedder } from './knowledge'
 import { AI_STREAM_CHANNEL } from '@shared/contracts'
 import { AI_MODELS } from '@shared/contracts/entities-ai'
 import type { AiModel, AiSession, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
@@ -320,10 +321,12 @@ function currentConfig(): ReturnType<typeof getAiConfig> {
 
 function getOrchestrator(): AgentOrchestrator {
   if (orchestrator === null) {
-    orchestrator = new AgentOrchestrator(getDatabase(), emitToRenderer, {
-      prepare: prepareWriteTool,
-      apply: applyWriteTool
-    })
+    orchestrator = new AgentOrchestrator(
+      getDatabase(),
+      emitToRenderer,
+      { prepare: prepareWriteTool, apply: applyWriteTool },
+      { embedder: knowledgeEmbedder(), database: knowledgeDatabase }
+    )
   }
   return orchestrator
 }
