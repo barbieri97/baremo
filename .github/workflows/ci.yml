@@ -10,6 +10,11 @@ on:
 # e as tools contra um banco local.
 env:
   CI: 'true'
+  # O postinstall do onnxruntime-node baixa, no Linux x64, os binários de GPU
+  # (CUDA 12 e TensorRT, centenas de MB). O app roda o modelo de busca só na
+  # CPU, cujo binário já vem no pacote; sem isto, o AppImage da v0.16.0 saiu
+  # com 427 MB em vez de ~190 MB.
+  ONNXRUNTIME_NODE_INSTALL: skip
 
 jobs:
   verificacao:
@@ -26,6 +31,14 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Baixar o binário do Electron
+        # Desde o Electron 44, o `npm ci` não baixa mais o binário: o download
+        # acontece no primeiro `require('electron')`. Nos testes, vários workers
+        # do vitest fazem esse require ao mesmo tempo e os downloads colidem no
+        # mesmo diretório (`File exists`), o que derrubou a release v0.16.0 no
+        # Linux e no macOS. Baixar uma vez, aqui, elimina a corrida.
+        run: node node_modules/electron/install.js
 
       - name: ESLint
         # Inclui a regra que impede o módulo de IA de importar os repositórios
@@ -76,6 +89,14 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Baixar o binário do Electron
+        # Desde o Electron 44, o `npm ci` não baixa mais o binário: o download
+        # acontece no primeiro `require('electron')`. Nos testes, vários workers
+        # do vitest fazem esse require ao mesmo tempo e os downloads colidem no
+        # mesmo diretório (`File exists`), o que derrubou a release v0.16.0 no
+        # Linux e no macOS. Baixar uma vez, aqui, elimina a corrida.
+        run: node node_modules/electron/install.js
 
       - name: Verificação de tipos
         run: npm run typecheck

@@ -74,6 +74,9 @@ linux:
   files:
     - '!**/node_modules/onnxruntime-node/bin/napi-v*/{win32,darwin}/**'
     - '!**/node_modules/onnxruntime-node/bin/napi-v*/linux/arm64/**'
+    # Binários de GPU que o postinstall baixa no Linux x64 (o CI já pula esse
+    # download com ONNXRUNTIME_NODE_INSTALL=skip). O app usa só a CPU.
+    - '!**/node_modules/onnxruntime-node/bin/napi-v*/linux/x64/libonnxruntime_providers_{cuda,tensorrt}.so'
   # Apenas AppImage: arquivo único, executa sem instalação e sem root. O alvo
   # `.deb` exige um mantenedor identificado com e-mail, gravado em cada pacote
   # distribuído — identidade que este projeto ainda não tem. Acrescentar o .deb
