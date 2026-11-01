@@ -7,17 +7,45 @@ on:
 permissions:
   contents: write
 
+env:
+  # O postinstall do onnxruntime-node baixa, no Linux x64, os binários de GPU
+  # (CUDA 12 e TensorRT, centenas de MB). O app roda o modelo de busca só na
+  # CPU, cujo binário já vem no pacote; sem isto, o AppImage da v0.16.0 saiu
+  # com 427 MB em vez de ~190 MB.
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
+  criar-release:
+    name: Criar o release
+    runs-on: ubuntu-latest
+    # O release é criado UMA vez, antes dos jobs de empacotamento. Deixar a
+    # criação para o electron-builder não basta: no Windows ele publica o
+    # instalador e o blockmap em paralelo, e os dois uploads criaram cada um o
+    # seu release na v0.16.0, com os arquivos divididos entre eles. Com o
+    # release já existente, todo job só anexa arquivos.
+    steps:
+      - name: Criar o release da tag, se ainda não existir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG já existe."
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "${TAG#v}" --notes ""
+          fi
+
   release:
     name: Empacotar e publicar (${{ matrix.os }})
+    needs: criar-release
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
-      # Os três jobs rodam `--publish always` contra a mesma tag. Em paralelo,
-      # cada um tenta criar o release e o GitHub aceita duplicatas: a v0.2.0
-      # saiu com dois releases e os artefatos divididos entre eles. Serializado,
-      # o primeiro job cria o release e os demais só anexam seus arquivos.
+      # Os três jobs rodam `--publish always` contra a mesma tag, e o GitHub
+      # aceita releases duplicados (a v0.2.0 saiu com dois). O release agora
+      # nasce em `criar-release`; a serialização fica como segunda barreira,
+      # para que dois jobs nunca disputem o mesmo release ao mesmo tempo.
       max-parallel: 1
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -32,6 +60,14 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Baixar o binário do Electron
+        # Desde o Electron 44, o `npm ci` não baixa mais o binário: o download
+        # acontece no primeiro `require('electron')`. Nos testes, vários workers
+        # do vitest fazem esse require ao mesmo tempo e os downloads colidem no
+        # mesmo diretório (`File exists`), o que derrubou a release v0.16.0 no
+        # Linux e no macOS. Baixar uma vez, aqui, elimina a corrida.
+        run: node node_modules/electron/install.js
 
       - name: Verificação de tipos
         run: npm run typecheck
