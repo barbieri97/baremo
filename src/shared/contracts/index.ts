@@ -51,6 +51,11 @@ import {
   aiToolCallSchema,
   aiSessionSchema
 } from './entities-ai'
+import {
+  knowledgeDocumentSchema,
+  knowledgeImportResultSchema,
+  knowledgeOverviewSchema
+} from './entities-knowledge'
 import { catalogImportPlanSchema } from './catalog'
 import { updateStatusSchema } from './updates'
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES, REPORT_KINDS } from '../labels'
@@ -619,7 +624,18 @@ export const contracts = {
   /** Cria (sem `id`) ou atualiza (com `id`). Nome duplicado volta como `conflict`. */
   'ai:saveSkill': channel(aiSkillInputSchema.extend({ id: idSchema.optional() }), aiSkillSchema),
   'ai:deleteSkill': channel(z.object({ id: idSchema }), ok),
-  'ai:setSkillEnabled': channel(z.object({ id: idSchema, enabled: z.boolean() }), aiSkillSchema)
+  'ai:setSkillEnabled': channel(z.object({ id: idSchema, enabled: z.boolean() }), aiSkillSchema),
+
+  // Base de referências do assistente (RAG local). Global, sem paciente; o
+  // arquivo é escolhido pelo diálogo nativo, então nenhum caminho trafega aqui.
+  'knowledge:overview': channel(empty, knowledgeOverviewSchema),
+  'knowledge:pickAndImport': channel(empty, knowledgeImportResultSchema),
+  'knowledge:rename': channel(
+    z.object({ id: idSchema, title: z.string().trim().min(1).max(200) }),
+    knowledgeDocumentSchema
+  ),
+  'knowledge:reindex': channel(z.object({ id: idSchema }), knowledgeDocumentSchema),
+  'knowledge:delete': channel(z.object({ id: idSchema }), ok)
 } as const satisfies Record<string, ChannelContract>
 
 export type Contracts = typeof contracts

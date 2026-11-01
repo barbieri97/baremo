@@ -7,8 +7,8 @@
  *  - uma escrita recusada fica registrada como `rejected`, não como sucesso.
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -18,7 +18,11 @@ import type { Content } from '@google/genai'
 
 const responses: unknown[] = []
 /** O que o orquestrador mandou ao modelo em cada chamada. */
-const requests: { contents: Content[]; config: { systemInstruction: string } }[] = []
+const requests: {
+  contents: Content[]
+  config: { systemInstruction: string }
+  toolNames: string[]
+}[] = []
 
 vi.mock('../../src/main/ai/key-store', () => ({ loadKey: () => 'chave-de-teste' }))
 
@@ -28,12 +32,21 @@ vi.mock('@google/genai', async (importOriginal) => {
     ...original,
     GoogleGenAI: class {
       models = {
-        generateContent: async (request: (typeof requests)[number]): Promise<unknown> => {
+        generateContent: async (request: {
+          contents: Content[]
+          config: {
+            systemInstruction: string
+            tools?: { functionDeclarations?: { name?: string }[] }[]
+          }
+        }): Promise<unknown> => {
           // Cópia profunda: o orquestrador continua mexendo em `contents` depois.
           requests.push(
             structuredClone({
               contents: request.contents,
-              config: { systemInstruction: request.config.systemInstruction }
+              config: { systemInstruction: request.config.systemInstruction },
+              toolNames: (request.config.tools?.[0]?.functionDeclarations ?? []).map(
+                (declaration) => declaration.name ?? ''
+              )
             })
           )
           const next = responses.shift()
@@ -55,6 +68,10 @@ const { applySkillCreation, previewSkillCreation } =
   await import('../../src/main/services/ai-skill-write')
 const { getAiConfig, updateAiConfig } = await import('../../src/main/repositories/ai-config')
 const { AgentOrchestrator, parseSkillCommand } = await import('../../src/main/ai/orchestrator')
+const { KnowledgeIndexer } = await import('../../src/main/services/knowledge/ingest')
+const { listKnowledgeDocuments } = await import('../../src/main/repositories/knowledge')
+const { openKnowledgeDatabase } = await import('../../src/main/db/gateway')
+const { FakeEmbedder } = await import('../fixtures/fake-embedder')
 
 type Handle = ReturnType<typeof openDatabase>
 type StreamEvent = Parameters<ConstructorParameters<typeof AgentOrchestrator>[1]>[0]
@@ -424,5 +441,135 @@ describe('AgentOrchestrator — skills', () => {
     expect(events.some((event) => event.kind === 'confirmation_required')).toBe(false)
     expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ ok: false })
     expect(listSkills(handle)).toHaveLength(0)
+  })
+})
+
+describe('AgentOrchestrator — base de referências', () => {
+  const writes: ConstructorParameters<typeof AgentOrchestrator>[2] = {
+    prepare: () => ({ description: '', blockDiff: null }),
+    apply: async () => ''
+  }
+
+  let knowledge: ReturnType<typeof openKnowledgeDatabase>
+
+  beforeAll(() => {
+    knowledge = openKnowledgeDatabase(join(directory, 'referencias.db'))
+  })
+
+  afterAll(() => knowledge.close())
+
+  const base = (embedder: InstanceType<typeof FakeEmbedder>) => ({
+    embedder,
+    database: () => knowledge
+  })
+
+  async function withDocument(embedder: InstanceType<typeof FakeEmbedder>): Promise<void> {
+    const indexer = new KnowledgeIndexer(() => knowledge, embedder, () => join(directory, 'refs'))
+    const path = join(directory, 'Manual_WISC.txt')
+    writeFileSync(
+      path,
+      'O subteste Dígitos é interrompido após dois erros consecutivos no mesmo item.'
+    )
+    await indexer.importFiles([path])
+    await indexer.idle()
+  }
+
+  afterEach(async () => {
+    const indexer = new KnowledgeIndexer(
+      () => knowledge,
+      new FakeEmbedder(),
+      () => join(directory, 'refs')
+    )
+    for (const document of listKnowledgeDocuments(knowledge)) await indexer.remove(document.id)
+  })
+
+  it('sem documento pronto, não oferece a tool nem a seção do prompt', async () => {
+    responses.push(textResponse('Ok.'))
+    await new AgentOrchestrator(handle, () => {}, writes, base(new FakeEmbedder())).send({
+      sessionId,
+      text: 'Oi',
+      requestId: 'k1'
+    })
+
+    expect(requests[0]!.toolNames).not.toContain('buscar_referencias')
+    expect(requests[0]!.config.systemInstruction).not.toContain('## Base de referências')
+  })
+
+  it('com documento pronto, manda dar preferência à base para confirmar informações', async () => {
+    const embedder = new FakeEmbedder()
+    await withDocument(embedder)
+
+    responses.push(textResponse('Ok.'))
+    await new AgentOrchestrator(handle, () => {}, writes, base(embedder)).send({
+      sessionId,
+      text: 'Oi',
+      requestId: 'k2'
+    })
+
+    const instruction = requests[0]!.config.systemInstruction
+    expect(requests[0]!.toolNames).toContain('buscar_referencias')
+    expect(instruction).toContain('## Base de referências')
+    expect(instruction).toContain('1 documento(s)')
+    expect(instruction).toContain('Dê preferência ao que a base de referências retornar')
+    expect(instruction).toContain('[Título, p. X]')
+    expect(instruction).toContain('não confirmou a informação')
+  })
+
+  it('buscar_referencias vetoriza a pergunta como query e devolve os trechos no envelope próprio', async () => {
+    const embedder = new FakeEmbedder()
+    await withDocument(embedder)
+    const events: StreamEvent[] = []
+
+    responses.push(
+      callResponse('buscar_referencias', { consulta: 'quando interromper o subteste Dígitos' }),
+      textResponse('Após dois erros consecutivos [Manual WISC].')
+    )
+    await new AgentOrchestrator(handle, (event) => events.push(event), writes, base(embedder)).send({
+      sessionId,
+      text: 'Quando interrompo Dígitos?',
+      requestId: 'k3'
+    })
+
+    const sent = functionResponseText(requests[1]!)
+    expect(sent).toContain('<referencias_tecnicas>')
+    expect(sent).toContain('Manual WISC')
+    expect(sent).toContain('dois erros consecutivos')
+    expect(sent).not.toContain('dados_do_prontuario')
+    expect(embedder.calls.at(-1)).toMatchObject({ kind: 'query' })
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({
+      ok: true,
+      summary: '1 trecho(s) encontrado(s) em 1 documento(s).'
+    })
+  })
+
+  it('base indisponível (extensão não carregou) só desliga a busca; o turno segue', async () => {
+    const events: StreamEvent[] = []
+    responses.push(textResponse('Ok.'))
+    await new AgentOrchestrator(handle, (event) => events.push(event), writes, {
+      embedder: new FakeEmbedder(),
+      database: () => null
+    }).send({ sessionId, text: 'Oi', requestId: 'k5' })
+
+    expect(requests[0]!.toolNames).not.toContain('buscar_referencias')
+    expect(events.at(-1)?.kind).toBe('done')
+  })
+
+  it('busca sem resultado orienta o modelo a dizer que a base não confirmou', async () => {
+    const embedder = new FakeEmbedder()
+    await withDocument(embedder)
+
+    responses.push(
+      callResponse('buscar_referencias', { consulta: 'zzz' }),
+      textResponse('A base não confirmou.')
+    )
+    await new AgentOrchestrator(handle, () => {}, writes, base(embedder)).send({
+      sessionId,
+      text: 'Pergunta sem resposta na base',
+      requestId: 'k4'
+    })
+
+    const sent = functionResponseText(requests[1]!)
+    expect(sent).toContain('Nenhum trecho relevante')
+    expect(sent).toContain('não confirmou')
   })
 })

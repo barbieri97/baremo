@@ -37,6 +37,30 @@ export function blobPath(sha256: string, extension: string): string {
   return join(attachmentsDir(), prefix, `${sha256}${suffix}`)
 }
 
+/**
+ * Originais da base de referências do assistente.
+ *
+ * Fica separado de `arquivos/` de propósito: lá, a manutenção trata como órfão
+ * todo blob sem linha em `attachments`, e a exclusão de um anexo apaga o blob.
+ * Um mesmo PDF pode ser anexo de um paciente e referência ao mesmo tempo.
+ */
+export function referencesDir(): string {
+  return ensureDir(join(userDataDir(), 'referencias'))
+}
+
+/**
+ * Banco da base de referências — separado do `baremo.db` para que o prontuário
+ * nunca dependa da extensão vetorial (ver `db/knowledge-schema.ts`).
+ */
+export function knowledgeDatabasePath(): string {
+  return join(userDataDir(), 'referencias.db')
+}
+
+/** Cache do modelo de embeddings local, baixado uma única vez. */
+export function modelsDir(): string {
+  return ensureDir(join(userDataDir(), 'modelos'))
+}
+
 export function aiKeyPath(): string {
   return join(userDataDir(), 'gemini-key.enc')
 }

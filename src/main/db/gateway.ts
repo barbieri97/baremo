@@ -11,9 +11,12 @@
  */
 
 import Database from 'better-sqlite3'
+import { getLoadablePath } from 'sqlite-vec'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as schema from './schema'
+import * as knowledgeSchema from './knowledge-schema'
+import { KNOWLEDGE_MIGRATIONS } from './knowledge-schema'
 
 export type DrizzleDb = BetterSQLite3Database<typeof schema>
 
@@ -45,6 +48,18 @@ export interface OpenOptions {
  * silenciosamente quando ele está desligado, e o padrão é desligado.
  */
 export function openDatabase(path: string, options: OpenOptions = {}): BaremoDatabase {
+  const raw = openConnection(path, options)
+  const db = drizzle(raw, { schema })
+
+  return {
+    db,
+    raw,
+    path,
+    close: () => raw.close()
+  }
+}
+
+function openConnection(path: string, options: OpenOptions): Database.Database {
   const raw = new Database(path, { readonly: options.readonly ?? false })
 
   if (!options.readonly) {
@@ -54,15 +69,70 @@ export function openDatabase(path: string, options: OpenOptions = {}): BaremoDat
   raw.pragma('foreign_keys = ON')
   // Sem isto, uma segunda janela (a de impressão) esbarra em SQLITE_BUSY.
   raw.pragma('busy_timeout = 5000')
+  return raw
+}
 
-  const db = drizzle(raw, { schema })
+// ─── Banco da base de referências ────────────────────────────────────────────
+
+export type KnowledgeDrizzleDb = BetterSQLite3Database<typeof knowledgeSchema>
+
+/**
+ * Banco da base de referências do assistente (`referencias.db`).
+ *
+ * Fica num arquivo separado do prontuário porque depende da extensão nativa
+ * `sqlite-vec`: o `baremo.db` nunca a carrega, então uma extensão ausente ou
+ * quebrada numa máquina desliga só a busca, e o app abre normalmente.
+ */
+export interface KnowledgeDatabase {
+  readonly db: KnowledgeDrizzleDb
+  readonly raw: Database.Database
+  readonly path: string
+  close(): void
+}
+
+/**
+ * Abre o banco de referências, carrega a `sqlite-vec` e aplica as migrations.
+ * Lança se a extensão não carregar; quem chama decide como desligar o recurso.
+ */
+export function openKnowledgeDatabase(path: string): KnowledgeDatabase {
+  const raw = openConnection(path, {})
+
+  try {
+    raw.loadExtension(vectorExtensionPath())
+
+    const [row] = raw.pragma('user_version') as [{ user_version: number }]
+    const pending = KNOWLEDGE_MIGRATIONS.filter((m) => m.version > row.user_version).sort(
+      (a, b) => a.version - b.version
+    )
+    for (const migration of pending) {
+      raw.transaction(() => {
+        for (const statement of migration.statements) raw.exec(statement)
+        raw.pragma(`user_version = ${Number(migration.version)}`)
+      })()
+    }
+  } catch (error) {
+    raw.close()
+    throw error
+  }
 
   return {
-    db,
+    db: drizzle(raw, { schema: knowledgeSchema }),
     raw,
     path,
     close: () => raw.close()
   }
+}
+
+/**
+ * Caminho do binário do `sqlite-vec`.
+ *
+ * No app empacotado, o pacote fica dentro de `app.asar`, mas o binário nativo
+ * vai para `app.asar.unpacked` (ver `asarUnpack` no electron-builder.yml): o
+ * `dlopen` do SQLite não lê de dentro do asar. A troca é só de texto, então
+ * este módulo continua sem importar `electron`.
+ */
+function vectorExtensionPath(): string {
+  return getLoadablePath().replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
 }
 
 export function readSchemaVersion(handle: BaremoDatabase): number {
