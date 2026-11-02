@@ -178,6 +178,23 @@ export type AiSkill = z.infer<typeof aiSkillSchema>
  * a mostra. Calculada no processo principal, com as mesmas validações e a mesma
  * classificação do formulário — o renderer só devolve os índices aceitos.
  */
+/**
+ * Proposta das tools de catálogo (`criar_instrumento`, `excluir_funcao_cognitiva`
+ * etc.). O catálogo vale para todos os pacientes, então o diálogo mostra cada
+ * campo — e, na exclusão, tudo o que cai junto.
+ */
+export const aiCatalogPreviewSchema = z.object({
+  action: z.enum(['create', 'update', 'delete']),
+  entity: z.enum(['instrument', 'cognitive_function']),
+  label: z.string(),
+  /** Criação: `before` nulo. Edição: só os campos que mudam. Exclusão: vazio. */
+  fields: z.array(
+    z.object({ field: z.string(), before: z.string().nullable(), after: z.string().nullable() })
+  ),
+  impact: z.array(z.object({ entity: z.string(), count: z.number().int() }))
+})
+export type AiCatalogPreview = z.infer<typeof aiCatalogPreviewSchema>
+
 export const aiResultImportRowSchema = z.object({
   index: z.number().int(),
   instrumentId: z.string().nullable(),
@@ -252,7 +269,9 @@ export const aiStreamEventSchema = z.discriminatedUnion('kind', [
      */
     skillPreview: z
       .object({ name: z.string(), description: z.string(), content: z.string() })
-      .nullable()
+      .nullable(),
+    /** Proposta das tools de catálogo; `null` nas demais. */
+    catalogPreview: aiCatalogPreviewSchema.nullable()
   }),
   z.object({
     kind: z.literal('done'),

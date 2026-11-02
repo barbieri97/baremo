@@ -23,6 +23,8 @@ import { createAiDraft, getDocument, saveContent } from '../../repositories/docu
 import { nowIso } from '../../repositories/helpers'
 import { applyResultImport, previewResultImport } from '../../services/ai-result-import'
 import { applySkillCreation, previewSkillCreation } from '../../services/ai-skill-write'
+import { applyCatalogWrite, previewCatalogWrite } from '../../services/ai-catalog-write'
+import { isCatalogTool } from '../../ai/tools'
 import {
   deleteSkill,
   listSkills,
@@ -125,10 +127,16 @@ export function registerAiHandlers(): void {
       const raw = error instanceof Error ? error.message : String(error)
 
       if (/\b401\b|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(raw)) {
-        return { ok: false, message: 'A chave foi recusada pelo provedor. Verifique se copiou corretamente.' }
+        return {
+          ok: false,
+          message: 'A chave foi recusada pelo provedor. Verifique se copiou corretamente.'
+        }
       }
       if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|fetch failed/i.test(raw)) {
-        return { ok: false, message: 'Sem conexão com o provedor. Verifique a rede e tente de novo.' }
+        return {
+          ok: false,
+          message: 'Sem conexão com o provedor. Verifique a rede e tente de novo.'
+        }
       }
       return { ok: false, message: `Não foi possível validar a chave: ${raw}` }
     }
@@ -182,7 +190,13 @@ export function registerAiHandlers(): void {
          DO UPDATE SET granted_at = excluded.granted_at,
                        consent_text_version = excluded.consent_text_version`
       )
-      .run(randomUUID(), scope, scope === 'module' ? null : patientId, nowIso(), CONSENT_TEXT_VERSION)
+      .run(
+        randomUUID(),
+        scope,
+        scope === 'module' ? null : patientId,
+        nowIso(),
+        CONSENT_TEXT_VERSION
+      )
 
     return { ok: true as const }
   })
@@ -404,6 +418,17 @@ function prepareWriteTool(
     return { description: preview.description, blockDiff: null, skillPreview: preview.skill }
   }
 
+  if (isCatalogTool(toolName)) {
+    // Catálogo é global: proposta inviável (ID inventado, ciclo, exclusão
+    // barrada por resultados) lança aqui e volta ao modelo sem abrir diálogo.
+    const preview = previewCatalogWrite(getDatabase(), toolName, args)
+    return {
+      description: preview.description,
+      blockDiff: null,
+      catalogPreview: preview.catalogPreview
+    }
+  }
+
   return { description: 'Gravação solicitada pelo assistente.', blockDiff: null }
 }
 
@@ -437,9 +462,7 @@ async function applyWriteTool(
     const document = createAiDraft(handle, {
       patientId,
       assessmentId,
-      type: (DOCUMENT_TYPES as readonly string[]).includes(type)
-        ? (type as DocumentType)
-        : 'other',
+      type: (DOCUMENT_TYPES as readonly string[]).includes(type) ? (type as DocumentType) : 'other',
       title,
       content: contentToTiptap(args['conteudo'])
     })
@@ -462,9 +485,7 @@ async function applyWriteTool(
     // documento a partir do que foi aceito — o rejeitado volta ao estado atual.
     const changes = diffBlocks(document.contentJson, proposed)
     const content =
-      acceptedBlocks === null
-        ? proposed
-        : applyAcceptedChanges(changes, acceptedBlocks)
+      acceptedBlocks === null ? proposed : applyAcceptedChanges(changes, acceptedBlocks)
 
     saveContent(handle, documentId, content)
 
@@ -480,6 +501,11 @@ async function applyWriteTool(
   if (toolName === 'criar_skill') {
     // Skill é global: o `patientId` não entra, e a origem fica marcada (§10.7).
     return applySkillCreation(handle, args)
+  }
+
+  if (isCatalogTool(toolName)) {
+    // Catálogo é global: o `patientId` não entra; a auditoria marca a origem.
+    return applyCatalogWrite(handle, toolName, args)
   }
 
   throw new Error(`Ferramenta de escrita desconhecida: ${toolName}.`)

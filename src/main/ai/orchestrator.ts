@@ -44,7 +44,11 @@ import type { Embedder } from '../services/knowledge/embedder'
 import { markdownToTiptap } from './markdown'
 import { resolveBlobPath } from '../services/attachments/storage'
 import { describeRateLimit, parseRateLimit } from './rate-limit'
-import type { AiResultImportRow, AiStreamEvent } from '@shared/contracts/entities-ai'
+import type {
+  AiCatalogPreview,
+  AiResultImportRow,
+  AiStreamEvent
+} from '@shared/contracts/entities-ai'
 import { nowIso } from '../repositories/helpers'
 
 /** Acima disto, o arquivo iria pela Files API; hoje o app recusa e explica. */
@@ -86,6 +90,8 @@ export interface WritePreview {
   readonly resultPreview?: AiResultImportRow[] | null
   /** Skill proposta por `criar_skill`, com o conteúdo completo; `null` nas demais. */
   readonly skillPreview?: { name: string; description: string; content: string } | null
+  /** Proposta das tools de catálogo (instrumentos e funções); `null` nas demais. */
+  readonly catalogPreview?: AiCatalogPreview | null
 }
 
 export interface BlockDiffEntry {
@@ -108,11 +114,7 @@ export class AgentOrchestrator {
     private readonly emit: StreamEmitter,
     private readonly writes: {
       /** Monta a descrição e, quando cabe, o diff por bloco (§10.6). */
-      prepare: (
-        patientId: string,
-        toolName: string,
-        args: Record<string, unknown>
-      ) => WritePreview
+      prepare: (patientId: string, toolName: string, args: Record<string, unknown>) => WritePreview
       /** Executa a gravação DEPOIS da confirmação, só com os blocos aceitos. */
       apply: (
         patientId: string,
@@ -156,11 +158,7 @@ export class AgentOrchestrator {
     return false
   }
 
-  async send(input: {
-    sessionId: string
-    text: string
-    requestId: string
-  }): Promise<void> {
+  async send(input: { sessionId: string; text: string; requestId: string }): Promise<void> {
     const { sessionId, text, requestId } = input
 
     const session = this.handle.db
@@ -497,6 +495,8 @@ export class AgentOrchestrator {
         return repository.listUsedInstruments()
       case 'buscar_instrumentos':
         return repository.searchInstruments(optional('termo'))
+      case 'listar_funcoes_cognitivas':
+        return repository.listCognitiveFunctions()
       // Skills não dependem do paciente: leem a tabela global, nunca o repositório
       // com escopo de `patientId`.
       case 'listar_skills':
@@ -603,7 +603,8 @@ export class AgentOrchestrator {
         argumentsJson: JSON.stringify(args),
         blockDiff: preview.blockDiff,
         resultPreview: preview.resultPreview ?? null,
-        skillPreview: preview.skillPreview ?? null
+        skillPreview: preview.skillPreview ?? null,
+        catalogPreview: preview.catalogPreview ?? null
       })
     })
 

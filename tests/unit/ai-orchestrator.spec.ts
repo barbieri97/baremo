@@ -66,6 +66,10 @@ const { listSkills, saveSkill, setSkillEnabled } =
   await import('../../src/main/repositories/ai-skills')
 const { applySkillCreation, previewSkillCreation } =
   await import('../../src/main/services/ai-skill-write')
+const { applyCatalogWrite, previewCatalogWrite } =
+  await import('../../src/main/services/ai-catalog-write')
+const { isCatalogTool } = await import('../../src/main/ai/tools')
+const { cognitiveFunctions, instruments } = await import('../../src/main/db/schema')
 const { getAiConfig, updateAiConfig } = await import('../../src/main/repositories/ai-config')
 const { AgentOrchestrator, parseSkillCommand } = await import('../../src/main/ai/orchestrator')
 const { KnowledgeIndexer } = await import('../../src/main/services/knowledge/ingest')
@@ -166,11 +170,7 @@ describe('AgentOrchestrator — histórico de tools', () => {
     expect(end).toMatchObject({ callId, ok: true, rejected: false })
     expect(events.at(-1)?.kind).toBe('done')
 
-    const userMessage = handle.db
-      .select()
-      .from(aiMessages)
-      .where(eq(aiMessages.role, 'user'))
-      .get()
+    const userMessage = handle.db.select().from(aiMessages).where(eq(aiMessages.role, 'user')).get()
     const recorded = handle.db.select().from(aiToolCalls).all()
 
     expect(recorded).toHaveLength(1)
@@ -444,6 +444,90 @@ describe('AgentOrchestrator — skills', () => {
   })
 })
 
+/** prepare/apply reais das tools de catálogo, como os handlers de IPC os montam. */
+const catalogWrites: ConstructorParameters<typeof AgentOrchestrator>[2] = {
+  prepare: (_patientId, toolName, args) => {
+    if (!isCatalogTool(toolName)) throw new Error(`tool inesperada: ${toolName}`)
+    const preview = previewCatalogWrite(handle, toolName, args)
+    return {
+      description: preview.description,
+      blockDiff: null,
+      catalogPreview: preview.catalogPreview
+    }
+  },
+  apply: async (_patientId, toolName, args) => {
+    if (!isCatalogTool(toolName)) throw new Error(`tool inesperada: ${toolName}`)
+    return applyCatalogWrite(handle, toolName, args)
+  }
+}
+
+describe('AgentOrchestrator — catálogo', () => {
+  const functionId = randomUUID()
+
+  beforeEach(() => {
+    handle.db.delete(instruments).run()
+    handle.db.delete(cognitiveFunctions).run()
+    handle.db
+      .insert(cognitiveFunctions)
+      .values({ id: functionId, parentId: null, name: 'Memória', description: null, order: 0 })
+      .run()
+  })
+
+  it('criar_instrumento não grava nada sem confirmação', async () => {
+    const events: StreamEvent[] = []
+
+    responses.push(
+      callResponse('criar_instrumento', { nome: 'RAVLT', funcaoCognitivaId: functionId }),
+      textResponse('Entendido.')
+    )
+    await orchestratorWith(events, false, catalogWrites).send({
+      sessionId,
+      text: 'Cadastre o RAVLT',
+      requestId: 'c1'
+    })
+
+    expect(events.find((event) => event.kind === 'confirmation_required')).toMatchObject({
+      catalogPreview: { action: 'create', entity: 'instrument', label: 'RAVLT' }
+    })
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ rejected: true })
+    expect(handle.db.select().from(instruments).all()).toHaveLength(0)
+  })
+
+  it('excluir_funcao_cognitiva aprovada exclui', async () => {
+    responses.push(
+      callResponse('excluir_funcao_cognitiva', {
+        funcaoId: functionId,
+        justificativa: 'Duplicada.'
+      }),
+      textResponse('Excluída.')
+    )
+    await orchestratorWith([], true, catalogWrites).send({
+      sessionId,
+      text: 'Exclua a função Memória',
+      requestId: 'c2'
+    })
+
+    expect(handle.db.select().from(cognitiveFunctions).all()).toHaveLength(0)
+  })
+
+  it('ID inventado volta ao modelo como erro, sem abrir diálogo', async () => {
+    const events: StreamEvent[] = []
+
+    responses.push(
+      callResponse('excluir_instrumento', { instrumentoId: 'ravlt', justificativa: 'x' }),
+      textResponse('Ok.')
+    )
+    await orchestratorWith(events, true, catalogWrites).send({
+      sessionId,
+      text: 'Exclua o RAVLT',
+      requestId: 'c3'
+    })
+
+    expect(events.some((event) => event.kind === 'confirmation_required')).toBe(false)
+    expect(events.find((event) => event.kind === 'tool_end')).toMatchObject({ ok: false })
+  })
+})
+
 describe('AgentOrchestrator — base de referências', () => {
   const writes: ConstructorParameters<typeof AgentOrchestrator>[2] = {
     prepare: () => ({ description: '', blockDiff: null }),
@@ -464,7 +548,11 @@ describe('AgentOrchestrator — base de referências', () => {
   })
 
   async function withDocument(embedder: InstanceType<typeof FakeEmbedder>): Promise<void> {
-    const indexer = new KnowledgeIndexer(() => knowledge, embedder, () => join(directory, 'refs'))
+    const indexer = new KnowledgeIndexer(
+      () => knowledge,
+      embedder,
+      () => join(directory, 'refs')
+    )
     const path = join(directory, 'Manual_WISC.txt')
     writeFileSync(
       path,
@@ -524,11 +612,13 @@ describe('AgentOrchestrator — base de referências', () => {
       callResponse('buscar_referencias', { consulta: 'quando interromper o subteste Dígitos' }),
       textResponse('Após dois erros consecutivos [Manual WISC].')
     )
-    await new AgentOrchestrator(handle, (event) => events.push(event), writes, base(embedder)).send({
-      sessionId,
-      text: 'Quando interrompo Dígitos?',
-      requestId: 'k3'
-    })
+    await new AgentOrchestrator(handle, (event) => events.push(event), writes, base(embedder)).send(
+      {
+        sessionId,
+        text: 'Quando interrompo Dígitos?',
+        requestId: 'k3'
+      }
+    )
 
     const sent = functionResponseText(requests[1]!)
     expect(sent).toContain('<referencias_tecnicas>')

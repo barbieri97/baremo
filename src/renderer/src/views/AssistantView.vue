@@ -13,6 +13,7 @@ import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, onAiStream } from '../api'
 import { useAppStore } from '../stores/app'
+import { useCatalogStore } from '../stores/catalog'
 import BaseButton from '../components/BaseButton.vue'
 import BaseDialog from '../components/BaseDialog.vue'
 import ToolActivityAccordion from '../components/ToolActivityAccordion.vue'
@@ -29,6 +30,7 @@ import { Plus, X } from 'lucide-vue-next'
 import type { ToolActivityItem } from '../components/ToolActivityAccordion.vue'
 import { groupToolCallsByMessage } from '@shared/ai/tool-activity'
 import type {
+  AiCatalogPreview,
   AiResultImportRow,
   AiSkill,
   AiStreamEvent,
@@ -49,6 +51,10 @@ const props = defineProps<{ patientId: string }>()
 
 const router = useRouter()
 const appStore = useAppStore()
+const catalogStore = useCatalogStore()
+
+/** Uma tool de catálogo foi aprovada neste turno: o store em cache fica velho. */
+let catalogChanged = false
 
 type Session = ChannelOutput<'ai:listSessions'>[number]
 type Message = ChannelOutput<'ai:listMessages'>[number]
@@ -150,7 +156,21 @@ const confirmation = ref<{
   blockDiff: BlockDiffEntry[] | null
   resultPreview: AiResultImportRow[] | null
   skillPreview: { name: string; description: string; content: string } | null
+  catalogPreview: AiCatalogPreview | null
 } | null>(null)
+
+const CATALOG_ACTION_LABELS: Record<AiCatalogPreview['action'], string> = {
+  create: 'Cadastrar',
+  update: 'Editar',
+  delete: 'Excluir'
+}
+
+const CATALOG_ENTITY_LABELS: Record<AiCatalogPreview['entity'], string> = {
+  instrument: 'instrumento',
+  cognitive_function: 'função cognitiva'
+}
+
+const isCatalogDelete = computed(() => confirmation.value?.catalogPreview?.action === 'delete')
 
 /** Blocos que o profissional aceitou. Começa vazio: aceitar é ato deliberado. */
 const acceptedBlocks = ref<Set<number>>(new Set())
@@ -278,7 +298,8 @@ function handleStream(event: AiStreamEvent): void {
         preview: event.preview,
         blockDiff: event.blockDiff,
         resultPreview: event.resultPreview,
-        skillPreview: event.skillPreview
+        skillPreview: event.skillPreview,
+        catalogPreview: event.catalogPreview
       }
       // Linhas novas já vêm marcadas; sobrescrever um resultado existente, não —
       // substituir o que já estava gravado é sempre um ato deliberado.
@@ -293,6 +314,12 @@ function handleStream(event: AiStreamEvent): void {
       void refreshMessages()
       // Uma skill criada pelo assistente neste turno já entra no menu `/`.
       void loadSkills()
+      // Instrumento ou função criado/alterado pelo assistente já aparece nos
+      // editores de resultado, que leem o catálogo do store.
+      if (catalogChanged) {
+        catalogChanged = false
+        void catalogStore.load(true)
+      }
       break
 
     case 'error':
@@ -406,6 +433,7 @@ async function respondToConfirmation(approved: boolean): Promise<void> {
 
   const hasSelection =
     confirmation.value.blockDiff !== null || confirmation.value.resultPreview !== null
+  if (approved && confirmation.value.catalogPreview !== null) catalogChanged = true
   try {
     await api('ai:confirmToolCall', {
       confirmationId: confirmation.value.confirmationId,
@@ -742,6 +770,45 @@ async function deleteSession(sessionId: string): Promise<void> {
         </p>
       </div>
 
+      <!-- Tools de catálogo: cada campo, e na exclusão tudo o que cai junto. -->
+      <div v-if="confirmation?.catalogPreview" class="mt-4" data-testid="catalog-preview">
+        <p class="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+          {{ CATALOG_ACTION_LABELS[confirmation.catalogPreview.action] }}
+          {{ CATALOG_ENTITY_LABELS[confirmation.catalogPreview.entity] }}
+        </p>
+        <p class="mt-1 text-sm font-semibold text-fg">{{ confirmation.catalogPreview.label }}</p>
+
+        <BaseCard v-if="confirmation.catalogPreview.fields.length > 0" class="mt-2 p-3">
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <template v-for="row in confirmation.catalogPreview.fields" :key="row.field">
+              <dt class="text-fg-subtle">{{ row.field }}</dt>
+              <dd class="text-fg">
+                <template v-if="confirmation.catalogPreview.action === 'update'">
+                  <span class="text-fg-faint line-through">{{ row.before ?? '—' }}</span>
+                  →
+                </template>
+                {{ row.after ?? '—' }}
+              </dd>
+            </template>
+          </dl>
+        </BaseCard>
+
+        <ul
+          v-if="confirmation.catalogPreview.impact.length > 0"
+          class="mt-2 space-y-0.5 text-sm text-fg"
+        >
+          <li v-for="item in confirmation.catalogPreview.impact" :key="item.entity">
+            {{ item.entity }}: <span class="font-semibold">{{ item.count }}</span>
+          </li>
+        </ul>
+
+        <p class="mt-2 text-xs text-warn-strong">
+          O catálogo vale para todos os pacientes.
+          <template v-if="isCatalogDelete">A exclusão é definitiva.</template>
+          Recuse se o pedido não partiu de você.
+        </p>
+      </div>
+
       <p class="mt-3 text-xs text-fg-subtle">
         Ferramenta: <span class="font-mono">{{ confirmation?.toolName }}</span>
       </p>
@@ -753,7 +820,7 @@ async function deleteSession(sessionId: string): Promise<void> {
       <template #footer>
         <BaseButton variant="ghost" @click="respondToConfirmation(false)">Recusar</BaseButton>
         <BaseButton
-          variant="primary"
+          :variant="isCatalogDelete ? 'danger' : 'primary'"
           :disabled="needsSelection && acceptedBlocks.size === 0"
           @click="respondToConfirmation(true)"
         >
@@ -762,7 +829,9 @@ async function deleteSession(sessionId: string): Promise<void> {
               ? `Aplicar ${acceptedBlocks.size} bloco(s)`
               : resultRows.length > 0
                 ? `Gravar ${acceptedBlocks.size} resultado(s)`
-                : 'Autorizar'
+                : isCatalogDelete
+                  ? 'Excluir'
+                  : 'Autorizar'
           }}
         </BaseButton>
       </template>
