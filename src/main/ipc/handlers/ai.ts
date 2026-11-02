@@ -7,7 +7,6 @@
 
 import { webContents } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { GoogleGenAI } from '@google/genai'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import { getDatabase } from '../../db'
 import { conflict, notFound, registerHandler } from '../register'
@@ -16,6 +15,7 @@ import { getAiConfig, updateAiConfig } from '../../repositories/ai-config'
 import { getPatient } from '../../repositories/patients'
 import { clearKey, encryptionAvailable, keyHint, saveKey } from '../../ai/key-store'
 import { AgentOrchestrator, contentToTiptap } from '../../ai/orchestrator'
+import { DEFAULT_PROVIDER } from '../../ai/providers'
 import type { WritePreview } from '../../ai/orchestrator'
 import { applyAcceptedChanges, countChanges, diffBlocks } from '@shared/domain/block-diff'
 import { listAiAudit, recordAiEvent } from '../../ai/audit'
@@ -115,18 +115,14 @@ export function registerAiHandlers(): void {
 
   /** Chamada de teste antes de salvar (§10.2). A chave não é gravada aqui. */
   registerHandler('ai:testKey', async ({ key }) => {
+    const provider = DEFAULT_PROVIDER
     try {
-      const client = new GoogleGenAI({ apiKey: key })
-      await client.models.generateContent({
-        model: 'gemini-flash-lite-latest',
-        contents: 'ok',
-        config: { maxOutputTokens: 1, automaticFunctionCalling: { disable: true } }
-      })
+      await provider.testKey(key)
       return { ok: true, message: 'Chave válida. A conexão com o provedor funcionou.' }
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error)
 
-      if (/\b401\b|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(raw)) {
+      if (provider.classifyError(error)?.code === 'invalid_key') {
         return {
           ok: false,
           message: 'A chave foi recusada pelo provedor. Verifique se copiou corretamente.'

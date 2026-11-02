@@ -16,6 +16,33 @@ import globals from 'globals'
  *    quem formata. Deixar as duas ligadas gera briga por quebra de linha sem
  *    nenhum ganho.
  */
+/** §10.5, camada 2 — ver o bloco de `src/main/ai/**` abaixo. */
+const PATIENT_ISOLATION = {
+  group: [
+    '**/repositories/patients',
+    '**/repositories/assessments',
+    '**/repositories/trees',
+    '**/repositories/documents',
+    '**/repositories/classification-ranges',
+    '**/services/reports',
+    '**/services/document-report'
+  ],
+  message:
+    'O módulo de IA lê dados de paciente exclusivamente pelo AgentReadRepository (§10.5). Importar um repositório geral aqui quebra o isolamento por paciente.'
+}
+
+/**
+ * O SDK de cada empresa de IA mora só no adaptador dela, em
+ * `src/main/ai/providers/`. Fora dali o app fala a interface neutra de
+ * `providers/types.ts` — é o que permite trocar de provedor sem caçar
+ * `import` pelo código.
+ */
+const PROVIDER_SDKS = {
+  group: ['@google/genai', '@anthropic-ai/sdk', 'openai'],
+  message:
+    'SDK de provedor de IA só pode ser importado pelo adaptador em src/main/ai/providers/. Use a interface AiProvider.'
+}
+
 export default ts.config(
   {
     ignores: ['out/**', 'dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**']
@@ -82,21 +109,7 @@ export default ts.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: [
-                '**/repositories/patients',
-                '**/repositories/assessments',
-                '**/repositories/trees',
-                '**/repositories/documents',
-                '**/repositories/classification-ranges',
-                '**/services/reports',
-                '**/services/document-report'
-              ],
-              message:
-                'O módulo de IA lê dados de paciente exclusivamente pelo AgentReadRepository (§10.5). Importar um repositório geral aqui quebra o isolamento por paciente.'
-            }
-          ]
+          patterns: [PATIENT_ISOLATION, PROVIDER_SDKS]
         }
       ]
     }
@@ -106,6 +119,21 @@ export default ts.config(
     // O repositório do agente é justamente quem tem permissão para montar as
     // consultas — com o filtro por paciente aplicado em todas elas.
     files: ['src/main/ai/agent-read-repository.ts'],
-    rules: { 'no-restricted-imports': 'off' }
+    rules: { 'no-restricted-imports': ['error', { patterns: [PROVIDER_SDKS] }] }
+  },
+
+  {
+    // Os adaptadores importam o SDK da sua empresa — e só isso a mais: o
+    // isolamento por paciente continua valendo dentro deles. No flat config a
+    // regra do último bloco SUBSTITUI a anterior, por isso a lista é refeita.
+    files: ['src/main/ai/providers/**/*.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [PATIENT_ISOLATION] }] }
+  },
+
+  {
+    // Fora do módulo de IA, nenhum SDK de provedor.
+    files: ['src/**/*.{ts,vue}'],
+    ignores: ['src/main/ai/**'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [PROVIDER_SDKS] }] }
   }
 )
