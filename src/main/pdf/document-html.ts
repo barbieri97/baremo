@@ -122,17 +122,17 @@ export const PRINT_PAGE_OPTIONS = {
  * obrigatório; `printToPDF` ignora estilo herdado da página.
  */
 export function printHeaderTemplate(header: PdfHeader): string {
-  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
-    <span>${escapeAttribute(header.left)}</span>
-    <span>${escapeAttribute(header.right)}</span>
-  </div>`
+  return `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#4a5568;width:100%;box-sizing:border-box;padding:0 15.5mm;"><div style="padding-bottom:1.5mm;border-bottom:0.5pt solid #2b6cb0;display:flex;justify-content:space-between;align-items:baseline;">
+    <span style="font-weight:600;color:#1a202c;">${escapeAttribute(header.left)}</span>
+    <span style="text-transform:uppercase;letter-spacing:0.08em;color:#2b6cb0;font-weight:600;">${escapeAttribute(header.right)}</span>
+  </div></div>`
 }
 
 export function printFooterTemplate(issuedAt: string): string {
-  return `<div style="font-size:7pt;color:#4a5568;width:100%;padding:0 12mm;display:flex;justify-content:space-between;">
+  return `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#718096;width:100%;box-sizing:border-box;padding:0 15.5mm;"><div style="padding-top:1.5mm;border-top:0.5pt solid #e2e8f0;display:flex;justify-content:space-between;">
     <span>Emitido em ${escapeAttribute(issuedAt)}</span>
-    <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
-  </div>`
+    <span>Página <span class="pageNumber" style="color:#1a202c;font-weight:600;"></span> de <span class="totalPages"></span></span>
+  </div></div>`
 }
 
 export function escapeAttribute(value: string): string {

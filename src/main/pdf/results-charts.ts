@@ -15,6 +15,7 @@
 import { CHART_SIZE, renderChartSvg } from './charts'
 import { comparisonOption, evolutionOption, functionRadarOption } from '@shared/charts/options'
 import type { ResultsOverview } from '@shared/contracts/results'
+import type { EChartsOption } from 'echarts'
 import type { ResultsReportCharts } from './templates'
 
 /**
@@ -58,25 +59,38 @@ export function renderResultsCharts(overview: ResultsOverview): ResultsReportCha
     for (const radar of group.radars) {
       if (radar.parentId === null) continue
       functionRadars[radar.parentId] = renderChartSvg(
-        functionRadarOption(radar.axes, style),
+        withRadarRadius(functionRadarOption(radar.axes, style), '66%'),
         CHART_SIZE.radar
       )
     }
   }
 
   return {
-    // O radar geral sai maior porque o cartão dele ocupa a largura da página
-    // (`.chart-card--wide`). O CSS o amplia, e é a ampliação que dá aos nomes
-    // das funções um corpo legível — ver o comentário em `charts.ts`.
+    // O radar geral ocupa a largura do conteúdo (`.chart-card--wide`), numa
+    // figura baixa: sobra lado para os nomes das funções, e o raio pode crescer
+    // até a altura sem que o cartão empurre o panorama para outra página.
     radar:
       overview.overallRadar === null
         ? null
         : renderChartSvg(
-            functionRadarOption(overview.overallRadar.axes, style),
+            withRadarRadius(functionRadarOption(overview.overallRadar.axes, style), '74%'),
             CHART_SIZE.radarOverall
           ),
     functionRadars,
     comparison,
     evolution
   }
+}
+
+/**
+ * Ajusta o raio do radar à moldura em que ele cai no laudo.
+ *
+ * O raio da opção compartilhada é conservador, porque serve a qualquer
+ * proporção. Aqui a proporção é conhecida — `CHART_SIZE` é largo e baixo —, e o
+ * raio pode ocupar a altura: os nomes ficam nas laterais, onde há folga.
+ */
+function withRadarRadius(option: EChartsOption, radius: string): EChartsOption {
+  const radar = option.radar
+  if (radar === undefined || Array.isArray(radar)) return option
+  return { ...option, radar: { ...radar, radius } }
 }
