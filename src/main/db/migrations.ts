@@ -453,11 +453,40 @@ const aiSkills: Migration = {
   ]
 }
 
+/**
+ * Mais de uma empresa de IA: a empresa ativa e a situação da chave de cada uma.
+ * A chave do Gemini já cadastrada passa para o formato novo — quem atualiza o
+ * app não precisa cadastrá-la de novo.
+ */
+const aiProviders: Migration = {
+  version: 5,
+  name: 'provedores-de-ia',
+  statements: [
+    `ALTER TABLE ai_config ADD COLUMN provider TEXT NOT NULL DEFAULT 'gemini'`,
+    `ALTER TABLE ai_config ADD COLUMN provider_keys TEXT NOT NULL DEFAULT '{}'`
+  ],
+  run(raw) {
+    const rows = raw
+      .prepare('SELECT id, key_hint AS hint, key_persisted AS persisted FROM ai_config')
+      .all() as { id: string; hint: string | null; persisted: number }[]
+
+    const update = raw.prepare('UPDATE ai_config SET provider_keys = ? WHERE id = ?')
+    for (const row of rows) {
+      if (row.hint === null) continue
+      update.run(
+        JSON.stringify({ gemini: { hint: row.hint, persisted: row.persisted === 1 } }),
+        row.id
+      )
+    }
+  }
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   initial,
   classificationLevels,
   rangeInheritance,
-  aiSkills
+  aiSkills,
+  aiProviders
 ]
 
 /** Versão de schema que este binário conhece. */

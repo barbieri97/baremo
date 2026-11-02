@@ -7,7 +7,7 @@
  *   Main — AgentOrchestrator
  *      ├── carrega SessionContext { sessionId, patientId }   ← imutável
  *      ├── monta systemInstruction + histórico truncado
- *      ├── chama Gemini com functionDeclarations
+ *      ├── chama o provedor (Gemini, …) com as declarações das tools
  *      ├── loop MANUAL de function calling (automático DESABILITADO — ADR-006)
  *      │     ├── tool de leitura → AgentReadRepository(patientId)
  *      │     └── tool de escrita → confirmação na UI → aguarda o usuário
@@ -21,8 +21,6 @@
 
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { GoogleGenAI } from '@google/genai'
-import type { Content, GenerateContentResponse, Part } from '@google/genai'
 import { asc, eq } from 'drizzle-orm'
 import type { BaremoDatabase, KnowledgeDatabase } from '../db/gateway'
 import { aiMessages, aiSessions, aiToolCalls } from '../db/schema'
@@ -43,12 +41,14 @@ import { countReadyKnowledgeDocuments, searchKnowledge } from '../repositories/k
 import type { Embedder } from '../services/knowledge/embedder'
 import { markdownToTiptap } from './markdown'
 import { resolveBlobPath } from '../services/attachments/storage'
-import { describeRateLimit, parseRateLimit } from './rate-limit'
-import type { AiResultImportRow, AiStreamEvent } from '@shared/contracts/entities-ai'
+import { resolveProvider } from './providers'
+import type { AiErrorCode, AiProvider, ChatTurn, FilePart, ToolResult } from './providers'
+import type {
+  AiCatalogPreview,
+  AiResultImportRow,
+  AiStreamEvent
+} from '@shared/contracts/entities-ai'
 import { nowIso } from '../repositories/helpers'
-
-/** Acima disto, o arquivo iria pela Files API; hoje o app recusa e explica. */
-const MAX_INLINE_FILE_BYTES = 15 * 1024 * 1024
 
 /** Turnos mantidos no histórico enviado ao modelo. */
 const HISTORY_LIMIT = 40
@@ -86,6 +86,8 @@ export interface WritePreview {
   readonly resultPreview?: AiResultImportRow[] | null
   /** Skill proposta por `criar_skill`, com o conteúdo completo; `null` nas demais. */
   readonly skillPreview?: { name: string; description: string; content: string } | null
+  /** Proposta das tools de catálogo (instrumentos e funções); `null` nas demais. */
+  readonly catalogPreview?: AiCatalogPreview | null
 }
 
 export interface BlockDiffEntry {
@@ -108,11 +110,7 @@ export class AgentOrchestrator {
     private readonly emit: StreamEmitter,
     private readonly writes: {
       /** Monta a descrição e, quando cabe, o diff por bloco (§10.6). */
-      prepare: (
-        patientId: string,
-        toolName: string,
-        args: Record<string, unknown>
-      ) => WritePreview
+      prepare: (patientId: string, toolName: string, args: Record<string, unknown>) => WritePreview
       /** Executa a gravação DEPOIS da confirmação, só com os blocos aceitos. */
       apply: (
         patientId: string,
@@ -129,7 +127,12 @@ export class AgentOrchestrator {
     private readonly knowledge: {
       readonly embedder: Embedder
       readonly database: () => KnowledgeDatabase | null
-    } | null = null
+    } | null = null,
+    /**
+     * Fixa a empresa do modelo — usado nos testes. Sem ele, vale a empresa
+     * escolhida nas configurações, lida a cada pergunta.
+     */
+    private readonly providerOverride: AiProvider | null = null
   ) {}
 
   cancel(requestId: string): void {
@@ -156,11 +159,7 @@ export class AgentOrchestrator {
     return false
   }
 
-  async send(input: {
-    sessionId: string
-    text: string
-    requestId: string
-  }): Promise<void> {
+  async send(input: { sessionId: string; text: string; requestId: string }): Promise<void> {
     const { sessionId, text, requestId } = input
 
     const session = this.handle.db
@@ -201,13 +200,16 @@ export class AgentOrchestrator {
       return
     }
 
-    const apiKey = loadKey()
+    // Tudo o que é específico do SDK mora no adaptador da empresa escolhida.
+    const provider = this.providerOverride ?? resolveProvider(config.provider)
+
+    const apiKey = loadKey(config.provider)
     if (apiKey === null) {
       this.emit({
         kind: 'error',
         requestId,
         code: 'invalid_key',
-        message: 'Nenhuma chave de API disponível. Cadastre a chave nas configurações.'
+        message: `Nenhuma chave de API da ${provider.label} disponível. Cadastre a chave nas configurações.`
       })
       return
     }
@@ -250,51 +252,50 @@ export class AgentOrchestrator {
     let failureDetail: string | null = null
 
     try {
-      const client = new GoogleGenAI({ apiKey })
-      const contents = this.buildHistory(sessionId)
+      const turns = this.buildHistory(sessionId)
 
       // `/nome` aplica a skill a ESTE pedido: o conteúdo segue no turno, num
       // envelope próprio, e a mensagem fica gravada exatamente como foi digitada.
       if (invokedSkill !== null) {
-        const current = contents.findLast((content) => content.role === 'user')
-        current?.parts?.unshift({ text: envelopeSkill(invokedSkill.name, invokedSkill.content) })
+        const current = turns.findLast((turn) => turn.role === 'user')
+        if (current?.role === 'user') {
+          current.parts.unshift({
+            kind: 'text',
+            text: envelopeSkill(invokedSkill.name, invokedSkill.content)
+          })
+        }
       }
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const response = await client.models.generateContent({
+        const response = await provider.generate({
+          apiKey,
           model: config.model,
-          contents,
-          config: {
-            systemInstruction: systemInstruction({
-              pseudonymized: config.pseudonymize,
-              skills: skills.map(({ name, description }) => ({ name, description })),
-              knowledgeDocuments
-            }),
-            tools: [
-              {
-                functionDeclarations: toolDeclarations(true, {
-                  knowledgeBase: knowledgeDocuments > 0
-                })
-              }
-            ],
-            // ADR-006 — o loop é nosso.
-            automaticFunctionCalling: { disable: true },
-            abortSignal: controller.signal
-          }
+          system: systemInstruction({
+            pseudonymized: config.pseudonymize,
+            skills: skills.map(({ name, description }) => ({ name, description })),
+            knowledgeDocuments
+          }),
+          turns,
+          tools: toolDeclarations(true, { knowledgeBase: knowledgeDocuments > 0 }),
+          signal: controller.signal
         })
 
-        inputTokens += response.usageMetadata?.promptTokenCount ?? 0
-        outputTokens += response.usageMetadata?.candidatesTokenCount ?? 0
+        inputTokens += response.inputTokens
+        outputTokens += response.outputTokens
 
-        const blocked = safetyBlock(response)
-        if (blocked !== null) {
+        if (response.stop === 'safety') {
           safetyBlocked = true
-          this.emit({ kind: 'error', requestId, code: 'safety_blocked', message: blocked })
+          this.emit({
+            kind: 'error',
+            requestId,
+            code: 'safety_blocked',
+            message: response.safetyMessage ?? 'Conteúdo bloqueado pelo filtro do provedor.'
+          })
           break
         }
 
-        const calls = response.functionCalls ?? []
-        const answer = response.text ?? ''
+        const calls = response.toolCalls
+        const answer = response.text
 
         if (calls.length === 0) {
           if (answer.length > 0) {
@@ -302,7 +303,7 @@ export class AgentOrchestrator {
             this.appendMessage(sessionId, 'model', answer, null)
           }
 
-          if (truncated(response)) {
+          if (response.stop === 'truncated') {
             this.emit({
               kind: 'error',
               requestId,
@@ -315,13 +316,12 @@ export class AgentOrchestrator {
         }
 
         // O modelo pediu tools: registra o turno e executa uma a uma.
-        contents.push({ role: 'model', parts: response.candidates?.[0]?.content?.parts ?? [] })
+        turns.push({ role: 'model', text: answer, toolCalls: calls, native: response.native })
 
-        const responseParts: Part[] = []
+        const results: ToolResult[] = []
 
         for (const call of calls) {
-          const name = call.name ?? ''
-          const args = (call.args ?? {}) as Record<string, unknown>
+          const { name, args } = call
           const callId = randomUUID()
           toolCallsForAudit.push({ name, args })
 
@@ -337,9 +337,9 @@ export class AgentOrchestrator {
           let ok = true
           let rejected = false
           let summary = ''
-          // `ler_arquivo` devolve bytes, não JSON: o conteúdo vai como uma parte
-          // inline separada, ao lado da resposta da tool.
-          let inlinePart: Part | null = null
+          // `ler_arquivo` devolve bytes, não JSON: o conteúdo segue como arquivo
+          // ao lado da resposta da tool.
+          let filePart: FilePart | null = null
           // `ler_skill` devolve instrução do profissional, não dado do prontuário:
           // sai no envelope `<skill>`, não em `<dados_do_prontuario>`.
           let skillEnvelope: string | null = null
@@ -364,8 +364,8 @@ export class AgentOrchestrator {
               if (typeof attachmentId !== 'string' || attachmentId.length === 0) {
                 throw new Error('Parâmetro obrigatório ausente: arquivoId.')
               }
-              const file = await this.readAttachmentPart(repository, attachmentId)
-              inlinePart = file.part
+              const file = await this.readAttachmentPart(repository, attachmentId, provider)
+              filePart = file.part
               payload = {
                 arquivo: file.name,
                 tipo: file.mime,
@@ -405,31 +405,26 @@ export class AgentOrchestrator {
           this.recordToolCall(callId, sessionId, turnMessageId, name, args, status, summary)
           this.emit({ kind: 'tool_end', requestId, callId, toolName: name, ok, rejected, summary })
 
-          responseParts.push({
-            functionResponse: {
-              name,
-              // O envelope do §10.7 acompanha o dado até dentro do modelo.
-              response: {
-                conteudo:
-                  ok && skillEnvelope !== null
-                    ? skillEnvelope
-                    : ok && referencesEnvelope !== null
-                      ? referencesEnvelope
-                      : envelopeToolOutput(name, payload)
-              }
-            }
+          results.push({
+            call,
+            // O envelope do §10.7 acompanha o dado até dentro do modelo.
+            content:
+              ok && skillEnvelope !== null
+                ? skillEnvelope
+                : ok && referencesEnvelope !== null
+                  ? referencesEnvelope
+                  : envelopeToolOutput(name, payload),
+            files: filePart === null ? [] : [filePart]
           })
-
-          if (inlinePart !== null) responseParts.push(inlinePart)
         }
 
-        contents.push({ role: 'user', parts: responseParts })
+        turns.push({ role: 'tool', results })
       }
 
       this.emit({ kind: 'done', requestId, inputTokens, outputTokens })
     } catch (error) {
       failureDetail = (error instanceof Error ? error.message : String(error)).slice(0, 4000)
-      this.emit({ kind: 'error', requestId, ...classifyError(error) })
+      this.emit({ kind: 'error', requestId, ...classifyError(error, provider) })
     } finally {
       this.active.delete(requestId)
       addTokenUsage(this.handle, inputTokens + outputTokens)
@@ -497,6 +492,8 @@ export class AgentOrchestrator {
         return repository.listUsedInstruments()
       case 'buscar_instrumentos':
         return repository.searchInstruments(optional('termo'))
+      case 'listar_funcoes_cognitivas':
+        return repository.listCognitiveFunctions()
       // Skills não dependem do paciente: leem a tabela global, nunca o repositório
       // com escopo de `patientId`.
       case 'listar_skills':
@@ -603,7 +600,8 @@ export class AgentOrchestrator {
         argumentsJson: JSON.stringify(args),
         blockDiff: preview.blockDiff,
         resultPreview: preview.resultPreview ?? null,
-        skillPreview: preview.skillPreview ?? null
+        skillPreview: preview.skillPreview ?? null,
+        catalogPreview: preview.catalogPreview ?? null
       })
     })
 
@@ -620,17 +618,18 @@ export class AgentOrchestrator {
   /** Anexo enviado inline; acima do limite, o app explica em vez de falhar seco. */
   async readAttachmentPart(
     repository: AgentReadRepository,
-    attachmentId: string
-  ): Promise<{ part: Part; name: string; mime: string }> {
+    attachmentId: string,
+    provider: AiProvider
+  ): Promise<{ part: FilePart; name: string; mime: string }> {
     const attachment = repository.getAttachmentForReading(attachmentId)
 
-    if (attachment.sizeBytes > MAX_INLINE_FILE_BYTES) {
+    if (attachment.sizeBytes > provider.maxInlineFileBytes) {
       throw new Error(
         `O arquivo tem ${(attachment.sizeBytes / 1024 / 1024).toFixed(1)} MB e excede o limite de envio inline. Descreva o trecho relevante ou anexe uma versão reduzida.`
       )
     }
 
-    if (!/^(application\/pdf|image\/)/.test(attachment.mime)) {
+    if (!provider.acceptsFile(attachment.mime)) {
       throw new Error(
         'Apenas PDFs e imagens podem ser enviados para análise. Para outros tipos, descreva o conteúdo relevante.'
       )
@@ -638,7 +637,7 @@ export class AgentOrchestrator {
 
     const bytes = await readFile(resolveBlobPath(attachment.sha256, attachment.extension))
     return {
-      part: { inlineData: { mimeType: attachment.mime, data: bytes.toString('base64') } },
+      part: { kind: 'file', mime: attachment.mime, dataBase64: bytes.toString('base64') },
       name: attachment.name,
       mime: attachment.mime
     }
@@ -646,7 +645,7 @@ export class AgentOrchestrator {
 
   // ─── Histórico e persistência ──────────────────────────────────────────────
 
-  private buildHistory(sessionId: string): Content[] {
+  private buildHistory(sessionId: string): ChatTurn[] {
     const rows = this.handle.db
       .select()
       .from(aiMessages)
@@ -656,10 +655,11 @@ export class AgentOrchestrator {
       .filter((row) => row.role === 'user' || row.role === 'model')
       .slice(-HISTORY_LIMIT)
 
-    return rows.map((row) => ({
-      role: row.role === 'model' ? 'model' : 'user',
-      parts: [{ text: row.text }]
-    }))
+    return rows.map((row): ChatTurn =>
+      row.role === 'model'
+        ? { role: 'model', text: row.text, toolCalls: [] }
+        : { role: 'user', parts: [{ kind: 'text', text: row.text }] }
+    )
   }
 
   private appendMessage(
@@ -715,36 +715,15 @@ export function contentToTiptap(content: unknown): unknown {
   return markdownToTiptap(typeof content === 'string' ? content : '')
 }
 
-function safetyBlock(response: GenerateContentResponse): string | null {
-  const promptBlock = response.promptFeedback?.blockReason
-  if (promptBlock) {
-    return (
-      'A pergunta foi bloqueada pelo filtro de segurança do provedor antes de ser processada. ' +
-      'Em contexto clínico isso acontece com frequência em relatos de ideação suicida, violência ou abuso. ' +
-      'O aplicativo funcionou corretamente; foi o provedor que recusou o conteúdo.'
-    )
-  }
-
-  const finishReason = response.candidates?.[0]?.finishReason
-  if (finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT') {
-    return (
-      'A resposta foi bloqueada pelo filtro de segurança do provedor. ' +
-      'Isso é comum em conteúdo clínico sensível e não indica falha do aplicativo. ' +
-      'Tente reformular a pergunta de forma mais técnica e delimitada.'
-    )
-  }
-
-  return null
-}
-
-function truncated(response: GenerateContentResponse): boolean {
-  return response.candidates?.[0]?.finishReason === 'MAX_TOKENS'
-}
-
-type AiErrorEvent = Extract<AiStreamEvent, { kind: 'error' }>
-
-/** Mensagem específica por tipo de falha (§10.8) — nunca um erro genérico. */
-function classifyError(error: unknown): Pick<AiErrorEvent, 'code' | 'message'> {
+/**
+ * Mensagem específica por tipo de falha (§10.8) — nunca um erro genérico.
+ * Cancelamento e rede são iguais para qualquer provedor; o resto (chave
+ * recusada, limite de uso) cada adaptador sabe ler no formato do seu SDK.
+ */
+function classifyError(
+  error: unknown,
+  provider: AiProvider
+): { code: AiErrorCode; message: string } {
   const raw = error instanceof Error ? error.message : String(error)
   const name = error instanceof Error ? error.name : ''
 
@@ -752,19 +731,8 @@ function classifyError(error: unknown): Pick<AiErrorEvent, 'code' | 'message'> {
     return { code: 'cancelled', message: 'Consulta cancelada.' }
   }
 
-  if (/\b401\b|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(raw)) {
-    return {
-      code: 'invalid_key',
-      message:
-        'A chave de API foi recusada pelo provedor (401). Verifique se ela está correta e ativa no projeto do Google AI Studio.'
-    }
-  }
-
-  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(raw)) {
-    // O 429 do Gemini diz qual limite estourou (por minuto, por dia, por
-    // modelo) — repassar isso é o que separa "espere 30 s" de "troque o modelo".
-    return { code: 'rate_limited', message: describeRateLimit(parseRateLimit(raw)) }
-  }
+  const specific = provider.classifyError(error)
+  if (specific !== null) return specific
 
   if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|fetch failed|network/i.test(raw)) {
     return {

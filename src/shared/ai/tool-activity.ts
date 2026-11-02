@@ -28,6 +28,13 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   listar_skills: 'Listando skills',
   ler_skill: 'Lendo skill',
   criar_skill: 'Criando skill',
+  listar_funcoes_cognitivas: 'Listando funções cognitivas',
+  criar_instrumento: 'Cadastrando instrumento',
+  editar_instrumento: 'Editando instrumento',
+  excluir_instrumento: 'Excluindo instrumento',
+  criar_funcao_cognitiva: 'Cadastrando função cognitiva',
+  editar_funcao_cognitiva: 'Editando função cognitiva',
+  excluir_funcao_cognitiva: 'Excluindo função cognitiva',
   buscar_referencias: 'Consultando a base de referências'
 }
 

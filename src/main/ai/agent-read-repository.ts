@@ -63,11 +63,7 @@ const MAX_INSTRUMENT_MATCHES = 50
 
 /** Minúsculas e sem acento: "Atenção" e "atencao" precisam se encontrar. */
 function normalizeForSearch(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
 export class AgentReadRepository {
@@ -123,11 +119,7 @@ export class AgentReadRepository {
   // ─── Tools de leitura (§10.6) ──────────────────────────────────────────────
 
   getPatientProfile(): PseudonymizedPatient | IdentifiedPatient {
-    const row = this.handle.db
-      .select()
-      .from(patients)
-      .where(eq(patients.id, this.patientId))
-      .get()
+    const row = this.handle.db.select().from(patients).where(eq(patients.id, this.patientId)).get()
 
     if (!row) throw new ScopeViolationError('patient', this.patientId)
 
@@ -196,8 +188,7 @@ export class AgentReadRepository {
       .where(eq(patients.id, this.patientId))
       .get()
 
-    const age =
-      patient?.birthDate != null ? ageAt(patient.birthDate, row.date) : null
+    const age = patient?.birthDate != null ? ageAt(patient.birthDate, row.date) : null
 
     return {
       assessmentId: row.id,
@@ -250,8 +241,7 @@ export class AgentReadRepository {
 
     return rows
       .filter(
-        (row) =>
-          cognitiveFunctionId === null || row.cognitiveFunctionId === cognitiveFunctionId
+        (row) => cognitiveFunctionId === null || row.cognitiveFunctionId === cognitiveFunctionId
       )
       .map((row) => ({
         instrument: row.instrumentAcronym
@@ -320,8 +310,7 @@ export class AgentReadRepository {
       return {
         cognitiveFunction: reference.cognitiveFunctionName ?? 'Sem função associada',
         instrument: reference.instrumentName,
-        scoreType:
-          SCORE_TYPE_SHORT_LABELS[reference.scoreType as ScoreType] ?? reference.scoreType,
+        scoreType: SCORE_TYPE_SHORT_LABELS[reference.scoreType as ScoreType] ?? reference.scoreType,
         valueA: a?.value ?? null,
         valueB: b?.value ?? null,
         classificationA: a?.classificationName ?? null,
@@ -406,37 +395,39 @@ export class AgentReadRepository {
     ]
     if (assessmentId !== null) filters.push(eq(attachments.assessmentId, assessmentId))
 
-    return this.handle.db
-      .select({
-        id: attachments.id,
-        originalName: attachments.originalName,
-        detectedMime: attachments.detectedMime,
-        sizeBytes: attachments.sizeBytes,
-        description: attachments.description,
-        assessmentId: attachments.assessmentId,
-        assessmentDate: assessments.date
-      })
-      .from(attachments)
-      // O filtro por paciente vai também no JOIN: nenhuma consulta sai sem ele.
-      .leftJoin(
-        assessments,
-        and(
-          eq(assessments.id, attachments.assessmentId),
-          eq(assessments.patientId, this.patientId)
+    return (
+      this.handle.db
+        .select({
+          id: attachments.id,
+          originalName: attachments.originalName,
+          detectedMime: attachments.detectedMime,
+          sizeBytes: attachments.sizeBytes,
+          description: attachments.description,
+          assessmentId: attachments.assessmentId,
+          assessmentDate: assessments.date
+        })
+        .from(attachments)
+        // O filtro por paciente vai também no JOIN: nenhuma consulta sai sem ele.
+        .leftJoin(
+          assessments,
+          and(
+            eq(assessments.id, attachments.assessmentId),
+            eq(assessments.patientId, this.patientId)
+          )
         )
-      )
-      .where(and(...filters))
-      .orderBy(desc(attachments.createdAt))
-      .all()
-      .map((row) => ({
-        attachmentId: row.id,
-        name: this.scrub(row.originalName) ?? row.originalName,
-        mime: row.detectedMime,
-        sizeBytes: row.sizeBytes,
-        description: this.scrub(row.description),
-        assessmentId: row.assessmentId,
-        assessmentDate: row.assessmentDate !== null ? formatIsoDate(row.assessmentDate) : null
-      }))
+        .where(and(...filters))
+        .orderBy(desc(attachments.createdAt))
+        .all()
+        .map((row) => ({
+          attachmentId: row.id,
+          name: this.scrub(row.originalName) ?? row.originalName,
+          mime: row.detectedMime,
+          sizeBytes: row.sizeBytes,
+          description: this.scrub(row.description),
+          assessmentId: row.assessmentId,
+          assessmentDate: row.assessmentDate !== null ? formatIsoDate(row.assessmentDate) : null
+        }))
+    )
   }
 
   /** Metadados do anexo, para o orquestrador decidir como enviá-lo (§10.6). */
@@ -543,7 +534,12 @@ export class AgentReadRepository {
     nome: string
     sigla: string | null
     instrumentoPai: string | null
+    instrumentoPaiId: string | null
     funcaoCognitiva: string | null
+    funcaoCognitivaId: string | null
+    idadeMin: number | null
+    idadeMax: number | null
+    referencia: string | null
     tiposEscoreComFaixa: string[]
   }[] {
     const rows = this.handle.db
@@ -552,6 +548,10 @@ export class AgentReadRepository {
         parentId: instruments.parentId,
         name: instruments.name,
         acronym: instruments.acronym,
+        functionId: instruments.cognitiveFunctionId,
+        minAgeYears: instruments.minAgeYears,
+        maxAgeYears: instruments.maxAgeYears,
+        reference: instruments.reference,
         functionName: cognitiveFunctions.name
       })
       .from(instruments)
@@ -590,8 +590,45 @@ export class AgentReadRepository {
       nome: row.name,
       sigla: row.acronym,
       instrumentoPai: row.parentId === null ? null : (names.get(row.parentId) ?? null),
+      instrumentoPaiId: row.parentId,
       funcaoCognitiva: row.functionName,
+      funcaoCognitivaId: row.functionId,
+      idadeMin: row.minAgeYears,
+      idadeMax: row.maxAgeYears,
+      referencia: row.reference,
       tiposEscoreComFaixa: [...(typesByInstrument.get(row.id) ?? [])]
+    }))
+  }
+
+  /**
+   * Árvore de funções cognitivas — dado de CATÁLOGO, como `searchInstruments`.
+   * Dá ao modelo os IDs para vincular instrumentos e para propor edições.
+   */
+  listCognitiveFunctions(): {
+    funcaoId: string
+    nome: string
+    descricao: string | null
+    funcaoPaiId: string | null
+    funcaoPai: string | null
+  }[] {
+    const rows = this.handle.db
+      .select({
+        id: cognitiveFunctions.id,
+        parentId: cognitiveFunctions.parentId,
+        name: cognitiveFunctions.name,
+        description: cognitiveFunctions.description
+      })
+      .from(cognitiveFunctions)
+      .orderBy(cognitiveFunctions.order, cognitiveFunctions.name)
+      .all()
+
+    const names = new Map(rows.map((row) => [row.id, row.name]))
+    return rows.map((row) => ({
+      funcaoId: row.id,
+      nome: row.name,
+      descricao: row.description,
+      funcaoPaiId: row.parentId,
+      funcaoPai: row.parentId === null ? null : (names.get(row.parentId) ?? null)
     }))
   }
 

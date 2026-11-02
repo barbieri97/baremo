@@ -38,7 +38,7 @@ import {
   patients
 } from '../../src/main/db/schema'
 import { AgentReadRepository, ScopeViolationError } from '../../src/main/ai/agent-read-repository'
-import { toolDeclarations } from '../../src/main/ai/tools'
+import { isWriteTool, toolDeclarations } from '../../src/main/ai/tools'
 import { initialsOf, redactIdentifiers, scrubText } from '../../src/main/ai/pseudonymize'
 
 interface Fixture {
@@ -270,12 +270,29 @@ describe('camada 1 — nenhuma tool recebe patientId do modelo', () => {
     }
   })
 
-  it('o catálogo não expõe tool de exclusão, filesystem, rede ou configuração', () => {
+  it('o catálogo não expõe tool de filesystem, rede ou configuração', () => {
     const names = toolDeclarations(true).map((declaration) => declaration.name ?? '')
 
-    for (const forbidden of ['excluir', 'delete', 'remover', 'arquivo_local', 'fetch', 'config']) {
+    for (const forbidden of ['arquivo_local', 'fetch', 'config']) {
       expect(names.some((name) => name.includes(forbidden))).toBe(false)
     }
+  })
+
+  it('a única exclusão possível é a de catálogo, e sempre como tool de escrita', () => {
+    // Excluir dado clínico (paciente, avaliação, documento, resultado) segue
+    // fora do alcance do modelo. Instrumentos e funções cognitivas podem ser
+    // excluídos, mas só atrás da confirmação do profissional.
+    const deleting = toolDeclarations(true)
+      .map((declaration) => declaration.name ?? '')
+      .filter((name) =>
+        ['excluir', 'delete', 'remover', 'apagar'].some((verb) => name.includes(verb))
+      )
+
+    expect(deleting.sort()).toEqual(['excluir_funcao_cognitiva', 'excluir_instrumento'])
+    expect(deleting.every((name) => isWriteTool(name))).toBe(true)
+    expect(
+      toolDeclarations(false).some((declaration) => deleting.includes(declaration.name ?? ''))
+    ).toBe(false)
   })
 })
 
@@ -432,7 +449,10 @@ describe('camada 3 — revalidação de IDs vindos do modelo', () => {
 
 describe('pseudonimização', () => {
   it('substitui nome completo por iniciais e data de nascimento por idade', () => {
-    const profile = repositoryFor('a', true).getPatientProfile() as unknown as Record<string, unknown>
+    const profile = repositoryFor('a', true).getPatientProfile() as unknown as Record<
+      string,
+      unknown
+    >
 
     expect(profile['pseudonymized']).toBe(true)
     expect(profile['initials']).toBe('A.A.A.')
@@ -448,7 +468,10 @@ describe('pseudonimização', () => {
   })
 
   it('redige identificadores no texto livre das observações', () => {
-    const profile = repositoryFor('a', true).getPatientProfile() as unknown as Record<string, unknown>
+    const profile = repositoryFor('a', true).getPatientProfile() as unknown as Record<
+      string,
+      unknown
+    >
     expect(String(profile['notes'])).toContain('[telefone removido]')
     expect(String(profile['notes'])).not.toContain('91234-5678')
   })
@@ -470,7 +493,10 @@ describe('pseudonimização', () => {
   })
 
   it('mantém os dados identificáveis quando desligada', () => {
-    const profile = repositoryFor('a', false).getPatientProfile() as unknown as Record<string, unknown>
+    const profile = repositoryFor('a', false).getPatientProfile() as unknown as Record<
+      string,
+      unknown
+    >
     expect(profile['pseudonymized']).toBe(false)
     expect(profile['fullName']).toBe('Ana Alves Andrade')
   })

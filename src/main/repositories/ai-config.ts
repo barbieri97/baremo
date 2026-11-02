@@ -2,18 +2,56 @@
  * Configuração do módulo de IA (spec §10.2).
  *
  * A chave de API NÃO passa por aqui. Este repositório lida com estado visível:
- * ligado/desligado, modelo, pseudonimização, teto de tokens e a dica dos quatro
- * últimos caracteres. O segredo em si vive em `ai/key-store.ts`, cifrado com
- * `safeStorage`, e nunca é lido para fora do processo principal.
+ * ligado/desligado, empresa e modelo, pseudonimização, teto de tokens e a dica
+ * dos quatro últimos caracteres de cada chave. O segredo em si vive em
+ * `ai/key-store.ts`, cifrado com `safeStorage`, e nunca é lido para fora do
+ * processo principal.
  */
 
 import { eq, sql } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
 import { aiConfig, SINGLETON_ID } from '../db/schema'
-import type { AiConfig, AiModel } from '@shared/contracts/entities-ai'
-import { AI_MODELS } from '@shared/contracts/entities-ai'
+import type { AiConfig, AiModel, AiProviderId, AiProviderKey } from '@shared/contracts/entities-ai'
+import { AI_MODELS_BY_PROVIDER, AI_PROVIDERS, defaultModelFor } from '@shared/contracts/entities-ai'
 
 type Row = typeof aiConfig.$inferSelect
+
+type StoredKeys = Partial<Record<AiProviderId, { hint: string; persisted: boolean }>>
+
+function parseKeys(json: string): StoredKeys {
+  try {
+    const parsed = JSON.parse(json) as unknown
+    if (parsed === null || typeof parsed !== 'object') return {}
+    const keys: StoredKeys = {}
+    for (const provider of AI_PROVIDERS) {
+      const entry = (parsed as Record<string, unknown>)[provider]
+      if (
+        entry !== null &&
+        typeof entry === 'object' &&
+        typeof (entry as { hint?: unknown }).hint === 'string'
+      ) {
+        keys[provider] = {
+          hint: (entry as { hint: string }).hint,
+          persisted: (entry as { persisted?: unknown }).persisted !== false
+        }
+      }
+    }
+    return keys
+  } catch {
+    return {}
+  }
+}
+
+function asProvider(value: string): AiProviderId {
+  return (AI_PROVIDERS as readonly string[]).includes(value) ? (value as AiProviderId) : 'gemini'
+}
+
+/** Modelo gravado, se for da empresa ativa; senão, o padrão dela. */
+function modelFor(provider: AiProviderId, stored: string): AiModel {
+  return (AI_MODELS_BY_PROVIDER[provider] as readonly string[]).includes(stored)
+    ? (stored as AiModel)
+    : defaultModelFor(provider)
+}
 
 function currentPeriod(): string {
   const now = new Date()
@@ -50,14 +88,23 @@ export function getAiConfig(
     row = readRow(handle)
   }
 
+  const provider = asProvider(row.provider)
+  const stored = parseKeys(row.providerKeys)
+  const keyOf = (id: AiProviderId): AiProviderKey => ({
+    hasKey: stored[id] !== undefined,
+    keyHint: stored[id]?.hint ?? null,
+    keyPersisted: stored[id]?.persisted ?? true
+  })
+  const active = keyOf(provider)
+
   return {
     enabled: row.enabled,
-    model: (AI_MODELS as readonly string[]).includes(row.model)
-      ? (row.model as AiModel)
-      : 'gemini-flash-latest',
-    hasKey: row.keyHint !== null,
-    keyHint: row.keyHint,
-    keyPersisted: row.keyPersisted,
+    provider,
+    model: modelFor(provider, row.model),
+    hasKey: active.hasKey,
+    keyHint: active.keyHint,
+    keyPersisted: active.keyPersisted,
+    keys: { gemini: keyOf('gemini'), anthropic: keyOf('anthropic'), openai: keyOf('openai') },
     safeStorageAvailable,
     pseudonymize: row.pseudonymize,
     monthlyTokenBudget: row.monthlyTokenBudget,
@@ -71,13 +118,44 @@ export function updateAiConfig(
   patch: Partial<{
     enabled: boolean
     model: AiModel
-    keyHint: string | null
-    keyPersisted: boolean
     pseudonymize: boolean
     monthlyTokenBudget: number
   }>
 ): void {
   handle.db.update(aiConfig).set(patch).where(eq(aiConfig.id, SINGLETON_ID)).run()
+}
+
+/**
+ * Troca a empresa ativa. O modelo passa ao padrão da nova empresa, a menos que
+ * o modelo pedido seja dela.
+ */
+export function setAiProvider(
+  handle: BaremoDatabase,
+  provider: AiProviderId,
+  model?: AiModel
+): void {
+  handle.db
+    .update(aiConfig)
+    .set({ provider, model: modelFor(provider, model ?? '') })
+    .where(eq(aiConfig.id, SINGLETON_ID))
+    .run()
+}
+
+/** Grava (ou apaga, com `null`) a dica da chave de uma empresa. */
+export function setProviderKey(
+  handle: BaremoDatabase,
+  provider: AiProviderId,
+  key: { hint: string; persisted: boolean } | null
+): void {
+  const keys = parseKeys(readRow(handle).providerKeys)
+  if (key === null) delete keys[provider]
+  else keys[provider] = key
+
+  handle.db
+    .update(aiConfig)
+    .set({ providerKeys: JSON.stringify(keys) })
+    .where(eq(aiConfig.id, SINGLETON_ID))
+    .run()
 }
 
 /** Soma o consumo do turno ao contador mensal (§10.2). */
