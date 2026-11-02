@@ -29,8 +29,10 @@ import type { SkillCommandItem } from '../components/SkillCommandMenu.vue'
 import { Plus, X } from 'lucide-vue-next'
 import type { ToolActivityItem } from '../components/ToolActivityAccordion.vue'
 import { groupToolCallsByMessage } from '@shared/ai/tool-activity'
+import { AI_PROVIDER_LABELS } from '@shared/contracts/entities-ai'
 import type {
   AiCatalogPreview,
+  AiProviderId,
   AiResultImportRow,
   AiSkill,
   AiStreamEvent,
@@ -131,6 +133,7 @@ const consent = ref<{
   moduleGranted: boolean
   patientGranted: boolean
   textVersion: string
+  provider: AiProviderId
 } | null>(null)
 const consentOpen = ref(false)
 
@@ -606,7 +609,8 @@ async function deleteSession(sessionId: string): Promise<void> {
     <BaseDialog v-model:open="consentOpen" title="Consentimento para uso do assistente" wide>
       <div class="space-y-3 text-sm text-fg-secondary">
         <p>
-          Ao usar o assistente, dados deste prontuário serão enviados à API do Google Gemini, um
+          Ao usar o assistente, dados deste prontuário serão enviados à API da
+          {{ consent ? AI_PROVIDER_LABELS[consent.provider] : 'empresa de IA escolhida' }}, um
           serviço de terceiros fora deste computador.
         </p>
         <p>

@@ -41,7 +41,7 @@ import { countReadyKnowledgeDocuments, searchKnowledge } from '../repositories/k
 import type { Embedder } from '../services/knowledge/embedder'
 import { markdownToTiptap } from './markdown'
 import { resolveBlobPath } from '../services/attachments/storage'
-import { DEFAULT_PROVIDER } from './providers'
+import { resolveProvider } from './providers'
 import type { AiErrorCode, AiProvider, ChatTurn, FilePart, ToolResult } from './providers'
 import type {
   AiCatalogPreview,
@@ -128,8 +128,11 @@ export class AgentOrchestrator {
       readonly embedder: Embedder
       readonly database: () => KnowledgeDatabase | null
     } | null = null,
-    /** Empresa do modelo. Tudo o que é específico do SDK mora no adaptador. */
-    private readonly provider: AiProvider = DEFAULT_PROVIDER
+    /**
+     * Fixa a empresa do modelo — usado nos testes. Sem ele, vale a empresa
+     * escolhida nas configurações, lida a cada pergunta.
+     */
+    private readonly providerOverride: AiProvider | null = null
   ) {}
 
   cancel(requestId: string): void {
@@ -197,13 +200,16 @@ export class AgentOrchestrator {
       return
     }
 
-    const apiKey = loadKey()
+    // Tudo o que é específico do SDK mora no adaptador da empresa escolhida.
+    const provider = this.providerOverride ?? resolveProvider(config.provider)
+
+    const apiKey = loadKey(config.provider)
     if (apiKey === null) {
       this.emit({
         kind: 'error',
         requestId,
         code: 'invalid_key',
-        message: 'Nenhuma chave de API disponível. Cadastre a chave nas configurações.'
+        message: `Nenhuma chave de API da ${provider.label} disponível. Cadastre a chave nas configurações.`
       })
       return
     }
@@ -261,7 +267,7 @@ export class AgentOrchestrator {
       }
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const response = await this.provider.generate({
+        const response = await provider.generate({
           apiKey,
           model: config.model,
           system: systemInstruction({
@@ -358,7 +364,7 @@ export class AgentOrchestrator {
               if (typeof attachmentId !== 'string' || attachmentId.length === 0) {
                 throw new Error('Parâmetro obrigatório ausente: arquivoId.')
               }
-              const file = await this.readAttachmentPart(repository, attachmentId)
+              const file = await this.readAttachmentPart(repository, attachmentId, provider)
               filePart = file.part
               payload = {
                 arquivo: file.name,
@@ -418,7 +424,7 @@ export class AgentOrchestrator {
       this.emit({ kind: 'done', requestId, inputTokens, outputTokens })
     } catch (error) {
       failureDetail = (error instanceof Error ? error.message : String(error)).slice(0, 4000)
-      this.emit({ kind: 'error', requestId, ...classifyError(error, this.provider) })
+      this.emit({ kind: 'error', requestId, ...classifyError(error, provider) })
     } finally {
       this.active.delete(requestId)
       addTokenUsage(this.handle, inputTokens + outputTokens)
@@ -612,17 +618,18 @@ export class AgentOrchestrator {
   /** Anexo enviado inline; acima do limite, o app explica em vez de falhar seco. */
   async readAttachmentPart(
     repository: AgentReadRepository,
-    attachmentId: string
+    attachmentId: string,
+    provider: AiProvider
   ): Promise<{ part: FilePart; name: string; mime: string }> {
     const attachment = repository.getAttachmentForReading(attachmentId)
 
-    if (attachment.sizeBytes > this.provider.maxInlineFileBytes) {
+    if (attachment.sizeBytes > provider.maxInlineFileBytes) {
       throw new Error(
         `O arquivo tem ${(attachment.sizeBytes / 1024 / 1024).toFixed(1)} MB e excede o limite de envio inline. Descreva o trecho relevante ou anexe uma versão reduzida.`
       )
     }
 
-    if (!this.provider.acceptsFile(attachment.mime)) {
+    if (!provider.acceptsFile(attachment.mime)) {
       throw new Error(
         'Apenas PDFs e imagens podem ser enviados para análise. Para outros tipos, descreva o conteúdo relevante.'
       )

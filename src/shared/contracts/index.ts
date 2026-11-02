@@ -43,6 +43,7 @@ import {
 import { resultsOverviewSchema } from './results'
 import {
   AI_MODELS,
+  AI_PROVIDERS,
   aiAuditSchema,
   aiConfigSchema,
   aiMessageSchema,
@@ -553,7 +554,10 @@ export const contracts = {
   // ─── ai:* ──────────────────────────────────────────────────────────────────
   'ai:getConfig': channel(empty, aiConfigSchema),
   'ai:setEnabled': channel(z.object({ enabled: z.boolean() }), aiConfigSchema),
+  /** O modelo determina a empresa: escolher um modelo do Claude ativa a Anthropic. */
   'ai:setModel': channel(z.object({ model: z.enum(AI_MODELS) }), aiConfigSchema),
+  /** Troca a empresa ativa; o modelo passa ao padrão dela. */
+  'ai:setProvider': channel(z.object({ provider: z.enum(AI_PROVIDERS) }), aiConfigSchema),
   /** Desligar a pseudonimização exige confirmação e vira registro (§10.3). */
   'ai:setPseudonymize': channel(
     z.object({ enabled: z.boolean(), confirmed: z.boolean() }),
@@ -564,18 +568,31 @@ export const contracts = {
     aiConfigSchema
   ),
   /** A chave sobe uma vez e nunca volta: o renderer só recebe `keyHint` (§10.1). */
+  /** Sem `provider`, vale a empresa ativa. */
   'ai:saveKey': channel(
-    z.object({ key: z.string().min(1).max(500), persist: z.boolean() }),
+    z.object({
+      key: z.string().min(1).max(500),
+      persist: z.boolean(),
+      provider: z.enum(AI_PROVIDERS).optional()
+    }),
     aiConfigSchema
   ),
   'ai:testKey': channel(
-    z.object({ key: z.string().min(1).max(500) }),
+    z.object({ key: z.string().min(1).max(500), provider: z.enum(AI_PROVIDERS).optional() }),
     z.object({ ok: z.boolean(), message: z.string() })
   ),
-  'ai:clearKey': channel(empty, aiConfigSchema),
+  'ai:clearKey': channel(
+    z.object({ provider: z.enum(AI_PROVIDERS).optional() }).optional(),
+    aiConfigSchema
+  ),
   'ai:getConsent': channel(
     z.object({ patientId: idSchema.nullable() }),
-    z.object({ moduleGranted: z.boolean(), patientGranted: z.boolean(), textVersion: z.string() })
+    z.object({
+      moduleGranted: z.boolean(),
+      patientGranted: z.boolean(),
+      textVersion: z.string(),
+      provider: z.enum(AI_PROVIDERS)
+    })
   ),
   'ai:grantConsent': channel(
     z.object({ scope: z.enum(['module', 'patient']), patientId: idSchema.nullable() }),

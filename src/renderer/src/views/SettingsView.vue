@@ -27,14 +27,17 @@ import ClassificationBadge from '../components/ClassificationBadge.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import { checkContrast, normalizeHex } from '@shared/domain/color'
 import {
-  AI_MODELS,
+  AI_MODELS_BY_PROVIDER,
   AI_MODEL_LABELS,
+  AI_PROVIDERS,
+  AI_PROVIDER_KEY_SOURCES,
+  AI_PROVIDER_LABELS,
   SKILL_CONTENT_MAX,
   SKILL_DESCRIPTION_MAX,
   SKILL_NAME_MAX,
   SKILL_NAME_PATTERN
 } from '@shared/contracts/entities-ai'
-import type { AiConfig, AiModel, AiSkill } from '@shared/contracts/entities-ai'
+import type { AiConfig, AiModel, AiProviderId, AiSkill } from '@shared/contracts/entities-ai'
 import type { ProfessionalProfile } from '@shared/contracts/entities'
 // O mesmo ícone do instalador, para a aba "Sobre" não divergir dele.
 import appIconUrl from '../../../../build/icon.png'
@@ -221,6 +224,24 @@ async function setEnabled(enabled: boolean): Promise<void> {
   }
 }
 
+/** Prefixo típico da chave de cada empresa — só para orientar quem cola. */
+const KEY_PLACEHOLDERS: Readonly<Record<AiProviderId, string>> = {
+  gemini: 'AIza…',
+  anthropic: 'sk-ant-…',
+  openai: 'sk-…'
+}
+
+async function setProvider(provider: AiProviderId): Promise<void> {
+  try {
+    aiConfig.value = await api('ai:setProvider', { provider })
+    // A chave digitada e o teste valiam para a empresa anterior.
+    apiKey.value = ''
+    testResult.value = null
+  } catch (error) {
+    appStore.notifyError(error)
+  }
+}
+
 async function setModel(model: AiModel): Promise<void> {
   try {
     aiConfig.value = await api('ai:setModel', { model })
@@ -285,7 +306,7 @@ async function saveKey(): Promise<void> {
 
 async function clearKey(): Promise<void> {
   try {
-    aiConfig.value = await api('ai:clearKey')
+    aiConfig.value = await api('ai:clearKey', { provider: aiConfig.value?.provider })
     appStore.notify('success', 'Chave removida.')
   } catch (error) {
     appStore.notifyError(error)
@@ -549,11 +570,18 @@ async function confirmDeleteSkill(): Promise<void> {
       <BaseAlert tone="warn" title="Este módulo envia dados de saúde a um provedor externo.">
         <p>
           O Baremo é local-first, com processamento em nuvem opcional e consentido. Com o módulo
-          ligado, consultas ao assistente enviam dados do prontuário à API do Google Gemini.
-          Recomendamos fortemente usar uma chave de projeto com
-          <strong>faturamento habilitado</strong>: chaves de nível gratuito historicamente têm
-          política de retenção e uso para melhoria de produto distinta — o que é inadequado para
-          dado sensível de saúde.
+          ligado, consultas ao assistente enviam dados do prontuário à API da
+          {{ AI_PROVIDER_LABELS[aiConfig.provider] }}.
+          <template v-if="aiConfig.provider === 'gemini'">
+            Recomendamos fortemente usar uma chave de projeto com
+            <strong>faturamento habilitado</strong>: chaves de nível gratuito historicamente têm
+            política de retenção e uso para melhoria de produto distinta — o que é inadequado para
+            dado sensível de saúde.
+          </template>
+          <template v-else>
+            Antes de usar, confira a política de retenção de dados da API da empresa e prefira uma
+            conta de organização com contrato adequado a dado sensível de saúde.
+          </template>
         </p>
       </BaseAlert>
 
@@ -567,7 +595,30 @@ async function confirmDeleteSkill(): Promise<void> {
       </BaseCard>
 
       <BaseCard padding="lg">
-        <SectionHeader title="Chave de API" size="sm" class="mb-3" />
+        <SectionHeader title="Empresa de IA" size="sm" class="mb-3" />
+        <BaseField id="ai-provider" label="Empresa que processa as consultas">
+          <BaseSelect
+            :model-value="aiConfig.provider"
+            @update:model-value="setProvider($event as AiProviderId)"
+          >
+            <option v-for="provider in AI_PROVIDERS" :key="provider" :value="provider">
+              {{ AI_PROVIDER_LABELS[provider] }}
+              {{ aiConfig.keys[provider].hasKey ? '· chave cadastrada' : '' }}
+            </option>
+          </BaseSelect>
+        </BaseField>
+        <p class="mt-2 text-xs text-fg-subtle">
+          Cada empresa tem a sua chave, guardada separadamente. Trocar de empresa pede um novo
+          consentimento antes da próxima consulta, porque os dados passam a ir para outro lugar.
+        </p>
+      </BaseCard>
+
+      <BaseCard padding="lg">
+        <SectionHeader
+          :title="`Chave de API — ${AI_PROVIDER_LABELS[aiConfig.provider]}`"
+          size="sm"
+          class="mb-3"
+        />
 
         <BaseAlert v-if="!aiConfig.safeStorageAvailable" tone="warn" size="sm" class="mb-3">
           A criptografia do sistema não está disponível neste computador (comum em Linux sem keyring
@@ -583,7 +634,11 @@ async function confirmDeleteSkill(): Promise<void> {
         <div class="flex items-end gap-3">
           <BaseField
             id="api-key"
-            :label="aiConfig.hasKey ? 'Substituir chave' : 'Chave de API do Gemini'"
+            :label="
+              aiConfig.hasKey
+                ? 'Substituir chave'
+                : `Chave gerada no ${AI_PROVIDER_KEY_SOURCES[aiConfig.provider]}`
+            "
             class="flex-1"
           >
             <BaseInput
@@ -591,7 +646,7 @@ async function confirmDeleteSkill(): Promise<void> {
               type="password"
               class="font-mono"
               autocomplete="off"
-              placeholder="AIza…"
+              :placeholder="KEY_PLACEHOLDERS[aiConfig.provider]"
             />
           </BaseField>
           <BaseButton :disabled="apiKey === ''" :loading="testing" @click="testKey">
@@ -633,7 +688,11 @@ async function confirmDeleteSkill(): Promise<void> {
               :model-value="aiConfig.model"
               @update:model-value="setModel($event as AiModel)"
             >
-              <option v-for="model in AI_MODELS" :key="model" :value="model">
+              <option
+                v-for="model in AI_MODELS_BY_PROVIDER[aiConfig.provider]"
+                :key="model"
+                :value="model"
+              >
                 {{ AI_MODEL_LABELS[model] }}
               </option>
             </BaseSelect>

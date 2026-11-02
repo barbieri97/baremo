@@ -11,11 +11,16 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import { getDatabase } from '../../db'
 import { conflict, notFound, registerHandler } from '../register'
 import { aiMessages, aiSessions, aiToolCalls, consents } from '../../db/schema'
-import { getAiConfig, updateAiConfig } from '../../repositories/ai-config'
+import {
+  getAiConfig,
+  setAiProvider,
+  setProviderKey,
+  updateAiConfig
+} from '../../repositories/ai-config'
 import { getPatient } from '../../repositories/patients'
 import { clearKey, encryptionAvailable, keyHint, saveKey } from '../../ai/key-store'
 import { AgentOrchestrator, contentToTiptap } from '../../ai/orchestrator'
-import { DEFAULT_PROVIDER } from '../../ai/providers'
+import { resolveProvider } from '../../ai/providers'
 import type { WritePreview } from '../../ai/orchestrator'
 import { applyAcceptedChanges, countChanges, diffBlocks } from '@shared/domain/block-diff'
 import { listAiAudit, recordAiEvent } from '../../ai/audit'
@@ -35,18 +40,35 @@ import {
 } from '../../repositories/ai-skills'
 import { knowledgeDatabase, knowledgeEmbedder } from './knowledge'
 import { AI_STREAM_CHANNEL } from '@shared/contracts'
-import { AI_MODELS } from '@shared/contracts/entities-ai'
-import type { AiModel, AiSession, AiStreamEvent, AiToolCall } from '@shared/contracts/entities-ai'
+import { AI_MODELS, AI_PROVIDER_LABELS, providerOfModel } from '@shared/contracts/entities-ai'
+import type {
+  AiModel,
+  AiProviderId,
+  AiSession,
+  AiStreamEvent,
+  AiToolCall
+} from '@shared/contracts/entities-ai'
 import type { DocumentType } from '@shared/labels'
 import { DOCUMENT_TYPES } from '@shared/labels'
 
 /**
- * Versão do texto de consentimento.
+ * Versão do texto de consentimento, por empresa de IA.
  *
  * Sobe quando o texto muda: um consentimento dado sob outra redação não vale
- * para a nova, e o registro precisa dizer a que o usuário consentiu.
+ * para a nova, e o registro precisa dizer a que o usuário consentiu. O texto
+ * nomeia a empresa que recebe os dados, então cada empresa tem a sua versão —
+ * trocar de empresa pede consentimento de novo. A do Gemini é a de antes da
+ * escolha de empresa existir: o texto dela não mudou.
  */
-export const CONSENT_TEXT_VERSION = '2026-08-1'
+export const CONSENT_TEXT_VERSIONS: Readonly<Record<AiProviderId, string>> = {
+  gemini: '2026-08-1',
+  anthropic: '2026-11-anthropic-1',
+  openai: '2026-11-openai-1'
+}
+
+function consentVersion(): string {
+  return CONSENT_TEXT_VERSIONS[getAiConfig(getDatabase()).provider]
+}
 
 let orchestrator: AgentOrchestrator | null = null
 
@@ -65,7 +87,12 @@ export function registerAiHandlers(): void {
   })
 
   registerHandler('ai:setModel', ({ model }) => {
-    updateAiConfig(getDatabase(), { model })
+    changeProvider(providerOfModel(model), model)
+    return currentConfig()
+  })
+
+  registerHandler('ai:setProvider', ({ provider }) => {
+    changeProvider(provider)
     return currentConfig()
   })
 
@@ -100,32 +127,36 @@ export function registerAiHandlers(): void {
     return currentConfig()
   })
 
-  registerHandler('ai:saveKey', ({ key, persist }) => {
+  registerHandler('ai:saveKey', ({ key, persist, provider }) => {
     const handle = getDatabase()
+    const target = provider ?? getAiConfig(handle).provider
 
     try {
-      saveKey(key, { persist })
+      saveKey(target, key, { persist })
     } catch (error) {
       throw conflict(error instanceof Error ? error.message : 'Falha ao gravar a chave.')
     }
 
-    updateAiConfig(handle, { keyHint: keyHint(key), keyPersisted: persist })
+    setProviderKey(handle, target, { hint: keyHint(key), persisted: persist })
     return currentConfig()
   })
 
   /** Chamada de teste antes de salvar (§10.2). A chave não é gravada aqui. */
-  registerHandler('ai:testKey', async ({ key }) => {
-    const provider = DEFAULT_PROVIDER
+  registerHandler('ai:testKey', async ({ key, provider: target }) => {
+    const provider = resolveProvider(target ?? getAiConfig(getDatabase()).provider)
     try {
       await provider.testKey(key)
-      return { ok: true, message: 'Chave válida. A conexão com o provedor funcionou.' }
+      return {
+        ok: true,
+        message: `Chave válida. A conexão com a ${provider.label} funcionou.`
+      }
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error)
 
       if (provider.classifyError(error)?.code === 'invalid_key') {
         return {
           ok: false,
-          message: 'A chave foi recusada pelo provedor. Verifique se copiou corretamente.'
+          message: `A chave foi recusada pela ${provider.label}. Verifique se copiou corretamente e se ela é desta empresa.`
         }
       }
       if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|fetch failed/i.test(raw)) {
@@ -138,9 +169,11 @@ export function registerAiHandlers(): void {
     }
   })
 
-  registerHandler('ai:clearKey', () => {
-    clearKey()
-    updateAiConfig(getDatabase(), { keyHint: null })
+  registerHandler('ai:clearKey', (input) => {
+    const handle = getDatabase()
+    const target = input?.provider ?? getAiConfig(handle).provider
+    clearKey(target)
+    setProviderKey(handle, target, null)
     return currentConfig()
   })
 
@@ -164,10 +197,12 @@ export function registerAiHandlers(): void {
             .where(and(eq(consents.scope, 'patient'), eq(consents.patientId, patientId)))
             .get()
 
+    const version = consentVersion()
     return {
-      moduleGranted: moduleConsent?.consentTextVersion === CONSENT_TEXT_VERSION,
-      patientGranted: patientConsent?.consentTextVersion === CONSENT_TEXT_VERSION,
-      textVersion: CONSENT_TEXT_VERSION
+      moduleGranted: moduleConsent?.consentTextVersion === version,
+      patientGranted: patientConsent?.consentTextVersion === version,
+      textVersion: version,
+      provider: getAiConfig(handle).provider
     }
   })
 
@@ -186,13 +221,7 @@ export function registerAiHandlers(): void {
          DO UPDATE SET granted_at = excluded.granted_at,
                        consent_text_version = excluded.consent_text_version`
       )
-      .run(
-        randomUUID(),
-        scope,
-        scope === 'module' ? null : patientId,
-        nowIso(),
-        CONSENT_TEXT_VERSION
-      )
+      .run(randomUUID(), scope, scope === 'module' ? null : patientId, nowIso(), consentVersion())
 
     return { ok: true as const }
   })
@@ -322,6 +351,24 @@ function toSession(row: typeof aiSessions.$inferSelect): AiSession {
     model: (AI_MODELS as readonly string[]).includes(row.model)
       ? (row.model as AiModel)
       : 'gemini-flash-latest'
+  }
+}
+
+/**
+ * Troca a empresa ativa e deixa isso na auditoria: a partir daqui, os dados do
+ * prontuário vão para outra empresa.
+ */
+function changeProvider(provider: AiProviderId, model?: AiModel): void {
+  const handle = getDatabase()
+  const before = getAiConfig(handle)
+  setAiProvider(handle, provider, model)
+
+  if (before.provider !== provider) {
+    recordAiEvent(
+      handle,
+      `Empresa de IA alterada de ${AI_PROVIDER_LABELS[before.provider]} para ${AI_PROVIDER_LABELS[provider]}.`,
+      { pseudonymized: before.pseudonymize }
+    )
   }
 }
 

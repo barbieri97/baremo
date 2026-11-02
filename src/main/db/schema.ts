@@ -254,7 +254,16 @@ export const aiConfig = sqliteTable('ai_config', {
   id: text('id').primaryKey(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
   model: text('model').notNull().default('gemini-flash-latest'),
+  /** Empresa ativa (migration 5). */
+  provider: text('provider').notNull().default('gemini'),
+  /**
+   * Situação da chave de cada empresa, em JSON: `{ gemini: { hint, persisted } }`.
+   * Só a dica dos quatro últimos caracteres — o segredo fica no `key-store`.
+   */
+  providerKeys: text('provider_keys').notNull().default('{}'),
+  /** @deprecated Desde a migration 5, a dica vive em `providerKeys`. */
   keyHint: text('key_hint'),
+  /** @deprecated Desde a migration 5, vive em `providerKeys`. */
   keyPersisted: integer('key_persisted', { mode: 'boolean' }).notNull().default(true),
   pseudonymize: integer('pseudonymize', { mode: 'boolean' }).notNull().default(true),
   monthlyTokenBudget: integer('monthly_token_budget').notNull().default(1_000_000),

@@ -61,8 +61,12 @@ export function modelsDir(): string {
   return ensureDir(join(userDataDir(), 'modelos'))
 }
 
-export function aiKeyPath(): string {
-  return join(userDataDir(), 'gemini-key.enc')
+/**
+ * Chave cifrada de uma empresa de IA. O nome do Gemini é o de antes da escolha
+ * de empresa existir: assim a chave já cadastrada continua valendo.
+ */
+export function aiKeyPath(provider: 'gemini' | 'anthropic' | 'openai'): string {
+  return join(userDataDir(), `${provider}-key.enc`)
 }
 
 export function ensureDir(path: string): string {

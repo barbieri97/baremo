@@ -9,32 +9,90 @@
 import { z } from 'zod'
 import { idSchema, timestampSchema } from './entities'
 
-/** Família do modelo: Flash para custo, Pro para raciocínio longo (§10.2). */
+/**
+ * Empresas de IA que o profissional pode escolher. Cada uma tem a sua chave,
+ * cifrada à parte, e o seu adaptador em `src/main/ai/providers/`.
+ */
+export const AI_PROVIDERS = ['gemini', 'anthropic', 'openai'] as const
+export type AiProviderId = (typeof AI_PROVIDERS)[number]
+
+export const AI_PROVIDER_LABELS: Readonly<Record<AiProviderId, string>> = {
+  gemini: 'Google Gemini',
+  anthropic: 'Anthropic Claude',
+  openai: 'OpenAI'
+}
+
+/** Onde o profissional gera a chave de cada empresa. */
+export const AI_PROVIDER_KEY_SOURCES: Readonly<Record<AiProviderId, string>> = {
+  gemini: 'Google AI Studio',
+  anthropic: 'Claude Console',
+  openai: 'OpenAI Platform'
+}
+
+/** Modelos oferecidos, por empresa — o primeiro de cada lista é o padrão. */
+export const AI_MODELS_BY_PROVIDER = {
+  gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'],
+  anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
+  openai: ['gpt-5.5', 'gpt-5.4-mini', 'gpt-5.4-nano']
+} as const satisfies Record<AiProviderId, readonly string[]>
+
 export const AI_MODELS = [
-  'gemini-flash-latest',
-  'gemini-flash-lite-latest',
-  'gemini-pro-latest'
+  ...AI_MODELS_BY_PROVIDER.gemini,
+  ...AI_MODELS_BY_PROVIDER.anthropic,
+  ...AI_MODELS_BY_PROVIDER.openai
 ] as const
 export type AiModel = (typeof AI_MODELS)[number]
 
 export const AI_MODEL_LABELS: Readonly<Record<AiModel, string>> = {
   'gemini-flash-latest': 'Gemini Flash — mais rápido e barato',
   'gemini-flash-lite-latest': 'Gemini Flash Lite — custo mínimo',
-  'gemini-pro-latest': 'Gemini Pro — raciocínio longo'
+  'gemini-pro-latest': 'Gemini Pro — raciocínio longo',
+  'claude-opus-5-5': 'Claude Opus 5.5 — o mais capaz',
+  'claude-sonnet-5-5': 'Claude Sonnet 5.5 — equilíbrio entre custo e capacidade',
+  'claude-haiku-5-5': 'Claude Haiku 5.5 — mais rápido e barato',
+  'gpt-5.5': 'GPT-5.5 — o mais capaz',
+  'gpt-5.4-mini': 'GPT-5.4 mini — equilíbrio entre custo e capacidade',
+  'gpt-5.4-nano': 'GPT-5.4 nano — custo mínimo'
 }
+
+export function providerOfModel(model: AiModel): AiProviderId {
+  for (const provider of AI_PROVIDERS) {
+    if ((AI_MODELS_BY_PROVIDER[provider] as readonly string[]).includes(model)) return provider
+  }
+  return 'gemini'
+}
+
+export function defaultModelFor(provider: AiProviderId): AiModel {
+  return AI_MODELS_BY_PROVIDER[provider][0]
+}
+
+/** Situação da chave de uma empresa: só a dica, nunca o segredo (§10.2). */
+export const aiProviderKeySchema = z.object({
+  hasKey: z.boolean(),
+  keyHint: z.string().max(8).nullable(),
+  keyPersisted: z.boolean()
+})
+export type AiProviderKey = z.infer<typeof aiProviderKeySchema>
 
 /**
  * Estado do módulo, do ponto de vista do renderer.
  * `hasKey` é booleano e `keyHint` traz só os quatro últimos caracteres (§10.2).
+ * Os três referem-se à empresa ATIVA; `keys` traz a situação de todas.
  */
 export const aiConfigSchema = z.object({
   /** Desligado por padrão — §10.1, princípio 6. */
   enabled: z.boolean(),
+  provider: z.enum(AI_PROVIDERS),
   model: z.enum(AI_MODELS),
   hasKey: z.boolean(),
   keyHint: z.string().max(8).nullable(),
   /** `false` quando o usuário optou por digitar a chave a cada execução. */
   keyPersisted: z.boolean(),
+  keys: z.object({
+    gemini: aiProviderKeySchema,
+    anthropic: aiProviderKeySchema,
+    openai: aiProviderKeySchema
+  }),
   /** §10.2 — Linux sem keyring degrada para criptografia simbólica. */
   safeStorageAvailable: z.boolean(),
   /** Pseudonimização ligada por padrão — §10.3. */
