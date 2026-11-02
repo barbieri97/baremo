@@ -34,10 +34,14 @@ import type { EChartsOption } from 'echarts'
  * "como está este paciente?" e a única que o leitor vai examinar de perto.
  */
 export const CHART_SIZE = {
-  radar: { width: 560, height: 340 },
-  radarOverall: { width: 520, height: 360 },
-  comparison: { width: 640, height: 300 },
-  evolution: { width: 640, height: 280 }
+  // Coluna do radar dentro do cartão de função (~96mm ≈ 360px): o radar sai em
+  // tamanho natural, e os nomes das subfunções no corpo que a opção definiu.
+  radar: { width: 360, height: 250 },
+  // Largura do conteúdo, baixo: o polígono ocupa a altura e as laterais ficam
+  // para os nomes das funções. Mais alto, empurrava o radar para outra página.
+  radarOverall: { width: 640, height: 290 },
+  comparison: { width: 640, height: 220 },
+  evolution: { width: 640, height: 220 }
 } as const
 
 /**

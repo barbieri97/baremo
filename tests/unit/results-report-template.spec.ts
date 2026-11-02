@@ -234,6 +234,104 @@ describe('panorama', () => {
   })
 })
 
+describe('faixa de indicadores da capa', () => {
+  it('resume o caso com números do view-model', () => {
+    const html = renderResultsReport(overview(), NO_CHARTS)
+
+    expect(html).toContain('class="kpi-strip"')
+    // Abaixo do esperado vem da soma dos grupos raiz, e pinta o bloco de alerta.
+    expect(html).toContain('kpi kpi--danger')
+    expect(html).toContain('Função mais rebaixada')
+    expect(html).toMatch(/kpi__fn-name">Memória de trabalho</)
+  })
+
+  it('não elege a pseudofunção "sem função" como a mais rebaixada', () => {
+    const semFuncao: FunctionSummary = { ...REBAIXADA, id: null, name: 'Sem função cognitiva' }
+    const html = renderResultsReport(overview({ functions: [semFuncao, PRESERVADA] }), NO_CHARTS)
+
+    expect(html).toMatch(/kpi__fn-name">Linguagem</)
+  })
+
+  it('some quando não há resultado', () => {
+    const html = renderResultsReport(
+      overview({ totalResults: 0, functions: [], functionGroups: [] }),
+      NO_CHARTS
+    )
+    expect(html).not.toContain('kpi-strip')
+  })
+})
+
+describe('detalhe por função', () => {
+  const group = overview().functionGroups[0]!
+
+  it('monta uma tabela só por função raiz, com as subfunções como linhas', () => {
+    const html = renderResultsReport(
+      overview({ functionGroups: [{ ...group, functions: [REBAIXADA, FRACIONARIA] }] }),
+      NO_CHARTS
+    )
+    const card = html.slice(html.indexOf('class="group-card"'))
+
+    expect(card.match(/<table/g)).toHaveLength(1)
+    expect(card.match(/class="subgroup-row"/g)).toHaveLength(2)
+  })
+
+  it('omite a subfunção que só repete o nome da raiz', () => {
+    const html = renderResultsReport(
+      overview({
+        functionGroups: [{ ...group, name: 'Linguagem', functions: [PRESERVADA] }]
+      }),
+      NO_CHARTS
+    )
+    expect(html).not.toContain('class="subgroup-row"')
+  })
+
+  it('só mostra a situação quando ela foge de "Aplicado"', () => {
+    const interrompido: FunctionSummary = {
+      ...REBAIXADA,
+      points: [point({ status: 'interrupted', statusLabel: 'Interrompido' })]
+    }
+    const html = renderResultsReport(
+      overview({ functionGroups: [{ ...group, functions: [REBAIXADA, interrompido] }] }),
+      NO_CHARTS
+    )
+
+    expect(html.match(/class="status-tag"/g)).toHaveLength(1)
+    expect(html).toContain('Interrompido')
+  })
+})
+
+describe('por teste', () => {
+  it('põe a tabela e o gráfico de comparação no mesmo cartão', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220"></svg>'
+    const test = {
+      instrumentId: '33333333-3333-4333-8333-333333333333',
+      name: 'Escala Wechsler',
+      acronym: 'WAIS',
+      label: 'Escala Wechsler (WAIS)',
+      inverted: false,
+      comparable: true,
+      entries: [
+        {
+          key: 'a',
+          label: 'Dígitos',
+          instrumentId: '33333333-3333-4333-8333-333333333333',
+          scoreType: 'percentile' as const,
+          scoreTypeLabel: 'Pc',
+          values: [point()]
+        }
+      ]
+    }
+    const html = renderResultsReport(overview({ tests: [test] }), {
+      ...NO_CHARTS,
+      comparison: { [test.instrumentId]: svg }
+    })
+    const card = html.slice(html.indexOf('class="test-card"'))
+
+    expect(card.indexOf('<table')).toBeLessThan(card.indexOf(svg))
+    expect(card.indexOf(svg)).toBeLessThan(card.indexOf('</article>'))
+  })
+})
+
 describe('relatório sem resultados', () => {
   it('ainda entrega capa, aviso e assinatura', () => {
     const html = renderResultsReport(

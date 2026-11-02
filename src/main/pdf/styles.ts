@@ -21,9 +21,10 @@
  *
  *  - a **folha clássica** (`.doc-header`, `.patient-card`, `.section`, `table`)
  *    veste o relatório comparativo e a exportação de documento do editor;
- *  - a **folha de tela** (`.cover`, `.card-grid`, `.fn-card`, `.chart-card`,
- *    `.table-card`) veste o relatório de resultados, e reproduz no papel o
- *    desenho de `ResultsView.vue` — cartão, barra de calor e selo coloridos.
+ *  - a **folha de tela** (`.cover`, `.kpi-strip`, `.card-grid`, `.fn-card`,
+ *    `.chart-card`, `.group-card`, `.test-card`) veste o relatório de
+ *    resultados, e reproduz no papel o desenho de `ResultsView.vue` — cartão,
+ *    barra de calor e selo coloridos.
  *
  * As medidas da segunda saem de uma conta só: a largura útil da página é de
  * ~179mm (A4 de 210mm menos as margens de 0,6pol de cada lado aplicadas pelo
@@ -282,47 +283,67 @@ export const REPORT_CSS = `
 
   /* ═══ Folha de tela: relatório de resultados (§7.3) ══════════════════════ */
 
+  /* Tokens próprios desta folha. O azul é o \`brand-500\` da interface: aqui ele
+     marca só a estrutura (sobretítulos, filetes), nunca dado — a cor com
+     significado no laudo continua sendo a dos níveis. */
+  :root {
+    --brand: #2b6cb0;
+    --brand-strong: #1a365d;
+    --brand-soft: #eff6ff;
+    --brand-line: #bfdbfe;
+    --surface-muted: #f8fafc;
+    --info-bg: #eff6ff;
+    --info-line: #bfdbfe;
+    --info-ink: #1a365d;
+  }
+
+  .text-danger { color: var(--danger); }
+
   /* ── Capa ─────────────────────────────────────────────────────────────── */
 
   .cover { break-after: page; page-break-after: always; }
 
-  .cover__letterhead {
+  .letterhead {
     display: flex;
-    gap: 8mm;
+    gap: 6mm;
     align-items: center;
-    border-bottom: 1pt solid var(--ink);
-    padding-bottom: 4mm;
-    margin-bottom: 14mm;
+    padding-bottom: 3.5mm;
+    margin-bottom: 8mm;
+    border-bottom: 0.6mm solid var(--brand);
   }
 
-  .cover__logo {
-    max-height: 22mm;
-    max-width: 40mm;
+  .letterhead__logo {
+    max-height: 20mm;
+    max-width: 38mm;
     object-fit: contain;
   }
 
-  .cover__identity { flex: 1; }
+  .letterhead__identity { flex: 1; }
 
-  .cover__professional {
+  .letterhead__name {
     font-family: var(--serif);
     font-size: 13pt;
     font-weight: 600;
-    margin: 0 0 1mm;
+    margin: 0 0 0.8mm;
+    color: var(--ink);
   }
 
-  .cover__contact {
+  .letterhead__meta {
     margin: 0;
     color: var(--muted);
     font-size: 8.5pt;
+    line-height: 1.45;
   }
 
+  .cover__hero { margin: 0 0 6mm; }
+
   .cover__eyebrow {
-    margin: 0 0 2mm;
+    margin: 0 0 2.5mm;
     font-size: 8pt;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--ink-500);
+    letter-spacing: 0.14em;
+    color: var(--brand);
   }
 
   .cover__title {
@@ -330,47 +351,104 @@ export const REPORT_CSS = `
     font-size: 22pt;
     font-weight: 600;
     letter-spacing: -0.02em;
-    line-height: 1.2;
+    line-height: 1.15;
     margin: 0 0 2mm;
+    color: var(--ink);
   }
 
   .cover__meta {
-    margin: 0 0 12mm;
+    margin: 0;
     color: var(--muted);
     font-size: 10pt;
   }
 
-  .cover__block { margin: 0 0 7mm; }
+  /* ── Faixa de indicadores ─────────────────────────────────────────────── */
 
-  /* Sem \`break-inside: avoid\` de propósito: uma queixa longa passa da
-     altura da página, e o Chromium recortaria o que não coubesse. O que se
-     evita aqui é o título órfão no pé da página. */
-  .cover__block-title {
-    break-after: avoid;
-    page-break-after: avoid;
-    margin: 0 0 2.5mm;
-    padding-bottom: 1.2mm;
-    border-bottom: 0.3mm solid var(--border);
-    font-size: 8pt;
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 2fr;
+    gap: 3mm;
+    margin: 0 0 5mm;
+    break-inside: avoid;
+  }
+
+  .kpi {
+    border: 0.3mm solid var(--border);
+    border-top: 0.9mm solid var(--brand);
+    border-radius: 2mm;
+    background: #ffffff;
+    padding: 3mm 3.5mm;
+  }
+
+  .kpi--danger { border-top-color: var(--danger); }
+  .kpi--danger .kpi__value { color: var(--danger); }
+
+  .kpi__value {
+    margin: 0;
+    font-size: 20pt;
+    font-weight: 600;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .kpi__label {
+    margin: 1mm 0 0;
+    font-size: 7.5pt;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--ink-500);
   }
 
-  /* O texto veio de um \`textarea\`: as quebras que o profissional digitou são
-     dele, e colapsá-las juntaria num bloco só o que ele escreveu apartado. */
-  .cover__text {
+  .kpi--wide .kpi__label { margin: 0 0 2mm; }
+
+  .kpi__fn {
+    display: flex;
+    align-items: center;
+    gap: 2.5mm;
     margin: 0;
-    font-size: 10pt;
-    white-space: pre-wrap;
-    text-align: justify;
+  }
+
+  .kpi__fn-name {
+    font-size: 11pt;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  /* ── Blocos da capa ───────────────────────────────────────────────────── */
+
+  .surface-card {
+    border: 0.3mm solid var(--border);
+    border-radius: 2mm;
+    background: var(--surface-muted);
+    padding: 4mm 5mm;
+    margin: 0 0 6mm;
+    break-inside: avoid;
+  }
+
+  .block-title {
+    break-after: avoid;
+    page-break-after: avoid;
+    margin: 0 0 3mm;
+    font-size: 8pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--brand-strong);
+  }
+
+  .block-title--spaced {
+    margin-top: 3.5mm;
+    padding-top: 3mm;
+    border-top: 0.3mm solid var(--border);
   }
 
   .data-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 3.5mm 6mm;
+    gap: 2.5mm 6mm;
     margin: 0;
   }
 
@@ -379,40 +457,79 @@ export const REPORT_CSS = `
   .data-grid dt {
     font-size: 7.5pt;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     color: var(--ink-500);
-    margin-bottom: 0.6mm;
+    margin-bottom: 0.5mm;
   }
 
   .data-grid dd {
     margin: 0;
     font-size: 10pt;
+    color: var(--ink);
   }
 
-  /* ── Seções e avisos ──────────────────────────────────────────────────── */
+  /* Sem \`break-inside: avoid\` de propósito: uma queixa longa passa da
+     altura da página, e o Chromium recortaria o que não coubesse. O que se
+     evita é o título órfão no pé da página (\`.block-title\`). */
+  .text-block {
+    margin: 0 0 4.5mm;
+    padding-left: 4mm;
+    border-left: 0.6mm solid var(--brand-line);
+  }
 
-  .screen-section { margin: 0 0 9mm; }
+  /* O texto veio de um \`textarea\`: as quebras que o profissional digitou são
+     dele, e colapsá-las juntaria num bloco só o que ele escreveu apartado. */
+  .text-block__body {
+    margin: 0;
+    font-size: 10pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    text-align: justify;
+  }
 
-  .screen-section__title {
-    font-family: var(--serif);
-    font-size: 14pt;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    margin: 0 0 1.5mm;
+  /* ── Seções ───────────────────────────────────────────────────────────── */
+
+  .report-section { margin: 0 0 6mm; }
+
+  .section-head {
+    margin: 0 0 5mm;
+    padding-top: 3mm;
+    border-top: 0.9mm solid var(--brand);
     break-after: avoid;
+    page-break-after: avoid;
   }
 
-  .screen-section__note {
-    margin: 0 0 3.5mm;
+  .section-head__eyebrow {
+    margin: 0 0 1mm;
+    font-size: 7.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--brand);
+  }
+
+  .section-head__title {
+    font-family: var(--serif);
+    font-size: 17pt;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .section-head__note {
+    margin: 1.5mm 0 0;
+    max-width: 150mm;
     font-size: 8.5pt;
     color: var(--ink-500);
   }
 
   .notice {
     border-radius: 2mm;
-    padding: 3mm 4mm;
-    margin: 0 0 6mm;
-    font-size: 9pt;
+    padding: 2.5mm 3.5mm;
+    margin: 0 0 4mm;
+    font-size: 8.5pt;
     break-inside: avoid;
   }
 
@@ -420,6 +537,20 @@ export const REPORT_CSS = `
     border: 0.3mm solid var(--warn-line);
     background: var(--warn-bg);
     color: var(--warn-ink);
+  }
+
+  .notice--info {
+    border: 0.3mm solid var(--info-line);
+    background: var(--info-bg);
+    color: var(--info-ink);
+  }
+
+  .footnote {
+    margin: 4mm 0 0;
+    padding-top: 2mm;
+    border-top: 0.3mm solid var(--border);
+    font-size: 8pt;
+    color: var(--ink-500);
   }
 
   /* ── Panorama: a grade de cartões ─────────────────────────────────────── */
@@ -432,9 +563,10 @@ export const REPORT_CSS = `
 
   .fn-card {
     border: 0.3mm solid var(--border);
+    border-left: 1.2mm solid var(--ink-400);
     border-radius: 2mm;
     background: #ffffff;
-    padding: 3mm;
+    padding: 3mm 3mm 2.6mm 3.2mm;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -444,7 +576,7 @@ export const REPORT_CSS = `
     align-items: flex-start;
     justify-content: space-between;
     gap: 2mm;
-    margin-bottom: 2.5mm;
+    margin-bottom: 2.4mm;
   }
 
   .fn-card__identity { min-width: 0; }
@@ -458,61 +590,72 @@ export const REPORT_CSS = `
   }
 
   .fn-card__count {
-    margin: 0.7mm 0 0;
+    margin: 0.6mm 0 0;
     font-size: 7.5pt;
     color: var(--ink-500);
   }
 
-  .fn-card__level {
-    flex: none;
-    border-radius: 1mm;
-    padding: 1mm 1.8mm;
-    font-size: 12.5pt;
-    font-weight: 700;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }
-
   .fn-card__foot {
-    margin: 2.5mm 0 0;
+    margin: 2.2mm 0 0;
     font-size: 7.5pt;
     line-height: 1.35;
     color: var(--ink-500);
   }
 
-  .fn-card__foot--danger { color: var(--danger); }
+  .fn-card__foot--danger { color: var(--danger); font-weight: 600; }
 
-  /* ── Barra de calor e legenda ─────────────────────────────────────────── */
+  /* O selo do nível médio — o \`rounded-chip\` com número em negrito da tela. */
+  .level-pill {
+    flex: none;
+    display: inline-block;
+    min-width: 10mm;
+    text-align: center;
+    border-radius: 1.2mm;
+    padding: 1.1mm 1.8mm;
+    font-size: 12pt;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .level-pill--sm {
+    min-width: 8mm;
+    padding: 0.8mm 1.4mm;
+    font-size: 8.5pt;
+  }
+
+  /* ── Barra de calor e régua de níveis ─────────────────────────────────── */
 
   .heat-bar {
     display: flex;
     width: 100%;
-    height: 2.6mm;
-    border-radius: 1.3mm;
+    height: 2.4mm;
+    border-radius: 1.2mm;
     overflow: hidden;
     background: var(--wash);
   }
 
   .heat-bar__part { display: block; height: 100%; font-size: 0; }
 
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1mm 4mm;
-    margin: 3.5mm 0 0;
+  .level-scale {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.8mm;
+    margin: 4mm 0 0;
+    break-inside: avoid;
+  }
+
+  .level-scale__step { display: flex; flex-direction: column; gap: 1.2mm; }
+
+  .level-scale__bar { display: block; height: 1.8mm; border-radius: 0.6mm; }
+
+  .level-scale__label {
     font-size: 7.5pt;
-    color: var(--ink-500);
+    line-height: 1.3;
+    color: var(--muted);
   }
 
-  .legend__item { display: inline-flex; align-items: center; gap: 1.2mm; }
-
-  .legend__swatch {
-    display: inline-block;
-    width: 2.4mm;
-    height: 2.4mm;
-    border-radius: 0.5mm;
-    flex: none;
-  }
+  .level-scale__label strong { color: var(--ink); margin-right: 0.6mm; }
 
   /* ── Moldura de gráfico ───────────────────────────────────────────────── */
 
@@ -520,13 +663,13 @@ export const REPORT_CSS = `
     border: 0.3mm solid var(--border);
     border-radius: 2mm;
     background: #ffffff;
-    padding: 3mm;
+    padding: 3mm 3.5mm;
     margin: 4mm 0 0;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .chart-card__head { margin: 0 0 2mm; }
+  .chart-card__head { margin: 0 0 1.5mm; }
 
   .chart-card__title {
     margin: 0;
@@ -536,77 +679,104 @@ export const REPORT_CSS = `
   }
 
   .chart-card__subtitle {
-    margin: 0.7mm 0 0;
+    margin: 0.5mm 0 0;
     font-size: 7.5pt;
     color: var(--ink-500);
   }
 
   .chart-card__canvas { text-align: center; }
 
-  /* O SVG do ECharts sai com \`viewBox\`, então encolher não deforma: é o que
-     permite dimensionar o gráfico em pixels no SSR e deixar a página decidir. */
-  .chart-card__canvas svg { max-width: 100%; height: auto; }
+  /* O SVG do ECharts sai com \`viewBox\`, então encolher ou ampliar não deforma:
+     é o que permite dimensionar o gráfico em pixels no SSR e deixar a página
+     decidir. Os tamanhos de \`pdf/charts.ts\` já são os da coluna em que cada
+     gráfico cai, para que o texto saia perto do corpo natural. */
+  .chart-card__canvas svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .chart-card--wide .chart-card__canvas svg { width: 100%; }
 
-  /* O radar do panorama é AMPLIADO até a largura do conteúdo. Como o SVG traz
-     \`viewBox\`, a figura escala inteira — texto junto. Em tamanho natural os
-     nomes das funções sairiam a 6,4pt: legíveis com esforço, que é justamente
-     o que um gráfico de relance não pode exigir. */
-  .chart-card--wide .chart-card__canvas svg { display: block; width: 100%; height: auto; }
+  /* ── Detalhe por função: um cartão por função raiz ────────────────────── */
 
-  /* ── Detalhe por função ───────────────────────────────────────────────── */
+  .group-card {
+    border: 0.3mm solid var(--border);
+    border-radius: 2mm;
+    background: #ffffff;
+    margin: 0 0 5mm;
+  }
 
-  .fn-group { margin: 0 0 7mm; }
-
-  .fn-group__head {
+  .group-card__head {
     display: flex;
     align-items: center;
     gap: 3mm;
-    margin: 0 0 2.5mm;
+    padding: 3mm 3.5mm;
+    background: var(--surface-muted);
+    border-bottom: 0.3mm solid var(--border);
+    border-radius: 2mm 2mm 0 0;
     break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
   }
 
-  .fn-group__name {
+  .group-card__identity { flex: 1; min-width: 0; }
+
+  .group-card__name {
     margin: 0;
-    font-size: 10.5pt;
+    font-size: 11pt;
     font-weight: 600;
+    line-height: 1.25;
     color: var(--ink);
   }
 
-  .fn-group__bar, .fn-detail__bar {
-    display: block;
-    flex: none;
-    width: 34mm;
-  }
-
-  .fn-group__count {
-    font-size: 8pt;
+  .group-card__count {
+    margin: 0.4mm 0 0;
+    font-size: 7.5pt;
     color: var(--ink-500);
   }
 
-  /* A função filha recua sob a raiz: a indentação é o que diz que a tabela
-     pertence àquele bloco, e não é mais uma seção de mesmo nível. */
-  .fn-detail {
-    margin: 0 0 5mm;
-    padding-left: 3.5mm;
-    border-left: 0.3mm solid var(--border);
-  }
+  .group-card__bar { display: block; flex: none; width: 38mm; }
 
-  .fn-detail__head {
-    display: flex;
+  /* Radar e resumo das subfunções lado a lado: o polígono e os nomes que o
+     explicam ficam no mesmo relance. */
+  .group-card__profile {
+    display: grid;
+    grid-template-columns: 96mm 1fr;
+    gap: 4mm;
     align-items: center;
-    gap: 3mm;
-    margin: 0 0 1.8mm;
-    break-after: avoid;
+    padding: 3mm 3.5mm;
+    border-bottom: 0.3mm solid var(--border);
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
-  .fn-detail__name {
+  .group-card__radar { margin: 0; }
+
+  .subfn-list {
+    list-style: none;
     margin: 0;
-    font-size: 8pt;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-500);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2.2mm;
   }
+
+  .subfn-list__item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 2mm;
+    row-gap: 0.8mm;
+    align-items: center;
+  }
+
+  .subfn-list__item .level-pill { grid-row: 1 / span 2; }
+
+  .subfn-list__name {
+    font-size: 8.5pt;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .subfn-list__bar { display: block; }
+  .subfn-list__bar .heat-bar { height: 1.6mm; }
 
   .level-chip {
     display: inline-flex;
@@ -624,32 +794,21 @@ export const REPORT_CSS = `
     flex: none;
   }
 
-  /* ── Tabelas emolduradas ──────────────────────────────────────────────── */
-
-  /* Sem \`overflow: hidden\` de propósito, apesar do raio: uma tabela longa
-     atravessa a página, e recortar o que passa da moldura apagaria linhas. */
-  .table-card {
-    border: 0.3mm solid var(--border);
-    border-radius: 2mm;
-    background: #ffffff;
-  }
-
-  .table-card__caption {
-    margin: 0;
-    padding: 2mm 3mm;
-    border-bottom: 0.3mm solid var(--border);
-    background: var(--soft);
-    font-size: 9.5pt;
+  .status-tag {
+    display: inline-block;
+    margin-left: 1.5mm;
+    padding: 0 1.2mm;
+    border: 0.25mm solid var(--line);
+    border-radius: 0.8mm;
+    font-size: 6.5pt;
     font-weight: 600;
-    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
-  .table-card__flag {
-    margin-left: 2mm;
-    font-size: 7.5pt;
-    font-weight: 400;
-    color: var(--warn-ink);
-  }
+  /* ── Tabelas ──────────────────────────────────────────────────────────── */
 
   /* A tabela da tela não tem grade nem zebra: as linhas se separam por um fio
      só, e a hierarquia fica com o cabeçalho. É mais leve ao lado dos cartões. */
@@ -662,20 +821,21 @@ export const REPORT_CSS = `
   .grid-table thead th {
     border: none;
     border-bottom: 0.3mm solid var(--border);
-    background: var(--wash);
-    padding: 1.8mm 3mm;
-    font-size: 7.5pt;
+    background: #ffffff;
+    padding: 2mm 3.5mm 1.6mm;
+    font-size: 7pt;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--ink-500);
   }
 
   .grid-table tbody td {
     border: none;
-    border-top: 0.3mm solid var(--border);
-    padding: 1.8mm 3mm;
+    border-top: 0.25mm solid var(--wash);
+    padding: 1.7mm 3.5mm;
     vertical-align: middle;
+    line-height: 1.35;
   }
 
   .grid-table tbody tr:first-child td { border-top: none; }
@@ -684,7 +844,100 @@ export const REPORT_CSS = `
   .grid-table td.muted { color: var(--muted); }
   .grid-table td.strong { font-weight: 600; }
 
-  .test-group { margin: 0 0 7mm; }
+  /* A subfunção abre um trecho da tabela do grupo: faixa clara, nome em
+     caixa-alta e a barra de calor dela — o mesmo papel do \`h4\` da tela. */
+  .grid-table tr.subgroup-row td {
+    background: var(--brand-soft);
+    border-top: 0.3mm solid var(--brand-line);
+    padding: 1.4mm 3.5mm;
+  }
+
+  .grid-table tr.subgroup-row:first-child td { border-top: none; }
+
+  .subgroup-row__inner { display: flex; align-items: center; gap: 3mm; }
+
+  .subgroup-row__name {
+    font-size: 7.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brand-strong);
+  }
+
+  .subgroup-row__bar { display: block; width: 26mm; flex: none; }
+  .subgroup-row__bar .heat-bar { height: 1.6mm; }
+
+  .subgroup-row__count {
+    margin-left: auto;
+    font-size: 7pt;
+    color: var(--ink-500);
+  }
+
+  /* ── Por teste: tabela e gráficos no mesmo cartão ─────────────────────── */
+
+  /* \`break-inside: avoid\` no cartão inteiro: a tabela de um teste e o gráfico
+     dela não se separam. Um teste maior que uma página quebra assim mesmo — o
+     Chromium ignora o pedido quando ele não cabe —, e então o \`thead\` repete. */
+  .test-card {
+    border: 0.3mm solid var(--border);
+    border-radius: 2mm;
+    background: #ffffff;
+    margin: 0 0 5mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .test-card__head {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    padding: 2.8mm 3.5mm;
+    background: var(--surface-muted);
+    border-bottom: 0.3mm solid var(--border);
+    border-radius: 2mm 2mm 0 0;
+  }
+
+  .test-card__name {
+    margin: 0;
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .test-card__flag {
+    padding: 0.3mm 1.6mm;
+    border: 0.25mm solid var(--warn-line);
+    border-radius: 0.8mm;
+    background: var(--warn-bg);
+    font-size: 7pt;
+    font-weight: 600;
+    color: var(--warn-ink);
+  }
+
+  .test-card__chart {
+    margin: 0;
+    padding: 2.5mm 3.5mm 2mm;
+    border-top: 0.3mm solid var(--border);
+  }
+
+  .test-card__chart-head {
+    display: flex;
+    align-items: baseline;
+    gap: 2mm;
+    margin: 0 0 1mm;
+  }
+
+  .test-card__chart-title {
+    font-size: 7.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brand-strong);
+  }
+
+  .test-card__chart-subtitle { font-size: 7.5pt; color: var(--ink-500); }
+
+  .test-card__chart svg { width: 100%; }
 
   /* ═══ Conteúdo vindo do editor de documentos (§9) ════════════════════════ */
 
