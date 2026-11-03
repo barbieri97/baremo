@@ -22,7 +22,8 @@ import {
   PRINT_CSP,
   PRINT_PAGE_OPTIONS,
   printFooterTemplate,
-  printHeaderTemplate
+  printHeaderTemplate,
+  PRINT_SCHEME
 } from './document-html'
 import type { PdfHeader } from './document-html'
 
@@ -31,7 +32,7 @@ import type { PdfHeader } from './document-html'
  *  módulo que os chamadores conhecem. */
 export type { PdfHeader }
 
-export const PRINT_SCHEME = 'baremo-print'
+export { PRINT_SCHEME }
 
 /** Jobs em voo, por id. O HTML nunca toca o disco. */
 const jobs = new Map<string, string>()

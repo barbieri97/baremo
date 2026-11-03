@@ -875,17 +875,18 @@ export const REPORT_CSS = `
 
   /* ── Por teste: tabela e gráficos no mesmo cartão ─────────────────────── */
 
-  /* \`break-inside: avoid\` no cartão inteiro: a tabela de um teste e o gráfico
-     dela não se separam. Um teste maior que uma página quebra assim mesmo — o
-     Chromium ignora o pedido quando ele não cabe —, e então o \`thead\` repete. */
+  /* O cartão que cabe numa página (\`--compact\`) não se parte: a tabela e o
+     gráfico ficam juntos. O longo pode quebrar entre linhas, com o \`thead\`
+     repetido; pedir que não quebrasse só o empurrava para a página seguinte,
+     deixando uma página vazia para trás. O gráfico nunca se parte. */
   .test-card {
     border: 0.3mm solid var(--border);
     border-radius: 2mm;
     background: #ffffff;
     margin: 0 0 5mm;
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
+
+  .test-card--compact { break-inside: avoid; page-break-inside: avoid; }
 
   .test-card__head {
     display: flex;
@@ -895,6 +896,8 @@ export const REPORT_CSS = `
     background: var(--surface-muted);
     border-bottom: 0.3mm solid var(--border);
     border-radius: 2mm 2mm 0 0;
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .test-card__name {
@@ -915,6 +918,8 @@ export const REPORT_CSS = `
   }
 
   .test-card__chart {
+    break-inside: avoid;
+    page-break-inside: avoid;
     margin: 0;
     padding: 2.5mm 3.5mm 2mm;
     border-top: 0.3mm solid var(--border);

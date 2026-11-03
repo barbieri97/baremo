@@ -8,55 +8,10 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { APP_ORIGIN } from '../protocol/schemes'
+import { cspHeadersFor, developmentCsp, PRODUCTION_CSP } from './csp'
 
 /** Protocolos que podem ser abertos no navegador do sistema (§13.1). */
 const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:'])
-
-/**
- * CSP de produção.
- *
- * `style-src-attr 'unsafe-inline'` é a única concessão, e é deliberada:
- * `style-src` cobre também atributos `style=`, que o Vue emite em todo binding
- * `:style` e as bibliotecas de posicionamento usam para colocar um popover na
- * tela. Separar a diretiva mantém `<style>` e folhas externas travados em
- * `'self'` — que é onde script poderia entrar — sem quebrar a interface.
- */
-const PRODUCTION_CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "style-src-attr 'unsafe-inline'",
-  "img-src 'self' data: baremo-file:",
-  "media-src 'self' baremo-file:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "frame-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'"
-].join('; ')
-
-/**
- * Em desenvolvimento o Vite injeta estilos e usa `eval` no HMR, e o dev server é
- * HTTP em localhost. A política é afrouxada só aqui — a de produção acima é a
- * que vai para o usuário.
- */
-function developmentCsp(devServerUrl: string): string {
-  const origin = new URL(devServerUrl).origin
-  return [
-    "default-src 'none'",
-    `script-src 'self' 'unsafe-eval' ${origin}`,
-    `style-src 'self' 'unsafe-inline' ${origin}`,
-    `img-src 'self' data: baremo-file: ${origin}`,
-    `media-src 'self' baremo-file: ${origin}`,
-    `font-src 'self' data: ${origin}`,
-    `connect-src 'self' ${origin} ws://localhost:* ws://127.0.0.1:*`,
-    "object-src 'none'",
-    "frame-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'"
-  ].join('; ')
-}
 
 export interface MainWindowOptions {
   readonly preloadPath: string
@@ -102,12 +57,11 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
 function applyCsp(window: BrowserWindow, devServerUrl?: string): void {
   const policy = devServerUrl ? developmentCsp(devServerUrl) : PRODUCTION_CSP
 
+  // A sessão é compartilhada com a janela de impressão: `cspHeadersFor` deixa
+  // de fora as respostas do esquema dela, que trazem a própria política.
   window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [policy]
-      }
+      responseHeaders: cspHeadersFor(details.url, details.responseHeaders ?? {}, policy)
     })
   })
 }

@@ -26,10 +26,20 @@
  * Por padrão a prévia sai com UMA avaliação, que é o caso da tela de
  * resultados; `--comparar` acrescenta a segunda e exercita as colunas de
  * comparação e os gráficos de evolução.
+ *
+ * Com dados reais, a partir de uma CÓPIA do banco (o original nunca é aberto):
+ *
+ *   npm run preview:pdf -- saida.html --banco=%APPDATA%/baremo/baremo.db --avaliacao=<id>
+ *
+ * A impressão reproduz as condições do app: HTML servido pelo esquema
+ * `baremo-print:` e a CSP da janela principal instalada na sessão, como em
+ * produção. `--sem-correcao` desliga a exceção de `windows/csp.ts` e
+ * reproduz o bug da v0.18.0 (laudo sem folha de estilo) — é o teste de que a
+ * prévia enxerga esta classe de problema.
  */
 
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -43,11 +53,14 @@ import { REPORT_CSS } from '../src/main/pdf/styles'
 import { DOCUMENT_CSS } from '../src/main/pdf/document-template'
 import {
   buildPrintDocument,
+  PRINT_CSP,
   PRINT_PAGE_OPTIONS,
+  PRINT_SCHEME,
   printFooterTemplate,
   printHeaderTemplate
 } from '../src/main/pdf/document-html'
 import { formatIsoDate, today } from '../src/shared/domain/dates'
+import { PRODUCTION_CSP } from '../src/main/windows/csp'
 
 const args = process.argv.slice(2)
 const flags = args.filter((argument) => argument.startsWith('--'))
@@ -55,16 +68,39 @@ const positional = args.filter((argument) => !argument.startsWith('--'))
 
 const comparing = flags.includes('--comparar')
 const withPdf = !flags.includes('--sem-pdf')
+const withoutFix = flags.includes('--sem-correcao')
+const flagValue = (name) =>
+  flags.find((flag) => flag.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
+const realDatabase = flagValue('banco')
+const realAssessment = flagValue('avaliacao')
 
 const TITLE = 'Relatório de Resultados'
 
 const directory = mkdtempSync(join(tmpdir(), 'baremo-preview-'))
 const dbPath = join(directory, 'preview.db')
-const { first, second } = seedDemo(dbPath)
+
+let assessmentId
+let comparisonIds = []
+if (realDatabase !== null) {
+  if (realAssessment === null) {
+    console.error('--banco exige --avaliacao=<id>')
+    process.exit(1)
+  }
+  // Cópia, com o WAL junto: o banco do usuário nunca é aberto por aqui.
+  copyFileSync(realDatabase, dbPath)
+  for (const suffix of ['-wal', '-shm']) {
+    if (existsSync(realDatabase + suffix)) copyFileSync(realDatabase + suffix, dbPath + suffix)
+  }
+  assessmentId = realAssessment
+} else {
+  const { first, second } = seedDemo(dbPath)
+  assessmentId = first
+  comparisonIds = comparing ? [second] : []
+}
 const handle = openDatabase(dbPath)
 
 // ── Monta o relatório, exatamente como o handler faz ──
-const overview = buildResultsOverview(handle, first, comparing ? [second] : [])
+const overview = buildResultsOverview(handle, assessmentId, comparisonIds)
 const charts = renderResultsCharts(overview)
 
 // `REPORT_CSS + DOCUMENT_CSS`, como em `ipc/handlers/reports.ts`: é o que o
@@ -102,6 +138,11 @@ writeFileSync(
   JSON.stringify({
     htmlPath: htmlOutput,
     output: pdfOutput,
+    // As condições de produção, que a janela de impressão do app enfrenta.
+    printScheme: PRINT_SCHEME,
+    printCsp: PRINT_CSP,
+    sessionCsp: PRODUCTION_CSP,
+    exemptPrintScheme: !withoutFix,
     printOptions: {
       ...PRINT_PAGE_OPTIONS,
       headerTemplate: printHeaderTemplate({
