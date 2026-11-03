@@ -325,7 +325,10 @@ describe('por teste', () => {
       ...NO_CHARTS,
       comparison: { [test.instrumentId]: svg }
     })
-    const card = html.slice(html.indexOf('class="test-card"'))
+    const card = html.slice(html.indexOf('class="test-card'))
+
+    // Um teste curto cabe numa página, e por isso não se parte.
+    expect(html).toContain('class="test-card test-card--compact"')
 
     expect(card.indexOf('<table')).toBeLessThan(card.indexOf(svg))
     expect(card.indexOf(svg)).toBeLessThan(card.indexOf('</article>'))

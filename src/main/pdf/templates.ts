@@ -836,6 +836,13 @@ function testSections(overview: ResultsOverview, charts: ResultsReportCharts): S
   `
 }
 
+/**
+ * Até quantos subtestes um cartão de teste cabe, com o gráfico, numa página.
+ * Medido na prévia: ~16 linhas de tabela mais o gráfico de 220px ocupam ~200mm
+ * dos ~259mm úteis, com folga para o cabeçalho da seção.
+ */
+const COMPACT_TEST_ROWS = 16
+
 function testCard(
   group: TestGroup,
   overview: ResultsOverview,
@@ -844,8 +851,15 @@ function testCard(
   const comparison = charts.comparison[group.instrumentId]
   const evolution = charts.evolution[group.instrumentId]
 
+  // Só o cartão que cabe numa página é mantido inteiro. Um teste longo (um
+  // inventário com dezenas de subtestes) não cabe de jeito nenhum, e pedir que
+  // não quebre só fazia o Chromium empurrá-lo para a página seguinte — deixando
+  // para trás uma página com o título da seção e nada mais — e quebrá-lo lá
+  // assim mesmo. O gráfico, esse, nunca se parte.
+  const compact = group.entries.length <= COMPACT_TEST_ROWS
+
   return html`
-    <article class="test-card">
+    <article class="test-card${raw(compact ? ' test-card--compact' : '')}">
       <header class="test-card__head">
         <h3 class="test-card__name">${group.label}</h3>
         ${

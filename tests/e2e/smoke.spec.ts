@@ -171,6 +171,15 @@ test('gera o relatório de resultados em PDF', async () => {
   // Maior que o limite antigo de propósito: com fonte embutida e SVG, um PDF
   // pequeno demais indicaria que a tipografia ou os gráficos não entraram.
   expect(statSync(target).size).toBeGreaterThan(20_000)
+
+  // Regressão da v0.18.0: o gancho de CSP da janela principal trocava a
+  // política da janela de impressão, e o laudo saía em Times, sem folha de
+  // estilo — com tamanho de arquivo normal. A fonte embutida é o sinal de que
+  // o `<style>` foi aplicado. O Skia escreve o dicionário da fonte sem
+  // compressão, então o nome aparece nos bytes.
+  const pdf = readFileSync(target, 'latin1')
+  expect(pdf).toMatch(/\/BaseFont \/[A-Z]{6}\+Inter-/)
+  expect(pdf).not.toMatch(/\/BaseFont \/[A-Z]{6}\+TimesNewRoman/)
 })
 
 test('salva a imagem de um gráfico', async () => {

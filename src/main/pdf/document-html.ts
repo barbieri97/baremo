@@ -10,6 +10,14 @@
 import DOMPurify from 'isomorphic-dompurify'
 
 /**
+ * Esquema que serve o HTML à janela de impressão (`render.ts`).
+ *
+ * Mora aqui, sem `electron`, porque a CSP da janela principal
+ * (`windows/csp.ts`) precisa reconhecê-lo — e aquela regra é testada.
+ */
+export const PRINT_SCHEME = 'baremo-print'
+
+/**
  * CSP da janela de impressão (§13.4).
  *
  * Sem `script-src`: com `default-src 'none'`, script nenhum executa. `font-src
