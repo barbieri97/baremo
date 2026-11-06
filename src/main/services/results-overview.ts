@@ -123,7 +123,9 @@ function toPoint(row: ResultRow, instrumentPath: string, inverted: boolean): Res
     manuallyOverridden: row.manuallyOverridden,
     notes: row.notes,
     cognitiveFunctionId: row.cognitiveFunctionId,
-    cognitiveFunctionName: row.cognitiveFunctionName
+    cognitiveFunctionName: row.cognitiveFunctionName,
+    secondaryFunctions: row.secondaryFunctions,
+    functionInherited: row.functionInherited
   }
 }
 

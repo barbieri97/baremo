@@ -562,3 +562,88 @@ test('a grade da avaliação começa recolhida e alterna entre as duas leituras'
   await bateria.click()
   await expect(subtesteUm).toBeVisible()
 })
+
+/** Escolhe a opção pelo texto visível, ignorando o recuo de árvore ("— "). */
+async function selectByText(select: ReturnType<Page['getByLabel']>, text: string): Promise<void> {
+  const value = await select
+    .locator('option')
+    .filter({ hasText: new RegExp('^[—\\s]*' + text + '$') })
+    .first()
+    .getAttribute('value')
+  if (value === null) throw new Error(`Opção "${text}" não encontrada.`)
+  await select.selectOption(value)
+}
+
+test('instrumento com função principal e secundária; subteste herda as duas', async () => {
+  await page.getByRole('link', { name: /Instrumentos/ }).click()
+
+  // 1. O teste: principal Controle inibitório, secundária Fluência.
+  await page.getByRole('button', { name: 'Adicionar na raiz' }).click()
+  await page.getByLabel('Nome').fill('Five Digits Test')
+  await page.getByLabel('Sigla').fill('FDT')
+  await selectByText(page.getByTestId('instrument-primary-function'), 'Controle inibitório')
+  await selectByText(page.getByTestId('instrument-secondary-add'), 'Fluência')
+  await expect(page.getByTestId('instrument-secondary-list')).toContainText('Fluência')
+  await page.getByRole('button', { name: 'Salvar' }).click()
+  await expect(page.getByText('Instrumento criado.').first()).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Faixas de classificação' }).click()
+  await page.getByRole('button', { name: 'Gerar 5 faixas' }).click()
+  const names = ['Inferior', 'Média inferior', 'Média', 'Média superior', 'Superior']
+  const rows = page.locator('tbody tr')
+  for (let index = 0; index < names.length; index++) {
+    await rows.nth(index).locator('input').first().fill(names[index]!)
+  }
+  await page.getByRole('button', { name: 'Salvar faixas' }).click()
+  await expect(page.getByText(/Faixas salvas/)).toBeVisible()
+
+  // 2. O subteste, sem função própria: o formulário avisa de onde ela vem.
+  await page.getByRole('button', { name: 'Adicionar na raiz' }).click()
+  await page.getByLabel('Nome').fill('Leitura FDT')
+  await selectByText(page.getByLabel('Instrumento pai'), 'Five Digits Test')
+  await expect(page.getByText(/Herdada de Five Digits Test: Controle inibitório/)).toBeVisible()
+  await expect(page.getByTestId('instrument-secondary-add')).toBeDisabled()
+  await page.getByRole('button', { name: 'Salvar' }).click()
+  await expect(page.getByText('Instrumento criado.').first()).toBeVisible()
+
+  // 3. Lança o subteste e confere o grupo e a etiqueta.
+  await page.getByRole('link', { name: /Pacientes/ }).click()
+  await page.getByText('Paciente de Verificação').click()
+  await page.getByText('Verificação automatizada').click()
+  await expect(page.getByRole('heading', { name: /^Avaliação de/ })).toBeVisible()
+
+  const open = page.getByRole('button', { name: 'Lançar resultado' })
+  if (await open.isVisible()) await open.click()
+  await page.getByRole('radio', { name: 'Item individual' }).click()
+  await selectByText(page.getByLabel('Instrumento'), 'Leitura FDT')
+  await expect(page.getByLabel('Tipo de escore')).toHaveValue('percentile')
+  await page.getByLabel('Valor').fill('65')
+  await page.getByRole('button', { name: 'Lançar' }).click()
+
+  // Agrupado pela principal herdada — e não em "Sem função cognitiva associada".
+  await page.getByText('Funções executivas').first().click()
+  const inhibition = page.getByText('Controle inibitório').first()
+  if (!(await page.getByText('Five Digits Test › Leitura FDT').isVisible())) {
+    await inhibition.click()
+  }
+  await expect(page.getByText('Five Digits Test › Leitura FDT')).toBeVisible()
+  await expect(
+    page.getByTestId('also-assesses').filter({ hasText: 'Também avalia: Fluência' }).first()
+  ).toBeVisible()
+
+  // 4. Visualização e PDF.
+  await page.getByRole('button', { name: 'Visualizar resultados' }).click()
+  await expect(page.getByRole('heading', { name: /^Resultados de/ })).toBeVisible()
+  await expect(
+    page.getByTestId('also-assesses').filter({ hasText: 'Também avalia: Fluência' }).first()
+  ).toBeAttached()
+
+  const target = join(userDataDir, 'relatorio-funcoes.pdf')
+  await app.evaluate(async ({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath })
+  }, target)
+  await page.getByRole('button', { name: 'Exportar PDF' }).click()
+  await expect(page.getByText('Relatório gerado.').last()).toBeVisible({ timeout: 20_000 })
+  expect(existsSync(target)).toBe(true)
+  expect(statSync(target).size).toBeGreaterThan(20_000)
+})

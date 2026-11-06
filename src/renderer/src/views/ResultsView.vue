@@ -25,6 +25,7 @@ import { useAppStore } from '../stores/app'
 import BaseButton from '../components/BaseButton.vue'
 import ChartCard from '../components/ChartCard.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
+import AlsoAssessesTag from '../components/AlsoAssessesTag.vue'
 import FunctionHeatCard from '../components/FunctionHeatCard.vue'
 import LevelHeatBar from '../components/LevelHeatBar.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -333,7 +334,10 @@ async function exportPdf(): Promise<void> {
               <BaseCard class="overflow-hidden">
                 <BaseTable :columns="FUNCTION_COLUMNS">
                   <tr v-for="point in summary.points" :key="point.resultId">
-                    <td class="text-fg">{{ point.instrumentPath }}</td>
+                    <td class="text-fg">
+                      {{ point.instrumentPath }}
+                      <AlsoAssessesTag :functions="point.secondaryFunctions" />
+                    </td>
                     <td class="text-fg-muted">{{ point.scoreTypeLabel }}</td>
                     <td class="tabular text-right font-medium text-fg">
                       {{ formatValue(point) }}

@@ -33,6 +33,10 @@ import {
 import { recordAudit } from './audit'
 import { REPARENT_ERROR_MESSAGES, validateReparent } from '@shared/domain/tree'
 import {
+  FUNCTION_VALIDATION_MESSAGES,
+  validateFunctions
+} from '@shared/domain/instrument-functions'
+import {
   cognitiveFunctionInputSchema,
   idSchema,
   instrumentInputSchema
@@ -89,6 +93,7 @@ function parseInstrument(
         name: current.name,
         acronym: current.acronym,
         cognitiveFunctionId: current.cognitiveFunctionId,
+        secondaryFunctionIds: current.secondaryFunctionIds,
         minAgeYears: current.minAgeYears,
         maxAgeYears: current.maxAgeYears,
         reference: current.reference,
@@ -99,6 +104,7 @@ function parseInstrument(
         name: '',
         acronym: null,
         cognitiveFunctionId: null,
+        secondaryFunctionIds: [],
         minAgeYears: null,
         maxAgeYears: null,
         reference: null,
@@ -115,12 +121,32 @@ function parseInstrument(
       : {}),
     ...(has(args, 'idadeMin') ? { minAgeYears: intOrNull(args['idadeMin']) } : {}),
     ...(has(args, 'idadeMax') ? { maxAgeYears: intOrNull(args['idadeMax']) } : {}),
-    ...(has(args, 'referencia') ? { reference: textOrNull(args['referencia']) } : {})
+    ...(has(args, 'referencia') ? { reference: textOrNull(args['referencia']) } : {}),
+    ...(has(args, 'funcoesSecundariasIds')
+      ? { secondaryFunctionIds: idList(args['funcoesSecundariasIds']) }
+      : {})
+  }
+  // Tirar a principal sem falar das secundárias leva as secundárias junto (F4),
+  // como no formulário.
+  if (candidate.cognitiveFunctionId === null && !has(args, 'funcoesSecundariasIds')) {
+    candidate.secondaryFunctionIds = []
   }
 
   const parsed = instrumentInputSchema.safeParse(candidate)
   if (!parsed.success) throw new Error(`Instrumento inválido: ${reasons(parsed.error.issues)}`)
+  const problem = validateFunctions(
+    parsed.data.cognitiveFunctionId,
+    parsed.data.secondaryFunctionIds ?? []
+  )
+  if (problem !== null) throw new Error(FUNCTION_VALIDATION_MESSAGES[problem])
   return parsed.data
+}
+
+/** Lista de IDs vinda do modelo; `null` ou vazio = "sem secundárias". */
+function idList(value: unknown): string[] {
+  if (value === null || value === undefined || value === '') return []
+  if (!Array.isArray(value)) return [String(value)]
+  return value.map((item) => String(item).trim())
 }
 
 function parseFunction(
@@ -190,7 +216,8 @@ const INSTRUMENT_LABELS: Record<keyof Omit<InstrumentInput, 'order'>, string> = 
   name: 'Nome',
   acronym: 'Sigla',
   parentId: 'Instrumento-pai',
-  cognitiveFunctionId: 'Função cognitiva',
+  cognitiveFunctionId: 'Função principal',
+  secondaryFunctionIds: 'Funções secundárias',
   minAgeYears: 'Idade mínima',
   maxAgeYears: 'Idade máxima',
   reference: 'Referência'
@@ -224,6 +251,10 @@ function instrumentDisplay(handle: BaremoDatabase): (key: string, value: unknown
   const functionNames = new Map(listCognitiveFunctions(handle).map((node) => [node.id, node.name]))
   return (key, value) => {
     if (value === null || value === undefined || value === '') return null
+    if (Array.isArray(value)) {
+      if (value.length === 0) return null
+      return value.map((id) => functionNames.get(String(id)) ?? String(id)).join(', ')
+    }
     if (key === 'parentId') return instrumentNames.get(String(value)) ?? String(value)
     if (key === 'cognitiveFunctionId') return functionNames.get(String(value)) ?? String(value)
     if (key === 'minAgeYears' || key === 'maxAgeYears') return `${String(value)} anos`
@@ -251,6 +282,9 @@ export function previewCatalogWrite(
       const input = parseInstrument(args, null)
       assertTreePlacement(listInstruments(handle), null, input.parentId, 'O instrumento-pai')
       assertFunctionExists(handle, input.cognitiveFunctionId)
+      for (const secondaryId of input.secondaryFunctionIds ?? []) {
+        assertFunctionExists(handle, secondaryId)
+      }
       return {
         description: `Cadastrar o instrumento "${input.name}" no catálogo. Ele ficará disponível para todos os pacientes.`,
         catalogPreview: {
@@ -272,6 +306,9 @@ export function previewCatalogWrite(
       const input = parseInstrument(args, current)
       assertTreePlacement(listInstruments(handle), id, input.parentId, 'O instrumento-pai')
       assertFunctionExists(handle, input.cognitiveFunctionId)
+      for (const secondaryId of input.secondaryFunctionIds ?? []) {
+        assertFunctionExists(handle, secondaryId)
+      }
       const fields = fieldRows(INSTRUMENT_LABELS, current, input, instrumentDisplay(handle))
       if (fields.length === 0)
         throw new Error('Nenhum campo do instrumento mudaria com essa edição.')

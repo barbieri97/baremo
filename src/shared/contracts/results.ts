@@ -67,8 +67,12 @@ export const resultPointSchema = z.object({
   statusLabel: z.string(),
   manuallyOverridden: z.boolean(),
   notes: nullableText,
+  /** Função PRINCIPAL efetiva (herdada quando o instrumento não tem a sua). */
   cognitiveFunctionId: idSchema.nullable(),
-  cognitiveFunctionName: nullableText
+  cognitiveFunctionName: nullableText,
+  /** "Também avalia: …" — informativo, nunca usado para agrupar (F2). */
+  secondaryFunctions: z.array(z.object({ id: idSchema, name: z.string() })),
+  functionInherited: z.boolean()
 })
 export type ResultPoint = z.infer<typeof resultPointSchema>
 

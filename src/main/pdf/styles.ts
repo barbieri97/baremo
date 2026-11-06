@@ -794,6 +794,13 @@ export const REPORT_CSS = `
     flex: none;
   }
 
+  .also-assesses {
+    display: block;
+    margin-top: 0.4mm;
+    font-size: 6.8pt;
+    color: var(--muted);
+  }
+
   .status-tag {
     display: inline-block;
     margin-left: 1.5mm;

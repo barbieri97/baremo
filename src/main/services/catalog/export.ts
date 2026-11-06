@@ -72,6 +72,10 @@ export function buildCatalogFile(handle: BaremoDatabase, appVersion: string): Ca
         instrument.cognitiveFunctionId === null
           ? null
           : namePathOf(functionRows, instrument.cognitiveFunctionId),
+      secondaryFunctionPaths: instrument.secondaryFunctionIds.flatMap((id) => {
+        const path = namePathOf(functionRows, id)
+        return path === null ? [] : [path]
+      }),
       minAgeYears: instrument.minAgeYears,
       maxAgeYears: instrument.maxAgeYears,
       reference: instrument.reference,

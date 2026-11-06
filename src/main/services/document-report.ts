@@ -17,6 +17,7 @@ import { getAssessment, listResults } from '../repositories/assessments'
 import type { ResultRow } from '../repositories/assessments'
 import { listCognitiveFunctions } from '../repositories/trees'
 import { serializeDocument } from '../pdf/serialize'
+import { alsoAssesses } from '../pdf/templates'
 import type { SerializeContext } from '../pdf/serialize'
 import { escapeHtml, html, raw, safeColor, toString } from '../pdf/html'
 import { ageAt, formatAge, formatIsoDate } from '@shared/domain/dates'
@@ -166,6 +167,7 @@ function renderResultsTable(
                 ${result.instrumentName}${
                   result.instrumentAcronym ? ` (${result.instrumentAcronym})` : ''
                 }
+                ${alsoAssesses(result.secondaryFunctions)}
               </td>
               <td>${result.cognitiveFunctionName ?? '—'}</td>
               <td>${SCORE_TYPE_SHORT_LABELS[result.scoreType]}</td>
@@ -177,8 +179,8 @@ function renderResultsTable(
                     : html`<span
                         class="classification"
                         style="background-color:${raw(background)};color:${raw(
-                        readableTextColor(background)
-                      )}"
+                          readableTextColor(background)
+                        )}"
                         >${result.classificationName}</span
                       >`
                 }

@@ -8,14 +8,8 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { BaremoDatabase } from '../db/gateway'
-import {
-  assessmentResults,
-  assessments,
-  attachments,
-  cognitiveFunctions,
-  documents,
-  instruments
-} from '../db/schema'
+import { assessmentResults, assessments, attachments, documents, instruments } from '../db/schema'
+import { loadFunctionResolver } from './function-resolver'
 import type { Assessment, AssessmentInput, AssessmentResultInput } from '@shared/contracts/entities'
 import type { ScoreType } from '@shared/domain/score-types'
 import { SCORE_TYPE_DOMAINS, validateScoreValue } from '@shared/domain/score-types'
@@ -159,8 +153,12 @@ export interface ResultRow {
   notes: string | null
   instrumentName: string
   instrumentAcronym: string | null
+  /** Função PRINCIPAL efetiva, já com a herança (F3). */
   cognitiveFunctionId: string | null
   cognitiveFunctionName: string | null
+  /** Etiqueta "também avalia: …" — nunca usada para agrupar (F2). */
+  secondaryFunctions: { id: string; name: string }[]
+  functionInherited: boolean
 }
 
 export function listResults(handle: BaremoDatabase, assessmentId: string): ResultRow[] {
@@ -180,20 +178,43 @@ export function listResults(handle: BaremoDatabase, assessmentId: string): Resul
       manuallyOverridden: assessmentResults.manuallyOverridden,
       notes: assessmentResults.notes,
       instrumentName: instruments.name,
-      instrumentAcronym: instruments.acronym,
-      cognitiveFunctionId: instruments.cognitiveFunctionId,
-      cognitiveFunctionName: cognitiveFunctions.name
+      instrumentAcronym: instruments.acronym
     })
     .from(assessmentResults)
     .innerJoin(instruments, eq(instruments.id, assessmentResults.instrumentId))
-    .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
     .where(eq(assessmentResults.assessmentId, assessmentId))
     .orderBy(asc(instruments.order), asc(instruments.name))
     .all()
-    .map((row) => ({
+    .map(withEffectiveFunctions(handle)) as ResultRow[]
+}
+
+/**
+ * Completa a linha com a função principal EFETIVA (herdada quando o instrumento
+ * não tem a sua) e com as secundárias — em vez de um join direto na coluna.
+ */
+function withEffectiveFunctions<
+  T extends { instrumentId: string; classificationLevel: number | null }
+>(
+  handle: BaremoDatabase
+): (row: T) => Omit<T, 'classificationLevel'> & {
+  classificationLevel: ClassificationLevel | null
+  cognitiveFunctionId: string | null
+  cognitiveFunctionName: string | null
+  secondaryFunctions: { id: string; name: string }[]
+  functionInherited: boolean
+} {
+  const resolve = loadFunctionResolver(handle)
+  return (row) => {
+    const functions = resolve(row.instrumentId)
+    return {
       ...row,
-      classificationLevel: toClassificationLevel(row.classificationLevel)
-    })) as ResultRow[]
+      classificationLevel: toClassificationLevel(row.classificationLevel),
+      cognitiveFunctionId: functions.primaryId,
+      cognitiveFunctionName: functions.primaryName,
+      secondaryFunctions: functions.secondaryFunctions,
+      functionInherited: functions.functionInherited
+    }
+  }
 }
 
 function getResultRow(handle: BaremoDatabase, id: string): ResultRow {
@@ -491,20 +512,14 @@ export function listResultsForAssessments(
       manuallyOverridden: assessmentResults.manuallyOverridden,
       notes: assessmentResults.notes,
       instrumentName: instruments.name,
-      instrumentAcronym: instruments.acronym,
-      cognitiveFunctionId: instruments.cognitiveFunctionId,
-      cognitiveFunctionName: cognitiveFunctions.name
+      instrumentAcronym: instruments.acronym
     })
     .from(assessmentResults)
     .innerJoin(instruments, eq(instruments.id, assessmentResults.instrumentId))
-    .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
     .where(inArray(assessmentResults.assessmentId, [...assessmentIds]))
     .orderBy(asc(instruments.order), asc(instruments.name))
     .all()
-    .map((row) => ({
-      ...row,
-      classificationLevel: toClassificationLevel(row.classificationLevel)
-    })) as ResultRow[]
+    .map(withEffectiveFunctions(handle)) as ResultRow[]
 }
 
 function isUniqueViolation(error: unknown): boolean {

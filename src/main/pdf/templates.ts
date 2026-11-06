@@ -10,6 +10,7 @@ import { html, raw, safeColor, toString } from './html'
 import type { SafeHtml } from './html'
 import type { ComparativeReport, ReportContext } from '../services/reports'
 import type { ResultRow } from '../repositories/assessments'
+import { alsoAssessesLabel } from '@shared/domain/instrument-functions'
 import { SCORE_TYPE_SHORT_LABELS } from '@shared/labels'
 import { readableTextColor } from '@shared/domain/color'
 import { SCORE_TYPE_DOMAINS } from '@shared/domain/score-types'
@@ -180,7 +181,10 @@ export function renderComparativeReport(report: ComparativeReport): string {
               ${row.entries.map(
                 (entry) => html`
                   <tr>
-                    <td>${entry.instrumentName}</td>
+                    <td>
+                      ${entry.instrumentName}
+                      ${alsoAssesses((entry.a ?? entry.b)?.secondaryFunctions ?? [])}
+                    </td>
                     <td>
                       ${
                         SCORE_TYPE_SHORT_LABELS[
@@ -798,6 +802,7 @@ function resultRow(point: ResultPoint): SafeHtml {
       <td>
         ${point.instrumentPath}
         ${point.status === 'applied' ? null : html`<span class="status-tag">${point.statusLabel}</span>`}
+        ${alsoAssesses(point.secondaryFunctions)}
       </td>
       <td class="muted">${point.scoreTypeLabel}</td>
       <td class="numeric strong">${formatValue(point)}</td>
@@ -805,6 +810,12 @@ function resultRow(point: ResultPoint): SafeHtml {
       <td>${levelChip(point)}</td>
     </tr>
   `
+}
+
+/** Secundárias abaixo do nome do instrumento — o agrupamento não muda (F2). */
+export function alsoAssesses(secondary: readonly { name: string }[]): SafeHtml | null {
+  const label = alsoAssessesLabel(secondary)
+  return label === null ? null : html`<span class="also-assesses">${label}</span>`
 }
 
 function levelChip(point: ResultPoint): SafeHtml {

@@ -125,6 +125,7 @@ export function registerDocumentHandlers(): void {
           .map((node) => node.name)
           .join(' › '),
         cognitiveFunctionName: result.cognitiveFunctionName,
+        secondaryFunctionNames: result.secondaryFunctions.map((item) => item.name),
         scoreTypeLabel: SCORE_TYPE_SHORT_LABELS[result.scoreType],
         value: result.value,
         statusLabel: RESULT_STATUS_LABELS[result.status],

@@ -44,6 +44,7 @@ export const DOCUMENT_CSS = `
   }
 
   .results-block { margin: 3mm 0 4mm; }
+  .results-block .also-assesses { display: block; font-size: 7.5pt; color: #64748b; }
   .profile-chart { margin: 3mm 0 4mm; max-width: 100%; }
   .token-unresolved { background: #fed7d7; padding: 0 1mm; border-radius: 0.5mm; }
 `

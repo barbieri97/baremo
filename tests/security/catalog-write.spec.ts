@@ -22,6 +22,7 @@ import {
   classificationRanges,
   cognitiveFunctions,
   colors,
+  instrumentSecondaryFunctions,
   instruments,
   patients
 } from '../../src/main/db/schema'
@@ -187,7 +188,7 @@ describe('tools de catálogo — preview e gravação', () => {
     expect(preview.catalogPreview.fields).toEqual(
       expect.arrayContaining([
         { field: 'Instrumento-pai', before: null, after: 'WISC-IV' },
-        { field: 'Função cognitiva', before: null, after: 'Atenção' }
+        { field: 'Função principal', before: null, after: 'Atenção' }
       ])
     )
 
@@ -274,6 +275,42 @@ describe('tools de catálogo — preview e gravação', () => {
     const remaining = handle.db.select().from(instruments).all()
     expect(remaining).toHaveLength(2)
     expect(remaining.every((row) => row.cognitiveFunctionId === null)).toBe(true)
+  })
+
+  it('secundárias: preview mostra os nomes, gravação respeita a ordem', () => {
+    const args = {
+      instrumentoId: WISC,
+      funcaoCognitivaId: MEMORY,
+      funcoesSecundariasIds: [ATTENTION]
+    }
+    const preview = previewCatalogWrite(handle, 'editar_instrumento', args)
+    expect(preview.catalogPreview.fields).toContainEqual({
+      field: 'Funções secundárias',
+      before: null,
+      after: 'Atenção'
+    })
+
+    applyCatalogWrite(handle, 'editar_instrumento', args)
+    const links = handle.db
+      .select()
+      .from(instrumentSecondaryFunctions)
+      .where(eq(instrumentSecondaryFunctions.instrumentId, WISC))
+      .all()
+    expect(links.map((link) => link.cognitiveFunctionId)).toEqual([ATTENTION])
+  })
+
+  it.each([
+    [
+      'secundária repetindo a principal',
+      { funcaoCognitivaId: MEMORY, funcoesSecundariasIds: [MEMORY] }
+    ],
+    ['secundária sem principal', { funcaoCognitivaId: '', funcoesSecundariasIds: [ATTENTION] }],
+    ['secundária inexistente', { funcaoCognitivaId: MEMORY, funcoesSecundariasIds: [randomUUID()] }]
+  ])('secundárias: %s é barrada já no preview', (_label, extra) => {
+    expect(() =>
+      previewCatalogWrite(handle, 'editar_instrumento', { instrumentoId: WISC, ...extra })
+    ).toThrow()
+    expect(handle.db.select().from(instrumentSecondaryFunctions).all()).toHaveLength(0)
   })
 
   it('cria e edita função cognitiva', () => {

@@ -115,10 +115,11 @@ describe('schema Drizzle × DDL das migrations', () => {
         pk: number
       }[]
 
-      const declaredPrimary = config.columns
-        .filter((column) => column.primary)
-        .map((column) => column.name)
-        .sort()
+      // Chave composta (`primaryKey({ columns })`) não marca `column.primary`.
+      const declaredPrimary = [
+        ...config.columns.filter((column) => column.primary).map((column) => column.name),
+        ...config.primaryKeys.flatMap((key) => key.columns.map((column) => column.name))
+      ].sort()
       const actualPrimary = actual
         .filter((column) => column.pk > 0)
         .map((column) => column.name)
@@ -164,7 +165,9 @@ describe('seeds', () => {
 
   it('NÃO semeia instrumentos nem faixas normativas', () => {
     // Tabelas de normas são material protegido dos manuais dos testes.
-    const instrumentCount = handle.raw.prepare('SELECT COUNT(*) AS total FROM instruments').get() as {
+    const instrumentCount = handle.raw
+      .prepare('SELECT COUNT(*) AS total FROM instruments')
+      .get() as {
       total: number
     }
     const rangeCount = handle.raw
@@ -189,9 +192,9 @@ describe('seeds', () => {
     seedTemplatesIfEmpty(handle)
     seedTemplatesIfEmpty(handle)
 
-    const types = handle.raw
-      .prepare('SELECT DISTINCT type FROM document_templates')
-      .all() as { type: string }[]
+    const types = handle.raw.prepare('SELECT DISTINCT type FROM document_templates').all() as {
+      type: string
+    }[]
 
     const present = types.map((row) => row.type)
     for (const required of [

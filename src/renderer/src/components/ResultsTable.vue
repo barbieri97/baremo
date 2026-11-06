@@ -9,6 +9,7 @@
  */
 import { useCatalogStore } from '../stores/catalog'
 import ClassificationBadge from './ClassificationBadge.vue'
+import AlsoAssessesTag from './AlsoAssessesTag.vue'
 import ResultRowEditor from './ResultRowEditor.vue'
 import BaseCard from './BaseCard.vue'
 import BaseTable, { type TableColumn } from './BaseTable.vue'
@@ -64,7 +65,10 @@ function formatValue(result: ResultRow): string {
     <BaseTable :columns="COLUMNS">
       <template v-for="result in rows" :key="result.id">
         <tr v-if="editingId !== result.id">
-          <td class="text-fg">{{ labelOf(result) }}</td>
+          <td class="text-fg">
+            {{ labelOf(result) }}
+            <AlsoAssessesTag :functions="result.secondaryFunctions" />
+          </td>
           <td class="text-fg-muted">
             {{ SCORE_TYPE_SHORT_LABELS[result.scoreType] }}
           </td>

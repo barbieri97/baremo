@@ -50,6 +50,13 @@ export const catalogInstrumentSchema = z.object({
    * para que um nome que contenha o separador não parta o caminho em dois.
    */
   cognitiveFunctionPath: z.array(shortText).max(20).nullable(),
+  /**
+   * Funções SECUNDÁRIAS, em ordem, pelo mesmo caminho de nomes. OPCIONAL, e o
+   * formato segue `@1`: o zod descarta campos desconhecidos em vez de recusar,
+   * então um binário antigo lê o arquivo novo ignorando as secundárias, e um
+   * arquivo antigo (sem o campo) não mexe nas secundárias já gravadas.
+   */
+  secondaryFunctionPaths: z.array(z.array(shortText).max(20)).max(30).optional(),
   minAgeYears: z.number().int().min(0).max(120).nullable(),
   maxAgeYears: z.number().int().min(0).max(120).nullable(),
   reference: z.string().trim().max(20_000).nullable(),

@@ -389,7 +389,14 @@ const INSTRUMENT_FIELDS: Readonly<Record<string, ToolSchema>> = {
   },
   funcaoCognitivaId: {
     type: 'string',
-    description: 'Opcional. ID obtido por listar_funcoes_cognitivas. Vazio remove o vínculo.'
+    description:
+      'Opcional. Função PRINCIPAL: ID obtido por listar_funcoes_cognitivas. Vazio remove o vínculo (e as secundárias). Sem principal, o instrumento herda as funções do instrumento-pai.'
+  },
+  funcoesSecundariasIds: {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'Opcional. Funções SECUNDÁRIAS, em ordem (IDs de listar_funcoes_cognitivas). Exigem principal e não podem repeti-la. Lista vazia remove todas; omitir mantém as atuais.'
   },
   idadeMin: { type: 'integer', description: 'Opcional. Idade mínima de aplicação, em anos.' },
   idadeMax: { type: 'integer', description: 'Opcional. Idade máxima de aplicação, em anos.' },

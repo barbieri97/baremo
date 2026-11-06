@@ -47,6 +47,8 @@ function point(overrides: Partial<ResultPoint> = {}): ResultPoint {
     notes: null,
     cognitiveFunctionId: '66666666-6666-4666-8666-666666666666',
     cognitiveFunctionName: 'Memória de trabalho',
+    secondaryFunctions: [],
+    functionInherited: false,
     ...overrides
   }
 }

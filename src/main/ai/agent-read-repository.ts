@@ -39,9 +39,29 @@ import {
   listResolvedRangesForInstruments,
   rangeOwnerOf
 } from '../repositories/classification-ranges'
+import { loadFunctionResolver } from '../repositories/function-resolver'
+import type { EffectiveFunctions } from '../repositories/function-resolver'
 import { identifiedPatient, pseudonymizePatient, scrubText } from './pseudonymize'
 import type { IdentifiedPatient, PseudonymizedPatient } from './pseudonymize'
 import { extractPlainText } from '../pdf/serialize'
+
+/** Funções efetivas de um instrumento no vocabulário das tools. */
+function functionFields(functions: EffectiveFunctions): {
+  funcaoCognitiva: string | null
+  funcaoCognitivaId: string | null
+  funcaoHerdada: boolean
+  funcoesSecundarias: { id: string; nome: string }[]
+} {
+  return {
+    funcaoCognitiva: functions.primaryName,
+    funcaoCognitivaId: functions.primaryId,
+    funcaoHerdada: functions.functionInherited,
+    funcoesSecundarias: functions.secondaryFunctions.map((item) => ({
+      id: item.id,
+      nome: item.name
+    }))
+  }
+}
 
 /** Erro de escopo: o modelo pediu um registro que não é do paciente da sessão. */
 export class ScopeViolationError extends Error {
@@ -207,6 +227,7 @@ export class AgentReadRepository {
   ): {
     instrument: string
     cognitiveFunction: string | null
+    alsoAssesses: string[]
     scoreType: string
     value: number | null
     classification: string | null
@@ -214,13 +235,13 @@ export class AgentReadRepository {
     manuallyOverridden: boolean
   }[] {
     this.assertOwnedAssessment(assessmentId)
+    const resolve = loadFunctionResolver(this.handle)
 
     const rows = this.handle.db
       .select({
+        instrumentId: assessmentResults.instrumentId,
         instrumentName: instruments.name,
         instrumentAcronym: instruments.acronym,
-        cognitiveFunctionName: cognitiveFunctions.name,
-        cognitiveFunctionId: instruments.cognitiveFunctionId,
         scoreType: assessmentResults.scoreType,
         value: assessmentResults.value,
         classificationName: assessmentResults.classificationName,
@@ -230,7 +251,6 @@ export class AgentReadRepository {
       .from(assessmentResults)
       .innerJoin(assessments, eq(assessments.id, assessmentResults.assessmentId))
       .innerJoin(instruments, eq(instruments.id, assessmentResults.instrumentId))
-      .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
       .where(
         and(
           eq(assessmentResults.assessmentId, assessmentId),
@@ -238,16 +258,19 @@ export class AgentReadRepository {
         )
       )
       .all()
+      // Função principal efetiva, já com a herança do instrumento-pai.
+      .map((row) => ({ ...row, functions: resolve(row.instrumentId) }))
 
     return rows
       .filter(
-        (row) => cognitiveFunctionId === null || row.cognitiveFunctionId === cognitiveFunctionId
+        (row) => cognitiveFunctionId === null || row.functions.primaryId === cognitiveFunctionId
       )
       .map((row) => ({
         instrument: row.instrumentAcronym
           ? `${row.instrumentName} (${row.instrumentAcronym})`
           : row.instrumentName,
-        cognitiveFunction: row.cognitiveFunctionName,
+        cognitiveFunction: row.functions.primaryName,
+        alsoAssesses: row.functions.secondaryFunctions.map((item) => item.name),
         scoreType: SCORE_TYPE_SHORT_LABELS[row.scoreType as ScoreType] ?? row.scoreType,
         value: row.value,
         classification: row.classificationName,
@@ -271,13 +294,13 @@ export class AgentReadRepository {
   }[] {
     this.assertOwnedAssessment(assessmentIdA)
     this.assertOwnedAssessment(assessmentIdB)
+    const resolve = loadFunctionResolver(this.handle)
 
     const rows = this.handle.db
       .select({
         assessmentId: assessmentResults.assessmentId,
         instrumentId: assessmentResults.instrumentId,
         instrumentName: instruments.name,
-        cognitiveFunctionName: cognitiveFunctions.name,
         scoreType: assessmentResults.scoreType,
         value: assessmentResults.value,
         classificationName: assessmentResults.classificationName
@@ -285,7 +308,6 @@ export class AgentReadRepository {
       .from(assessmentResults)
       .innerJoin(assessments, eq(assessments.id, assessmentResults.assessmentId))
       .innerJoin(instruments, eq(instruments.id, assessmentResults.instrumentId))
-      .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
       .where(
         and(
           inArray(assessmentResults.assessmentId, [assessmentIdA, assessmentIdB]),
@@ -293,6 +315,10 @@ export class AgentReadRepository {
         )
       )
       .all()
+      .map((row) => ({
+        ...row,
+        cognitiveFunctionName: resolve(row.instrumentId).primaryName
+      }))
 
     const pairs = new Map<string, (typeof rows)[number][]>()
     for (const row of rows) {
@@ -537,6 +563,8 @@ export class AgentReadRepository {
     instrumentoPaiId: string | null
     funcaoCognitiva: string | null
     funcaoCognitivaId: string | null
+    funcaoHerdada: boolean
+    funcoesSecundarias: { id: string; nome: string }[]
     idadeMin: number | null
     idadeMax: number | null
     referencia: string | null
@@ -548,16 +576,14 @@ export class AgentReadRepository {
         parentId: instruments.parentId,
         name: instruments.name,
         acronym: instruments.acronym,
-        functionId: instruments.cognitiveFunctionId,
         minAgeYears: instruments.minAgeYears,
         maxAgeYears: instruments.maxAgeYears,
-        reference: instruments.reference,
-        functionName: cognitiveFunctions.name
+        reference: instruments.reference
       })
       .from(instruments)
-      .leftJoin(cognitiveFunctions, eq(cognitiveFunctions.id, instruments.cognitiveFunctionId))
       .orderBy(instruments.order, instruments.name)
       .all()
+    const resolve = loadFunctionResolver(this.handle)
 
     const names = new Map(rows.map((row) => [row.id, row.name]))
     const needle = term === null ? '' : normalizeForSearch(term)
@@ -591,8 +617,7 @@ export class AgentReadRepository {
       sigla: row.acronym,
       instrumentoPai: row.parentId === null ? null : (names.get(row.parentId) ?? null),
       instrumentoPaiId: row.parentId,
-      funcaoCognitiva: row.functionName,
-      funcaoCognitivaId: row.functionId,
+      ...functionFields(resolve(row.id)),
       idadeMin: row.minAgeYears,
       idadeMax: row.maxAgeYears,
       referencia: row.reference,

@@ -129,8 +129,13 @@ export const instrumentSchema = z.object({
   parentId: idSchema.nullable(),
   name: shortText,
   acronym: optionalShortText,
-  /** A associação à função cognitiva é feita no nó que produz escore. */
+  /**
+   * Função PRINCIPAL. Sem ela, o instrumento herda principal e secundárias do
+   * ancestral mais próximo que tenha uma (SPEC funções múltiplas, F3).
+   */
   cognitiveFunctionId: idSchema.nullable(),
+  /** Funções secundárias PRÓPRIAS, na ordem do usuário. Exigem principal (F4). */
+  secondaryFunctionIds: z.array(idSchema),
   minAgeYears: z.number().int().min(0).max(120).nullable(),
   maxAgeYears: z.number().int().min(0).max(120).nullable(),
   reference: longText,
@@ -147,7 +152,14 @@ export const instrumentSchema = z.object({
 export type Instrument = z.infer<typeof instrumentSchema>
 
 export const instrumentInputSchema = instrumentSchema
-  .omit({ id: true, inheritsRanges: true })
+  .omit({ id: true, inheritsRanges: true, secondaryFunctionIds: true })
+  .extend({
+    /**
+     * Opcional: ausente numa atualização mantém as secundárias como estão — é o
+     * que deixa clientes antigos (e a IA, quando não fala delas) inofensivos.
+     */
+    secondaryFunctionIds: z.array(idSchema).max(30).optional()
+  })
   .refine(
     (v) => v.minAgeYears === null || v.maxAgeYears === null || v.minAgeYears <= v.maxAgeYears,
     { message: 'A idade mínima não pode ser maior que a máxima.', path: ['minAgeYears'] }

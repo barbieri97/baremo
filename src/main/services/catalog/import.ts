@@ -26,7 +26,11 @@ import { asc, eq, sql } from 'drizzle-orm'
 import type { BaremoDatabase } from '../../db/gateway'
 import { colors, instruments } from '../../db/schema'
 import { conflict, invalid } from '../../ipc/register'
-import { listCognitiveFunctions, listInstruments } from '../../repositories/trees'
+import {
+  listCognitiveFunctions,
+  listInstruments,
+  writeSecondaryFunctions
+} from '../../repositories/trees'
 import {
   listConfiguredScoreTypes,
   listRanges,
@@ -90,6 +94,8 @@ interface InstrumentWrite {
   readonly name: string
   readonly acronym: string | null
   readonly cognitiveFunctionId: string | null
+  /** `null` = o arquivo não fala de secundárias: mantém as gravadas. */
+  readonly secondaryFunctionIds: string[] | null
   readonly minAgeYears: number | null
   readonly maxAgeYears: number | null
   readonly reference: string | null
@@ -205,6 +211,13 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
     const parentId = resolveParent(node, fileById, existingById, warnings)
     const cognitiveFunctionId = resolveFunction(node, functionByPath, warnings)
     const exists = existingById.has(node.id)
+    const secondaryFunctionIds = resolveSecondaryFunctions(
+      node,
+      cognitiveFunctionId,
+      exists,
+      functionByPath,
+      warnings
+    )
 
     if (!exists) {
       const collision = existingSiblingNames.get(siblingKey(parentId, node.name))
@@ -222,6 +235,7 @@ function resolve(handle: BaremoDatabase, file: CatalogFile): Resolution {
       name: node.name,
       acronym: node.acronym,
       cognitiveFunctionId,
+      secondaryFunctionIds,
       minAgeYears: node.minAgeYears,
       maxAgeYears: node.maxAgeYears,
       reference: node.reference,
@@ -362,6 +376,12 @@ export function applyCatalogImport(handle: BaremoDatabase, file: CatalogFile): C
       handle.db.update(instruments).set(toRow(node)).where(eq(instruments.id, node.id)).run()
     }
 
+    for (const node of [...resolution.toCreate, ...resolution.toUpdate]) {
+      if (node.secondaryFunctionIds !== null) {
+        writeSecondaryFunctions(handle, node.id, node.secondaryFunctionIds)
+      }
+    }
+
     // `saveRanges` é o único caminho de escrita de faixas do app: valida de
     // novo, incrementa a versão e preserva o snapshot dos resultados já
     // lançados (§4.8). Importar não é exceção a isso.
@@ -405,6 +425,8 @@ function sameAsStored(stored: Instrument, incoming: InstrumentWrite): boolean {
     stored.name === incoming.name &&
     stored.acronym === incoming.acronym &&
     stored.cognitiveFunctionId === incoming.cognitiveFunctionId &&
+    (incoming.secondaryFunctionIds === null ||
+      sameList(stored.secondaryFunctionIds, incoming.secondaryFunctionIds)) &&
     stored.minAgeYears === incoming.minAgeYears &&
     stored.maxAgeYears === incoming.maxAgeYears &&
     stored.reference === incoming.reference &&
@@ -510,6 +532,46 @@ function resolveFunction(
     `A função cognitiva "${node.cognitiveFunctionPath.join(' / ')}" não existe neste computador. "${node.name}" foi importado sem vínculo — crie a função e refaça o vínculo pela tela.`
   )
   return null
+}
+
+/**
+ * Secundárias do arquivo, resolvidas por nome como a principal.
+ *
+ * Arquivo antigo (sem o campo): instrumento novo nasce sem secundárias e o já
+ * existente mantém as suas — a menos que fique sem principal, que as derruba
+ * (F4). Caminho que não casar vira aviso e é pulado; repetição da principal ou
+ * de outra secundária é descartada em silêncio (F1).
+ */
+function resolveSecondaryFunctions(
+  node: CatalogInstrument,
+  primaryId: string | null,
+  exists: boolean,
+  functionByPath: ReadonlyMap<string, string>,
+  warnings: WarningBag
+): string[] | null {
+  if (primaryId === null) return []
+  if (node.secondaryFunctionPaths === undefined) return exists ? null : []
+
+  const seen = new Set<string>([primaryId])
+  const ids: string[] = []
+  for (const path of node.secondaryFunctionPaths) {
+    const resolved = functionByPath.get(pathKey(path))
+    if (resolved === undefined) {
+      warnings.add(
+        'unknown_cognitive_function',
+        `A função cognitiva "${path.join(' / ')}" não existe neste computador. "${node.name}" foi importado sem essa função secundária.`
+      )
+      continue
+    }
+    if (seen.has(resolved)) continue
+    seen.add(resolved)
+    ids.push(resolved)
+  }
+  return ids
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index])
 }
 
 function indexFunctionsByPath(rows: readonly CognitiveFunction[]): Map<string, string> {
