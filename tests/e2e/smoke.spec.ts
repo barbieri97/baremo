@@ -585,7 +585,7 @@ test('instrumento com função principal e secundária; subteste herda as duas',
   await selectByText(page.getByTestId('instrument-secondary-add'), 'Fluência')
   await expect(page.getByTestId('instrument-secondary-list')).toContainText('Fluência')
   await page.getByRole('button', { name: 'Salvar' }).click()
-  await expect(page.getByText('Instrumento criado.')).toBeVisible()
+  await expect(page.getByText('Instrumento criado.').first()).toBeVisible()
 
   await page.getByRole('tab', { name: 'Faixas de classificação' }).click()
   await page.getByRole('button', { name: 'Gerar 5 faixas' }).click()
@@ -604,7 +604,7 @@ test('instrumento com função principal e secundária; subteste herda as duas',
   await expect(page.getByText(/Herdada de Five Digits Test: Controle inibitório/)).toBeVisible()
   await expect(page.getByTestId('instrument-secondary-add')).toBeDisabled()
   await page.getByRole('button', { name: 'Salvar' }).click()
-  await expect(page.getByText('Instrumento criado.')).toBeVisible()
+  await expect(page.getByText('Instrumento criado.').first()).toBeVisible()
 
   // 3. Lança o subteste e confere o grupo e a etiqueta.
   await page.getByRole('link', { name: /Pacientes/ }).click()
