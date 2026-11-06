@@ -95,8 +95,11 @@ const rangeIssueSchema = z.object({
 const resultRowSchema = assessmentResultSchema.extend({
   instrumentName: z.string(),
   instrumentAcronym: z.string().nullable(),
+  /** Função principal efetiva, já com a herança. */
   cognitiveFunctionId: idSchema.nullable(),
-  cognitiveFunctionName: z.string().nullable()
+  cognitiveFunctionName: z.string().nullable(),
+  secondaryFunctions: z.array(z.object({ id: idSchema, name: z.string() })),
+  functionInherited: z.boolean()
 })
 
 const backupSchema = z.object({
@@ -499,6 +502,7 @@ export const contracts = {
         z.object({
           instrumentPath: z.string(),
           cognitiveFunctionName: z.string().nullable(),
+          secondaryFunctionNames: z.array(z.string()),
           scoreTypeLabel: z.string(),
           value: z.number().nullable(),
           statusLabel: z.string(),

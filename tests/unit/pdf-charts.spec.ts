@@ -48,6 +48,8 @@ function point(overrides: Partial<ResultPoint>): ResultPoint {
     notes: null,
     cognitiveFunctionId: null,
     cognitiveFunctionName: null,
+    secondaryFunctions: [],
+    functionInherited: false,
     ...overrides
   }
 }

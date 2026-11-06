@@ -20,6 +20,9 @@ import BaseField from '../components/BaseField.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseSelect from '../components/BaseSelect.vue'
 import BaseTextarea from '../components/BaseTextarea.vue'
+import BaseIconButton from '../components/BaseIconButton.vue'
+import { ArrowDown, ArrowUp, X } from 'lucide-vue-next'
+import { resolveFunctions } from '@shared/domain/instrument-functions'
 import type { ChannelOutput } from '@shared/contracts'
 import type { Instrument } from '@shared/contracts/entities'
 import type { CatalogImportPlan } from '@shared/contracts/catalog'
@@ -43,6 +46,7 @@ const form = ref({
   acronym: '',
   parentId: null as string | null,
   cognitiveFunctionId: null as string | null,
+  secondaryFunctionIds: [] as string[],
   minAgeYears: null as number | null,
   maxAgeYears: null as number | null,
   reference: ''
@@ -68,6 +72,7 @@ function select(id: string): void {
     acronym: node.acronym ?? '',
     parentId: node.parentId,
     cognitiveFunctionId: node.cognitiveFunctionId,
+    secondaryFunctionIds: [...node.secondaryFunctionIds],
     minAgeYears: node.minAgeYears,
     maxAgeYears: node.maxAgeYears,
     reference: node.reference ?? ''
@@ -83,6 +88,7 @@ function startNew(parentId: string | null): void {
     acronym: '',
     parentId,
     cognitiveFunctionId: null,
+    secondaryFunctionIds: [],
     minAgeYears: null,
     maxAgeYears: null,
     reference: ''
@@ -97,6 +103,9 @@ async function save(): Promise<void> {
       name: form.value.name.trim(),
       acronym: form.value.acronym.trim() || null,
       cognitiveFunctionId: form.value.cognitiveFunctionId,
+      // F4: sem principal, as secundárias não são gravadas.
+      secondaryFunctionIds:
+        form.value.cognitiveFunctionId === null ? [] : form.value.secondaryFunctionIds,
       minAgeYears: form.value.minAgeYears,
       maxAgeYears: form.value.maxAgeYears,
       reference: form.value.reference.trim() || null,
@@ -262,6 +271,70 @@ const importChangesNothing = computed(() => {
   )
 })
 
+// ─── Funções principal e secundárias ─────────────────────────────────────────
+
+function functionName(id: string): string {
+  return catalog.functionById.get(id)?.name ?? '—'
+}
+
+/** Funções que ainda podem virar secundária: nem a principal, nem as já escolhidas. */
+const secondaryOptions = computed(() =>
+  catalog.flatFunctions.filter(
+    (entry) =>
+      entry.node.id !== form.value.cognitiveFunctionId &&
+      !form.value.secondaryFunctionIds.includes(entry.node.id)
+  )
+)
+
+function addSecondary(id: string): void {
+  if (id === '' || form.value.secondaryFunctionIds.includes(id)) return
+  form.value.secondaryFunctionIds = [...form.value.secondaryFunctionIds, id]
+}
+
+function removeSecondary(index: number): void {
+  form.value.secondaryFunctionIds = form.value.secondaryFunctionIds.filter((_, i) => i !== index)
+}
+
+function moveSecondary(index: number, delta: -1 | 1): void {
+  const list = [...form.value.secondaryFunctionIds]
+  const target = index + delta
+  if (target < 0 || target >= list.length) return
+  ;[list[index], list[target]] = [list[target]!, list[index]!]
+  form.value.secondaryFunctionIds = list
+}
+
+/** A principal escolhida não pode continuar na lista de secundárias (F1). */
+function changePrimary(id: string | null): void {
+  form.value.cognitiveFunctionId = id
+  form.value.secondaryFunctionIds = form.value.secondaryFunctionIds.filter((item) => item !== id)
+}
+
+/**
+ * Sem principal própria, o que viria do instrumento-pai (F3) — calculado com o
+ * pai do FORMULÁRIO, para refletir a troca de pai antes de salvar.
+ */
+const inherited = computed(() => {
+  if (form.value.cognitiveFunctionId !== null || form.value.parentId === null) return null
+  const resolved = resolveFunctions(
+    form.value.parentId,
+    catalog.instruments,
+    catalog.instruments.flatMap((node) =>
+      node.secondaryFunctionIds.map((cognitiveFunctionId, order) => ({
+        instrumentId: node.id,
+        cognitiveFunctionId,
+        order
+      }))
+    )
+  )
+  if (resolved.primaryId === null) return null
+  const owner = catalog.instrumentById.get(resolved.inheritedFrom ?? form.value.parentId)
+  return {
+    from: owner?.name ?? '—',
+    primary: functionName(resolved.primaryId),
+    secondary: resolved.secondaryIds.map(functionName)
+  }
+})
+
 const parentOptions = computed(() => {
   if (selectedId.value === null) return catalog.flatInstruments
 
@@ -351,14 +424,85 @@ const parentOptions = computed(() => {
 
               <BaseField
                 id="instrument-function"
-                label="Função cognitiva"
+                label="Função principal"
                 class="col-span-2"
-                hint="Vincule no nó que produz escore. É por este vínculo que o relatório por função cognitiva organiza os resultados."
+                :hint="
+                  inherited === null
+                    ? 'É por esta função que a avaliação, a visão geral e o relatório agrupam os resultados. Sem função própria, o instrumento herda a do instrumento pai.'
+                    : `Herdada de ${inherited.from}: ${inherited.primary}${inherited.secondary.length > 0 ? ` (também avalia: ${inherited.secondary.join(', ')})` : ''}. Escolha uma função para usar a própria.`
+                "
               >
-                <BaseSelect v-model="form.cognitiveFunctionId">
-                  <option :value="null">Nenhuma</option>
+                <BaseSelect
+                  :model-value="form.cognitiveFunctionId"
+                  data-testid="instrument-primary-function"
+                  @update:model-value="changePrimary($event as string | null)"
+                >
+                  <option :value="null">
+                    {{ inherited === null ? 'Nenhuma' : `Herdada de ${inherited.from}` }}
+                  </option>
                   <option
                     v-for="entry in catalog.flatFunctions"
+                    :key="entry.node.id"
+                    :value="entry.node.id"
+                  >
+                    {{ '— '.repeat(entry.depth) }}{{ entry.node.name }}
+                  </option>
+                </BaseSelect>
+              </BaseField>
+
+              <BaseField
+                id="instrument-secondary-functions"
+                label="Funções secundárias"
+                class="col-span-2"
+                :hint="
+                  form.cognitiveFunctionId === null
+                    ? 'Escolha antes a função principal.'
+                    : 'Aparecem como etiqueta (“também avalia: …”) e não mudam o agrupamento dos resultados.'
+                "
+              >
+                <ul
+                  v-if="form.cognitiveFunctionId !== null && form.secondaryFunctionIds.length > 0"
+                  class="mb-2 flex flex-col gap-1"
+                  data-testid="instrument-secondary-list"
+                >
+                  <li
+                    v-for="(functionId, index) in form.secondaryFunctionIds"
+                    :key="functionId"
+                    class="flex items-center gap-1 rounded-chip bg-surface-muted px-2 py-1 text-sm"
+                  >
+                    <span class="flex-1">{{ functionName(functionId) }}</span>
+                    <BaseIconButton
+                      :icon="ArrowUp"
+                      label="Subir"
+                      size="sm"
+                      :disabled="index === 0"
+                      @click="moveSecondary(index, -1)"
+                    />
+                    <BaseIconButton
+                      :icon="ArrowDown"
+                      label="Descer"
+                      size="sm"
+                      :disabled="index === form.secondaryFunctionIds.length - 1"
+                      @click="moveSecondary(index, 1)"
+                    />
+                    <BaseIconButton
+                      :icon="X"
+                      :label="`Remover ${functionName(functionId)}`"
+                      variant="danger"
+                      size="sm"
+                      @click="removeSecondary(index)"
+                    />
+                  </li>
+                </ul>
+                <BaseSelect
+                  model-value=""
+                  :disabled="form.cognitiveFunctionId === null"
+                  data-testid="instrument-secondary-add"
+                  @update:model-value="addSecondary(String($event ?? ''))"
+                >
+                  <option value="">Adicionar função secundária…</option>
+                  <option
+                    v-for="entry in secondaryOptions"
                     :key="entry.node.id"
                     :value="entry.node.id"
                   >

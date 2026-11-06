@@ -31,7 +31,8 @@ import {
   createCognitiveFunction,
   createInstrument,
   listCognitiveFunctions,
-  listInstruments
+  listInstruments,
+  updateInstrument
 } from '../../src/main/repositories/trees'
 import {
   describeRangeOrigin,
@@ -873,5 +874,79 @@ describe('herança de faixas', () => {
     expect(describeRangeOrigin(target, ownerId).inherited).toBe(false)
     expect(describeRangeOrigin(target, heirId).inherited).toBe(true)
     expect(describeRangeOrigin(target, heirId).ownerId).toBe(rootId)
+  })
+})
+
+describe('funções secundárias', () => {
+  function seedFdt(): string {
+    const id = seedInstrumentWithRanges(origin, {
+      name: 'FDT',
+      cognitiveFunctionName: 'Controle inibitório'
+    })
+    const current = listInstruments(origin).find((node) => node.id === id)!
+    updateInstrument(origin, id, {
+      ...current,
+      secondaryFunctionIds: [
+        functionIdByName(origin, 'Planejamento'),
+        functionIdByName(origin, 'Atenção alternada')
+      ]
+    })
+    return id
+  }
+
+  function secondaryNamesOf(handle: BaremoDatabase, instrumentId: string): string[] {
+    const instrument = listInstruments(handle).find((node) => node.id === instrumentId)!
+    const functions = listCognitiveFunctions(handle)
+    return instrument.secondaryFunctionIds.map(
+      (id) => functions.find((node) => node.id === id)!.name
+    )
+  }
+
+  it('viajam por nome, na ordem, e a reimportação não acusa mudança', () => {
+    const id = seedFdt()
+    const file = exportFile()
+    expect(file.instruments[0]?.secondaryFunctionPaths).toHaveLength(2)
+
+    applyCatalogImport(target, file)
+    expect(secondaryNamesOf(target, id)).toEqual(['Planejamento', 'Atenção alternada'])
+
+    expect(planCatalogImport(target, file).instruments.unchanged).toBe(1)
+  })
+
+  it('arquivo antigo, sem o campo, continua válido e não mexe nas secundárias gravadas', () => {
+    const id = seedFdt()
+    applyCatalogImport(target, exportFile())
+
+    const legacy = parseCatalogFile(
+      JSON.stringify({
+        ...buildCatalogFile(origin, '0.18.1'),
+        instruments: buildCatalogFile(origin, '0.18.1').instruments.map((node) => {
+          const { secondaryFunctionPaths: _dropped, ...rest } = node
+          return rest
+        })
+      })
+    )
+    expect(legacy.instruments[0]?.secondaryFunctionPaths).toBeUndefined()
+
+    applyCatalogImport(target, legacy)
+    expect(secondaryNamesOf(target, id)).toEqual(['Planejamento', 'Atenção alternada'])
+  })
+
+  it('caminho que não existe no destino vira aviso e é pulado', () => {
+    const id = seedFdt()
+    const file = exportFile()
+    const tampered: CatalogFile = {
+      ...file,
+      instruments: file.instruments.map((node) => ({
+        ...node,
+        secondaryFunctionPaths: [['Função que não existe'], ...(node.secondaryFunctionPaths ?? [])]
+      }))
+    }
+
+    const plan = applyCatalogImport(target, tampered)
+    expect(plan.warnings.some((warning) => warning.code === 'unknown_cognitive_function')).toBe(
+      true
+    )
+    expect(secondaryNamesOf(target, id)).toEqual(['Planejamento', 'Atenção alternada'])
   })
 })

@@ -1,6 +1,9 @@
 # SPEC: instrumento associado a várias funções cognitivas
 
-> Status: aprovado em 2026-11-06. Sem código ainda. Acompanhamento em issue do GitHub (label `modulo: catálogo`).
+> Status: implementado em 2026-11-06 (migration 6). Acompanhamento na issue #26 (label `modulo: catálogo`).
+>
+> Catálogo: o formato segue `baremo/catalog@1`. O schema do zod descarta campos desconhecidos em vez de
+> recusar, então `secondaryFunctionPaths` entrou como campo opcional, sem trocar a versão.
 
 ## 1. Contexto
 

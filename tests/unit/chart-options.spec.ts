@@ -49,7 +49,9 @@ function point(normalized: number | null, level: 1 | 2 | 3 | 4 | 5 | null): Resu
     manuallyOverridden: false,
     notes: null,
     cognitiveFunctionId: null,
-    cognitiveFunctionName: null
+    cognitiveFunctionName: null,
+    secondaryFunctions: [],
+    functionInherited: false
   }
 }
 

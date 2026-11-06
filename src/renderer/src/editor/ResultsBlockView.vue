@@ -14,6 +14,7 @@ import BaseCard from '../components/BaseCard.vue'
 import BaseSelect from '../components/BaseSelect.vue'
 import BaseTable, { type TableColumn } from '../components/BaseTable.vue'
 import ClassificationBadge from '../components/ClassificationBadge.vue'
+import AlsoAssessesTag from '../components/AlsoAssessesTag.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { formatIsoDate } from '@shared/domain/dates'
 import type { ChannelOutput } from '@shared/contracts'
@@ -124,7 +125,10 @@ function setFunction(event: Event): void {
           class="bg-surface"
         >
           <tr v-for="(row, index) in data.rows" :key="index">
-            <td>{{ row.instrumentPath }}</td>
+            <td>
+              {{ row.instrumentPath }}
+              <AlsoAssessesTag :functions="row.secondaryFunctionNames" />
+            </td>
             <td class="text-fg-muted">{{ row.cognitiveFunctionName ?? '—' }}</td>
             <td class="text-fg-muted">{{ row.scoreTypeLabel }}</td>
             <td class="text-right tabular">

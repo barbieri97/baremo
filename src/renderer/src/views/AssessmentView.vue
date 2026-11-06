@@ -110,9 +110,11 @@ const viewMode = ref<(typeof VIEW_MODES)[number]['value']>('function')
 /**
  * Na árvore de funções, com os pais preservados.
  *
- * O vínculo instrumento → função não é herdado do pai: um subteste sem função
- * cai no balde final mesmo que o teste tenha uma. O balde fica visível de
- * propósito — é uma pendência de cadastro, e distribuí-la seria escondê-la.
+ * Agrupa pela função PRINCIPAL efetiva, que o processo principal já resolve com
+ * a herança: um subteste sem função própria entra no grupo da função do teste
+ * pai. Só cai no balde final o que não tem função em nenhum ancestral — uma
+ * pendência de cadastro, visível de propósito. As secundárias não agrupam: são
+ * a etiqueta "também avalia" da linha.
  */
 const byFunction = computed(() =>
   groupResultsByTree(

@@ -481,12 +481,33 @@ const aiProviders: Migration = {
   }
 }
 
+/**
+ * Funções secundárias por instrumento (SPEC `funcoes-cognitivas-multiplas.md`).
+ *
+ * `instruments.cognitive_function_id` continua existindo e passa a significar a
+ * função PRINCIPAL — por isso nada nos dados existentes precisa mudar.
+ */
+const secondaryFunctions: Migration = {
+  version: 6,
+  name: 'funcoes-secundarias',
+  statements: [
+    `CREATE TABLE instrument_secondary_functions (
+       instrument_id TEXT NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
+       cognitive_function_id TEXT NOT NULL REFERENCES cognitive_functions(id) ON DELETE CASCADE,
+       "order" INTEGER NOT NULL DEFAULT 0,
+       PRIMARY KEY (instrument_id, cognitive_function_id)
+     )`,
+    `CREATE INDEX idx_secondary_functions_function ON instrument_secondary_functions (cognitive_function_id)`
+  ]
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   initial,
   classificationLevels,
   rangeInheritance,
   aiSkills,
-  aiProviders
+  aiProviders,
+  secondaryFunctions
 ]
 
 /** Versão de schema que este binário conhece. */

@@ -9,7 +9,15 @@
  */
 
 import { sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex
+} from 'drizzle-orm/sqlite-core'
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
 
@@ -97,6 +105,24 @@ export const instruments = sqliteTable(
   (table) => [
     index('idx_instruments_parent').on(table.parentId),
     index('idx_instruments_function').on(table.cognitiveFunctionId)
+  ]
+)
+
+/**
+ * Funções SECUNDÁRIAS de um instrumento (migration 6). A principal continua em
+ * `instruments.cognitive_function_id`. Agrupar resultados usa só a principal; as
+ * secundárias são etiqueta informativa ("também avalia: …").
+ */
+export const instrumentSecondaryFunctions = sqliteTable(
+  'instrument_secondary_functions',
+  {
+    instrumentId: text('instrument_id').notNull(),
+    cognitiveFunctionId: text('cognitive_function_id').notNull(),
+    order: integer('order').notNull().default(0)
+  },
+  (table) => [
+    primaryKey({ columns: [table.instrumentId, table.cognitiveFunctionId] }),
+    index('idx_secondary_functions_function').on(table.cognitiveFunctionId)
   ]
 )
 
